@@ -5,8 +5,14 @@
 #   2. build                — both halves bundle
 #   3. verify-client.mjs    — browser-half contract and decor guardrails (no DOM)
 #   4. verify-host.mjs      — host-half route, traversal guard, teardown
-#   5. smoke-browser.mjs    — the built bundle in headless Chrome + screenshot
-#   6. verify-install.ps1   — would the running profile be able to load it
+#   5. verify-install.ps1   — would the running profile be able to load it
+#   6. smoke-browser.mjs    — the built bundle in headless Chrome + screenshot
+#   7. verify-*-live.mjs    — the REAL GUI, reading computed values back
+#
+# Layer 7 needs a running `dsh web` and its token in $env:DSH_URL. It is skipped
+# with a clear note when either is missing, because "the app is not running" is
+# not a skin defect. When it does run it is the only layer that can prove a rule
+# WINS against the shell's own styling.
 #
 # Usage: pwsh -File scripts/verify-all.ps1
 $ErrorActionPreference = 'Continue'
@@ -23,12 +29,38 @@ function Step([string]$Name, [scriptblock]$Body) {
     if ($code -ne 0) { Write-Host "  -> exit $code" -ForegroundColor Red }
 }
 
+# The live layer needs the app's current URL; recover it from the launcher's log
+# so a normal `make restart-dsh` run needs no manual export.
+if (-not $env:DSH_URL) {
+    $log = Join-Path $env:USERPROFILE '.dsh-web.out.log'
+    if (Test-Path $log) {
+        $match = Select-String -Path $log -Pattern 'http://\S*token=\S*' -AllMatches |
+            ForEach-Object { $_.Matches } | ForEach-Object { $_.Value } | Select-Object -Last 1
+        if ($match) {
+            $env:DSH_URL = $match
+            Write-Host "using DSH_URL recovered from $log" -ForegroundColor DarkGray
+        }
+    }
+}
+
 Step 'typecheck'        { pnpm run typecheck }
 Step 'build'            { pnpm run build }
 Step 'verify: client'   { node scripts/verify-client.mjs }
 Step 'verify: host'     { node scripts/verify-host.mjs }
 Step 'verify: install'  { pwsh -NoProfile -File scripts/verify-install.ps1 }
 Step 'smoke: browser'   { node scripts/smoke-browser.mjs }
+
+if ($env:DSH_URL) {
+    Step 'live: corners (composer + code blocks)' { node scripts/verify-corners-live.mjs }
+    Step 'live: focus signature'                  { node scripts/verify-focus-signature.mjs }
+    Step 'live: tool-block chrome'                { node scripts/verify-tool-block-chrome.mjs }
+    Step 'live: typography + message bubble'      { node scripts/verify-typography-and-bubble.mjs }
+} else {
+    Write-Host ""
+    Write-Host "=== live layers skipped ===" -ForegroundColor Yellow
+    Write-Host "No DSH_URL and no token found in ~/.dsh-web.out.log, so the running-GUI"
+    Write-Host "checks did not run. Start dsh web, or export DSH_URL with its printed URL."
+}
 
 Pop-Location
 Write-Host ""

@@ -27,10 +27,48 @@ export interface ThemeRuntime {
 /**
  * Subset of the Cordis context available inside a browser-half `apply(ctx)`.
  * `effect` returns a disposer registration; the harness calls it on unload/HMR.
+ *
+ * `slots` and `settingsScope` resolve only because the client half declares them
+ * in `inject`; `@deepseek-ai/dsh-client-modules` rejects any dynamic bundle that
+ * requires a package outside the platform baseline, so the slot ledger and the
+ * settings scope are reached as *services* and never as `require()` calls.
  */
 export interface ClientContext {
   theme: ThemeRuntime
   effect(callback: () => void | (() => void), label?: string): void
+  slots?: SlotService
+  settingsScope?: { bind(spec: unknown): SettingsScope }
+  logger?: {
+    info?(message: string): void
+    warn?(message: string): void
+  }
+}
+
+/** A registered slot entry's options, as the ledger reports them. */
+export interface SlotRegistration {
+  name: string
+  id?: string
+  order?: number
+  label?: string | (() => string)
+}
+
+/** Subset of `ctx.slots` used to contribute the settings page. */
+export interface SlotService {
+  inject(name: string, callback: () => unknown): void
+  register(options: SlotRegistration, component: unknown): unknown
+}
+
+/**
+ * Subset of a bound settings scope, taken from how `ui-theme` consumes the same
+ * service (it is the only shipped plugin that binds and writes a namespace):
+ * `getSnapshot()` carries the resolved section, `set(path, value)` writes one
+ * field, and `subscribe` reports every committed change — including an external
+ * edit to the settings document — so the page and the painted CSS stay in step.
+ */
+export interface SettingsScope {
+  getSnapshot(): { value: unknown; writable?: boolean }
+  subscribe(listener: () => void): () => void
+  set(path: string, value: unknown): unknown
 }
 
 /** Subset of `ctx.webServer` used by the host half. */
@@ -43,6 +81,15 @@ export interface WebServerRoute {
 export interface HostContext {
   webServer?: {
     register(route: WebServerRoute): () => void
+  }
+  /**
+   * Durable settings service. Optional on purpose: a deployment without a
+   * settings provider still loads the plugin, and the skin then runs on its
+   * built-in defaults.
+   */
+  settings?: {
+    register(name: string, schema: unknown): unknown
+    get(name: string): unknown
   }
   effect?(callback: () => void | (() => void), label?: string): void
   logger?: {

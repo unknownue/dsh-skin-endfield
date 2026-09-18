@@ -42,7 +42,8 @@
     "verify:chrome": "node scripts/verify-tool-block-chrome.mjs",
     "verify:install": "pwsh -File scripts/verify-install.ps1",
     "smoke": "node scripts/smoke-browser.mjs",
-    "showcase": "node scripts/showcase.mjs"
+    "showcase": "node scripts/showcase.mjs",
+    "verify:type-bubble": "node scripts/verify-typography-and-bubble.mjs"
   },
   "keywords": [
     "deepseek-harness",
@@ -64,5 +65,8 @@
     "lightningcss": "^1.32.0",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
   }
 }

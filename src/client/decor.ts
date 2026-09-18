@@ -75,14 +75,17 @@ body [data-composer-card]::after {
    A "body *" rule is one class-equivalent more specific, so it wins on the
    element outright. (Verified in scripts/verify-corners-live.mjs. Note: the
    guardrail in verify-client.mjs text-scans for priority-forcing declarations,
-   so do not spell that keyword out anywhere in this file, comments included.) */
+   so do not spell that keyword out anywhere in this file, comments included.)
+
+   The value is a variable rather than a literal 0 so the Skin settings page can
+   re-round these surfaces without regenerating this stylesheet. */
 body * {
-  --dsl-terminal-radius: 0;
-  --dsl-code-block-border-radius: 0;
-  --dsl-diff-radius: 0;
-  --dsl-read-radius: 0;
-  --dsl-search-radius: 0;
-  --dsl-web-radius: 0;
+  --dsl-terminal-radius: var(--endfield-corner-radius);
+  --dsl-code-block-border-radius: var(--endfield-corner-radius);
+  --dsl-diff-radius: var(--endfield-corner-radius);
+  --dsl-read-radius: var(--endfield-corner-radius);
+  --dsl-search-radius: var(--endfield-corner-radius);
+  --dsl-web-radius: var(--endfield-corner-radius);
 }
 body :is(pre, code, kbd, samp),
 body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) {
@@ -119,6 +122,24 @@ body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) >
    blanket star-selector rule: avatars, status dots and the composer's
    progress ring are true circles and must stay circles. */
 body :is([data-dockkit-dock-zone], [data-dockkit-drop-zones], [data-dockkit-strip-scroll], [data-submission-echo]) {
+  border-radius: 0;
+  corner-shape: round;
+}
+
+/* ── 1e. the user message bubble ───────────────────────────────────────── */
+/* The bubble is NOT in the shell's own CSS: the chat package ships its own
+   runtime stylesheet and rounds it to 22px, and it is addressed by a CSS-module
+   class (Sixlwa_bubble) whose prefix is build-generated. There is no data
+   attribute or role to hang off, so this matches on the stable half of the
+   module class name instead, verified against a real session (exactly one match,
+   and its parent is the user stack).
+
+   Note this is deliberately looser than the rest of the layer, which prefers
+   documented attributes. A tooltip in the shell's own CSS is also called
+   "bubble", and matching that would round nothing but would be harmless; the
+   [class*="_bubble"] form keeps the match to module classes and skips the
+   plain one-hashed tooltip class, which lacks the underscore prefix. */
+body [class*="_bubble"] {
   border-radius: 0;
   corner-shape: round;
 }
@@ -193,7 +214,7 @@ body :is(h1, h2, h3) {
   letter-spacing: -0.01em;
 }
 body :is(h1, h2, h3)::before {
-  content: "//";
+  content: var(--endfield-prefix, "//");
   margin-inline-end: 0.4em;
   color: var(--dsw-alias-brand-primary);
   font-weight: 700;
@@ -236,14 +257,16 @@ body ::-webkit-scrollbar-thumb {
   }
 }
 
-/* ── 10. tags / badges: the game uses flat blocks, never chips ─────────── */
-/* Restricted to leaf elements: [data-state] may also land on a container that
-   holds prose (a toast, a wrapper), and forcing uppercase there mangles text
-   instead of labelling it. */
+/* ── 10. tags / badges ─────────────────────────────────────────────────── */
+/* No text-transform here, deliberately. An earlier version uppercased
+   [data-tone] / [data-state] leaves, on the theory that the game labels its
+   tags in caps. In practice the shell also puts those attributes on containers
+   of real content, so file paths, code and prompt text rendered SHOUTING --
+   a cosmetic rule fighting readability. The hook is broad and its meaning is
+   not "this is a label", so the safe answer is to style nothing here.
+   Letter-spacing is kept: it reads as a label without rewriting the glyphs. */
 body :is([data-tone], [data-state]):not(:has(p, pre, ul, ol, table)) {
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-variant-caps: all-small-caps;
+  letter-spacing: 0.02em;
 }
 
 /* ── 11. focus / selection: the chartreuse signature ───────────────────── */
@@ -257,10 +280,20 @@ body :is([data-tone], [data-state]):not(:has(p, pre, ul, ol, table)) {
    semantic aliases keep their official-yellow meaning. The split is on purpose
    anyway -- big solid areas keep the official signal yellow, while this small
    accent bloom takes the greener game value (#D0E94F .. #E6F35B as sampled
-   from frames, which run cooler than the website's #FFFA00). */
+   from frames, which run cooler than the website's #FFFA00).
+
+   These are defaults, not fixed values: the Skin settings page writes
+   --endfield-focus / --endfield-focus-bloom / --endfield-corner-radius onto
+   documentElement, which wins over anything declared here. */
 body {
   --endfield-focus: #D0E94F;
   --endfield-focus-bloom: rgba(208, 233, 79, 0.28);
+  --endfield-corner-radius: 0px;
+  /* The switchable // marker. A custom property is used for the toggle rather
+     than a root-level attribute selector because every rule in this layer stays
+     rooted at body; that invariant is what lets the guardrail prove the scope,
+     and reaching for html to read a flag would trade it away for a boolean. */
+  --endfield-prefix: "//";
 }
 body :focus-visible {
   outline: 2px solid var(--endfield-focus);
@@ -306,16 +339,15 @@ body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web])::
   border-right-width: 2px;
   border-bottom-width: 2px;
 }
-/* The first row is the readout label: prefixed, uppercase, letter-spaced. */
+/* The first row is the readout label: prefixed. No text-transform -- the first
+   row is frequently a command line or a file path, and uppercasing those makes
+   them harder to read, not more "technical". Gated by the same variable toggle
+   as the heading marker. */
 body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) > *:first-child::before {
-  content: "//";
+  content: var(--endfield-prefix, "//");
   margin-inline-end: 0.45em;
   color: var(--dsw-alias-brand-primary);
   font-weight: 700;
   letter-spacing: 0;
-}
-body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) > *:first-child {
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 `

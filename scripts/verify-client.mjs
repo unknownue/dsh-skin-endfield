@@ -261,6 +261,29 @@ check('decor does not fight the theme with !important', () => {
   return 'no !important'
 })
 
+// The decor stylesheet is one TS template literal, so a backtick typed inside a
+// comment closes the literal early and tsdown fails with "Cannot assign to this
+// expression" pointing at the line AFTER the real mistake. That cost several
+// debugging rounds, so report the offending line directly.
+check('decor CSS body contains no backtick (it would close the template literal)', () => {
+  const src = readFileSync(join(ROOT, 'src', 'client', 'decor.ts'), 'utf8')
+  const open = src.indexOf('export const endfieldDecor = `')
+  assert(open >= 0, 'could not locate the decor template literal')
+  const bodyStart = src.indexOf('`', open) + 1
+  const bodyEnd = src.lastIndexOf('`')
+  const body = src.slice(bodyStart, bodyEnd)
+  const lines = body.split('\n')
+  const bad = []
+  lines.forEach((line, i) => {
+    if (line.includes('`')) {
+      const absolute = src.slice(0, bodyStart + body.split('\n').slice(0, i).join('\n').length).split('\n').length
+      bad.push(`line ${absolute}: ${line.trim().slice(0, 70)}`)
+    }
+  })
+  assert(bad.length === 0, `backtick inside the CSS body:\n    ${bad.join('\n    ')}`)
+  return 'no backtick in the CSS body'
+})
+
 check('decor only nests rules under body', () => {
   // Split on top-level commas only: `:is(a, b)` contains commas that must not
   // be treated as selector separators.
