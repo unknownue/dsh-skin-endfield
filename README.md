@@ -30,7 +30,21 @@ pnpm typecheck
 node scripts/verify-client.mjs    # 15 项：bundle 契约、令牌、装饰层护栏、卸载对称性
 node scripts/verify-host.mjs      #  9 项：字体路由、路径穿越防护、注册/卸载对称性
 node scripts/smoke-browser.mjs    # 真浏览器渲染 + 截图 tests/out/smoke.png
+node scripts/showcase.mjs         # 案例参考：把皮肤铺到 DSH 界面元素上并输出对照图
+pwsh -File scripts/verify-all.ps1 # 一次跑全部（verify:install 在未安装前会报未注册，属预期）
 ```
+
+## 案例参考（评估效果用）
+
+`pnpm showcase` 生成两张评估图（在 `tests/out/`，不入库）：
+
+| 文件 | 内容 |
+|------|------|
+| `showcase-dark.png` | 深色主题：侧栏 / 会话流 / 工具调用卡 / 终端 / 设置弹窗 / 右键菜单 / toast / tooltip，**外加令牌对照表**（色块 + 令牌名 + 实际 hex） |
+| `showcase-light.png` | 浅色主题同一批元素（浅色列全部为派生值，用于对比度复核） |
+
+这两张图是把**插件真实的令牌层与装饰样式**铺到 shell 的 DOM 形状上渲染的（令牌直接从 `src/client/palette.ts` 导入，不会与实现漂移），因此看到的就是装上去之后的效果；唯一差别是消息内容为示意文本。
+
 
 ### 装到 GUI 上（**可选，会改动你的 profile**）
 

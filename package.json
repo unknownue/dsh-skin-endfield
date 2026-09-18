@@ -37,7 +37,8 @@
     "verify:client": "node scripts/verify-client.mjs",
     "verify:host": "node scripts/verify-host.mjs",
     "verify:install": "pwsh -File scripts/verify-install.ps1",
-    "smoke": "node scripts/smoke-browser.mjs"
+    "smoke": "node scripts/smoke-browser.mjs",
+    "showcase": "node scripts/showcase.mjs"
   },
   "keywords": [
     "deepseek-harness",
