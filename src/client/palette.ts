@@ -96,9 +96,9 @@ export const endfieldTokens: ThemeTokenOverrides = {
   '--dsw-alias-button-ghost-active-border': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
   '--dsw-alias-button-info-fill': { light: MINT, dark: MINT },
   '--dsw-alias-button-info-hover': { light: '#4DFFBE', dark: '#4DFFBE' },
-  '--dsw-alias-button-tool-bar-fill': { light: '#FFFFFF', dark: '#2A2A2A' },
+  '--dsw-alias-button-tool-bar-fill': { light: '#EDEDED', dark: '#2A2A2A' },
   '--dsw-alias-button-tool-bar-fill-invisible': { light: 'rgba(255,255,255,0)', dark: 'rgba(42,42,42,0)' },
-  '--dsw-alias-button-tool-bar-hover': { light: '#F2F2F2', dark: '#424242' },
+  '--dsw-alias-button-tool-bar-hover': { light: '#E4E4E4', dark: '#424242' },
 
   // ── interaction ─────────────────────────────────────────────────────────
   '--dsw-alias-interactive-bg-hover': { light: 'rgba(25,25,25,0.06)', dark: 'rgba(217,217,217,0.08)' },
