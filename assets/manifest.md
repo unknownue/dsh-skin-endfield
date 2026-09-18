@@ -32,6 +32,42 @@
 | `ui-primitives/deco.dbe18bea.svg` | 点阵/装饰原始 SVG（`fill #666`） |
 | `ui-primitives/triangles.bcbd794a.svg` | 三角三元组原始 SVG（`fill #FCFC1F`） |
 | `ui-primitives/downloadBtn.a6050c8e.png` | 黄底主按钮原始素材 |
+| `in-game-frames/` | **实机界面帧精选 26 张**（3.4 MB，`01-*.jpg` … `26-*.jpg`）。**每张都经全分辨率目视确认后才命名**，不是从接触表上猜的 |
+| `in-game-frames/_gallery.jpg` | 上述 26 张的接触表总览（6×5 拼图，带文件名标签），一眼看完整个界面体系 |
+
+### 帧精选清单（按证据强度使用）
+
+| 文件 | 源帧 | 内容 |
+|------|------|------|
+| `01-title-screen-light.jpg` | `matdun-057` | 浅色标题页：浮雕 logo 柔光 + 左下 TIPS + 底部**细虚线**进度条 |
+| `02-main-menu-terminal.jpg` | `uilook-110` | 主菜单/个人终端：中央巨圆地图 + 左列 4 大卡 + 右列方形磁贴（含**带锁未解锁**）+ 左上三圆钮 + 玩家名片 |
+| `03-explore-radial-menu.jpg` | `uilook-142` | 探索径向快捷菜单：中心圆环 + 8 卫星图标 + 黄色虚线引导 |
+| `04-loader-dark.jpg` | `uilook-169` | 深色加载页：TIPS 块 + 底部细亮进度条 + `NOW LOADING...` |
+| `05-char-attribute-details.jpg` | `menunav-030` | 属性详情卡：`Intellect 110 (Main)` **整块亮黄**；`OTHER STATS` 行表，**末行整体灰化**=禁用态 |
+| `06-ability-matrix.jpg` | `menunav-031` | `Ability Matrix`：**整列垂直亮黄底** + 圆节点 + 点状虚线连接 + 锁头虚线环 |
+| `07-char-list-rarity.jpg` | `uilook-106` | 干员列表：**底边稀有度色条** + 选中黄绿描边角括号 + 右侧选择槽（1 满 3 空 `+`） |
+| `08-gear-empty-slots.jpg` | `uilook-131` | `装備`：2×4 槽全空，**近白卡 + 大号半透明 `+` + `EMPTY`**（空槽型空状态） |
+| `09-weapon-list.jpg` | `uilook-116` | 武器库列表：**底边紫/蓝稀有度条** + 右栏属性 |
+| `10-weapon-levelup-empty.jpg` | `uilook-117` | 武器升级：左下 **5 个空素材槽大 `+`** |
+| `11-depot-storage.jpg` | `menunav-052` | Depot/仓库：格网 + 物品详情 |
+| `12-blueprint-grid.jpg` | `uilook-159` | 蓝图网格：**黄绿 `NEW` 旗标** + 灰化未解锁行 + 空槽 + **禁用按钮 `条件未達`** |
+| `13-empty-state.jpg` | `uilook-029` | **文字型空状态**：`⊘ アイテムはありません ⊘`（浅灰居中，**无插画**） |
+| `14-map-world.jpg` | `menunav-006` | 全屏世界地图 |
+| `15-map-counters.jpg` | `uilook-111` | 区域地图：**黄色三角玩家标** + 三色收集计数 + `// 四号谷地` 面包屑 |
+| `16-settings-audio.jpg` | `uilook-002` | **唯一的设置界面证据**：6 枚方形图标 tab（选中=**亮黄方块+深色符号**）+ 细滑杆 + ON/OFF 分段开关 + **焦点行黄绿描边外发光** |
+| `17-boss-healthbar-pink.jpg` | `ps5pro-055` | Boss HUD：顶部**粉红分段血条 + 方括号端帽** + 底部自身血条（数字内嵌） |
+| `18-gacha-panel.jpg` | `uilook-091` | `// 人材発掘`：满屏 keyart + 方括号标题 + **亮黄药丸 `10回スカウト`** + 菱形稀有度 |
+| `19-shop-hex-tabs.jpg` | `uilook-077` | `// 購買部`：**六边形 tab** + 橙色斜切 `%` 标签 + **薄荷绿**功能标签 + 白色价格牌 |
+| `20-event-daily-cards.jpg` | `uilook-070` | `// イベント`：DAY 卡（近白卡 + 左缘点阵纹理带 + 大号黑数字） |
+| `21-modal-light-band.jpg` | `uilook-126` | **贯穿全屏浅色横带**式确认弹窗 + 深灰/亮黄双药丸按钮 |
+| `22-item-detail-orange-head.jpg` | `uilook-046` | **橙头物品详情卡**（可复用组件）+ 横贯**虚线**分隔 + 数量角标 |
+| `23-danger-attack-warning.jpg` | `uilook-151` | **危险态**：深洋红底带 + 亮粉标题 + 黄底 callout |
+| `24-toast-notification.jpg` | `matdun-061` | **唯一找到的 toast 类型**：右上黄框通知板 |
+| `25-theme-select-disabled.jpg` | `uilook-109` | 禁用态：`// テーマ変更` 未解锁=**左半灰锁头 + 竖直分割线 + 右半压暗**；含**宽体数字样本 `09 / 05 / 20`** |
+| `26-mission-guide-list.jpg` | `menunav-047` | `Endfield Database`：浅灰纸面 + **巨大淡水印数字 `01..06`** + 橙色菱形标记 |
+
+> ⚠ **引用这些帧时注意**：① 帧来自 **JP/EN/CN 三个不同语言构建**，同一界面文案语言不同，**像素级复刻时不要混用**；② 帧经过视频有损压缩 + 缩放，**取样色值会有偏差**，精确 hex 仍以官方 CSS 为准；③ 帧内代码/数值均为示意，不代表真实数据。
+
 
 ## 2. 本地缓存（`E:\Workspace\tmp\endfield-refs\`）
 
@@ -42,30 +78,74 @@
 | `raw/cssimg/` | 官方 CSS 引用的全部素材（技术框/纹理/图标/按钮/角色立绘） | 165 | ~8 MB |
 | `raw/htmlimg/`, `raw/special/`, `raw/newsimg/` | 官网 HTML 引用素材、画廊页素材、公告页图 | 48 | — |
 | `raw/covers/` | 官方公告预览横幅（**本身就是 UI 版式样本**） | 75 | — |
-| `raw/videos/` | 官网 HTML 内嵌的官方 MP4 | 10 | ~408 MB |
+| `raw/videos/` | 官网 HTML 内嵌的官方 MP4（**15–24 秒短片**，非长录屏；4K/2K/1080p 混合） | 10 | ~408 MB |
+| `videos/` | **长录屏**（YouTube，含无解说纯 UI 60 分钟片） | 6 | ~2.2 GB |
 | `raw/steam/screenshots/` | 官方 Steam 商店截图 1920×1080（**实机渲染，无 UI**） | 10 | ~5 MB |
 | `raw/bili/covers/` | B 站参考视频封面（官方 + 社区 + 教程） | 30 | — |
 | `shots/` | 参考站全页截图（官网 CN/EN/TW、画廊、公告、Steam、Game UI DB、Reddit） | 10 | ~33 MB |
-| `contacts/` | 素材接触表（母题总览） | 7 | ~5 MB |
-| `frames/` | 视频抽帧接触表（3×3/每片） | — | — |
+| `contacts/` | 素材接触表（母题总览） | 9 | ~35 MB |
+| `frames/` | **首轮稀疏抽帧**：每条视频 1 张接触表帧 | 13 | ~0.9 MB |
+| `frames2/` | **密抽帧**（`07-dense-frames.ps1` 产出，`<tag>-NNN.jpg`，1600px 宽） | **515** | ~54 MB |
+| `contacts2/` | 密抽帧的分页接触表（`sheet-<tag>-pN.jpg`，5×8 拼图） | 16 | ~13 MB |
+| `UI-FRAME-NOTES.md` | **帧证据清点报告**（308 行 / 68 KB）：界面状态清单、组件解剖、难找状态结论、逐点取色（带采样坐标）、动效观察、不确定项。**`02-ui-inventory.md` 的一手底稿** | 1 | 68 KB |
+| `sheets-lab/` | 带帧号标注的接触表（`make-sheets2.ps1` / `make-sheets3.ps1` 可复跑），比 `contacts2/` 更便于逐帧定位 | — | — |
 | `logs/` | 结构化元数据：`bulletins.json/csv`、`bili-priority.json/csv`、`youtube-official.json`、`videos.tsv`、`cssimg-index.txt` | — | — |
+
+> **抽帧的两套数据别混用**：`frames/` 是首轮每片 1 张，用于快速确认"这视频里有没有 UI"；`frames2/` 才是**界面状态清单的证据源**。密抽帧用 `-skip_frame nokey` 只解关键帧以换取速度，**帧编号不等于视频时间码**，不要用它推算时长。
+>
+> **`_chrome-profile/` 与 `_cdp-profile/`**（合计约 660 MB）是 headless Chrome 抓 SPA 时留下的临时 profile，**不是素材**，可随时删除。
+
 
 ## 3. 官方站内嵌 MP4（全部已下载）
 
-官网 HTML 直接内嵌 10 条 MP4（`web-static.hg-cdn.com/upload/video/<日期>/<hash>.mp4`），全部 1080p 级，是**无需登录即可拿到的高质量官方影像**：
+官网 HTML 直接内嵌 10 条 MP4（`web-static.hg-cdn.com/upload/video/<日期>/<hash>.mp4`），全部 1080p 以上，是**无需登录即可拿到的高质量官方影像**：
 
-| 文件 | 来源日期 |
-|------|---------|
-| `c9a70d82c6a4d896046e6594e8f0ed80.mp4` | 20260411 |
-| `ed1866f9752d51ef06105b9b97bea923.mp4` | 20260416 |
-| `4c6b963722105991cd49e846a779b489.mp4` | 20260525 |
-| `436a0c9185d1b40006fe6574062f9e32.mp4` | 20260603 |
-| `76a422d1140dadf2b57ea7f1eb197275.mp4` | 20260625 |
-| `b37e139e9494bd716410c7fa8a7f39ca.mp4` | 20260710 |
-| `00240a644851abbdf0153120ebb5e26f.mp4` | 20260715 |
-| `3e14f4ce6154cb327d67ce2f29cfea0b.mp4` | 20260807 |
-| `f3b195d0491b0dd8e38cdfca476c7d62.mp4` | 20260821 |
-| `a92f49a53810d0a162584a10daa9de39.mp4` | 20260902 |
+⚠️ **但它们是 5–24 秒的版本 PV 短片，不是界面录屏**（ffprobe 实测总时长约 102 秒）。**界面形态的证据来自 `videos/` 里的长录屏，不是这 10 条。** 这一条曾被误读，特此写明。
+
+| 文件 | 来源日期 | 分辨率 | 时长 |
+|------|---------|--------|------|
+| `c9a70d82c6a4d896046e6594e8f0ed80.mp4` | 20260411 | 2340×1080 24fps | 8.2s |
+| `ed1866f9752d51ef06105b9b97bea923.mp4` | 20260416 | 2340×1080 24fps | 14.3s |
+| `4c6b963722105991cd49e846a779b489.mp4` | 20260525 | 1920×1080 30fps | 5.0s |
+| `436a0c9185d1b40006fe6574062f9e32.mp4` | 20260603 | 1920×1080 60fps | 11.1s |
+| `76a422d1140dadf2b57ea7f1eb197275.mp4` | 20260625 | 4096×2160 60fps | 11.7s |
+| `b37e139e9494bd716410c7fa8a7f39ca.mp4` | 20260710 | 3840×2160 30fps | 9.4s |
+| `00240a644851abbdf0153120ebb5e26f.mp4` | 20260715 | 4096×1716 60fps | 10.3s |
+| `3e14f4ce6154cb327d67ce2f29cfea0b.mp4` | 20260807 | 4096×1716 30fps | 9.2s |
+| `f3b195d0491b0dd8e38cdfca476c7d62.mp4` | 20260821 | 3840×2160 30fps | 10.4s |
+| `a92f49a53810d0a162584a10daa9de39.mp4` | 20260902 | 4096×1716 30fps | 12.1s |
+
+### 3.5 长录屏（**这才是界面证据的来源**）
+
+存在 `videos/`，共 6 条、约 2.2 GB。用户明确要求「包括游戏界面视频」，本组即为满足该需求的主力素材：
+
+| 文件 | 分辨率 | 时长 | 价值 |
+|------|--------|------|------|
+| `yt-ui-look-endfield-no-narration.mp4` | 1920×1080 60fps | **59.9 min** | **无解说纯 UI 长录屏，覆盖最广 —— 首选证据源** |
+| `yt-23-character-menu-animations.mp4` | 1920×1080 60fps | 17.9 min | 逐角色菜单动效；**角色界面的平坦浅色画布在这里看得最清楚** |
+| `yt-menu-navigation-explained.mp4` | 1920×1080 30fps | 16.6 min | 菜单信息架构逐项讲解，含设置/说明/地图 |
+| `yt-gameplay-demo-showcase-ps5pro.mp4` | 1920×1080 60fps | 14.4 min | 实机演示，含战斗 HUD |
+| `yt-ui-preview-material-dungeon.mp4` | 1920×1080 60fps | 10.6 min | UI 预览 + 素材副本，界面切换密集 |
+| `yt-official-release-trailer-back-to-endfield.mp4` | 1920×886 60fps | 4.2 min | 官方公测 PV（⚠ **YouTube 下载件，4:3 黑边内嵌 886px 高**，非官网原件） |
+
+> 抽帧命令见下方第 6 节 `07-dense-frames.ps1`。
+
+### 3.6 密抽帧索引（省得下次重新找）
+
+`frames2/` 的 tag 含义与帧量；`contacts2/sheet-<tag>-pN.jpg` 是分页接触表（每页 40 张）：
+
+| tag | 来源 | 间隔 | 帧数 | 含哪些界面 |
+|-----|------|------|------|-----------|
+| `uilook` | 无解说纯 UI 60 min | 20s | 180 | 标题/加载页、主菜单终端、探索径向菜单、干员列表/属性、武器库、装备空槽、仓库、蓝图网格、**空状态**、地图、商店、卡池、事件、**toast**、**危险态**、设置、邮件 |
+| `menunav` | 菜单 IA 讲解 16.6 min | 15s | 66 | 菜单骨架、`Ability Matrix`、`Endfield Database`、装备制作、设置分节、说明弹窗、世界地图、武器库 |
+| `charanim` | 角色菜单动效 17.9 min | 15s | 71 | 角色界面平坦浅色画布、属性面板、`RANK`、动效中间态 |
+| `matdun` | UI 预览 + 素材副本 10.6 min | 10s | 64 | 详情卡、背包/仓库、字幕、浅底确认弹窗、战斗 |
+| `ps5pro` | 实机演示 14.4 min | 12s | 72 | 战斗 HUD、探索、场景 |
+| `trailer` | 公测 PV 4.2 min | 4s | 62 | 宣传镜头（界面少） |
+
+**快速定位手法**：先看 `contacts2/sheet-<tag>-pN.jpg` 确定页与格位（5 列），再按 `5×(行-1)+列` 反推帧编号去 `frames2/` 取全尺寸图。
+
+
 
 ## 4. 视频参考清单（优先级顺序）
 
@@ -158,6 +238,8 @@ pwsh -File 04-videos-and-frames.ps1
 pwsh -File 05-screenshots.ps1
 # 6) 生成母题接触表（需 ImageMagick）
 pwsh -File 06-contact-sheets.ps1
+# 7) 密抽帧 + 分页接触表（界面状态证据源，需 ffmpeg + ImageMagick）
+pwsh -File 07-dense-frames.ps1
 # 附：需要真实渲染 DOM 时（SPA 页面）
 node 00-cdp-fetch.mjs <outDir>
 ```
