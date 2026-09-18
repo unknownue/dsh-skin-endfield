@@ -40,6 +40,10 @@ export default defineConfig([
     sourcemap: true,
     clean: false,
     define: { 'process.env.NODE_ENV': '"production"' },
+    // `react` must stay a require() the shell answers from its static module
+    // table. Bundling it would work visually but would duplicate React and break
+    // hooks the moment the shell and the skin disagree on an instance.
+    external: ['react', 'react/jsx-runtime', 'react-dom'],
     banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(ID)}, factory: (require) => { var module = { exports: {} }; var exports = module.exports;`,
     footer: 'return module.exports; } });',
     outputOptions: { entryFileNames: 'client.js' },
