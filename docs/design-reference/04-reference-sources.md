@@ -53,21 +53,31 @@
 | [game8 键位表](https://game8.co/games/Arknights-Endfield/archives/538343) | Esc/Tab/CapsLock/F1–F12 热键体系 |
 | [灰机 wiki 集成工业系统](https://endfield.huijiwiki.com/wiki/%E9%9B%86%E6%88%90%E5%B7%A5%E4%B8%9A%E7%B3%BB%E7%BB%9F) | 协议核心 PAC、集成核心区域 |
 | [17173 界面 UI 设计赏析](https://news.17173.com/z/arknights2026/content/01112026/195613273.shtml) | 标签页/筛选器/对比视图、三角符号（**注意：疑含 AI 生成成分，仅作线索**） |
+| [17173 UI/UX 设计点评](https://news.17173.com/z/arknights2026/content/01182026/151718585.shtml) | Logo 复用为世界观载体、装备筛选/对比视图、编队界面、多平台适配的布局差异（⚠ 同站，AI 生成嫌疑同上） |
+| [什么值得买《终末地是怎么把界面做出工业高级感的？》](https://post.smzdm.com/p/amoqz4qp) | 「克制的高级感」「高级灰 + 少量黄色」、点线面几何装饰、动效克制、部分界面被设计成 3D 空间 |
+
+> ⚠ **社区分析里有一条已被证伪的说法**：上表末尾那篇（及同源小红书内容）称终末地界面使用了「**毛玻璃**」与「**渐变色**」。这条与官方 CSS 实测不符 —— 400,919 字符的官方 CSS 中 `radial-gradient` / `conic-gradient` 均为 **0**，`backdrop-filter` 仅 **2** 次（画廊页），`blur(` 仅 **3** 次。终末地平面语言的基调是**不透明平坦色块**；透明度只以整屏 `rgba(0,0,0,.5)` 遮罩这种粗粒度形式出现。引用该文时**不要**采信其毛玻璃/渐变部分。
 
 ## 5. 视频参考（详见 `assets/manifest.md` 的视频清单）
 
+**已实际下载到本地的是表格中标 ★ 的 6 条长录屏**（`tmp\endfield-refs\videos\`，合计约 124 分钟）。下表其余条目是**已核对元数据但未下载**的候补源 —— 需要新证据时按它们去找，不要以为本地已有。
+
 | 类别 | 代表 | 价值 |
 |------|------|------|
+| ★ 纯 UI 录屏 | [YouTube `PcG2xHzBYfc`「UIを見る」](https://www.youtube.com/watch?v=PcG2xHzBYfc) → `yt-ui-look-endfield-no-narration.mp4` | **60 分钟无解说，抽帧效率最高，首选证据源** |
+| ★ UI 预览 | [YouTube `cZucx0ZyhuU`](https://www.youtube.com/watch?v=cZucx0ZyhuU) → `yt-ui-preview-material-dungeon.mp4` | 菜单层级完整 |
+| ★ 菜单 IA | [YouTube `1m4WvuXY3Bg`](https://www.youtube.com/watch?v=1m4WvuXY3Bg) → `yt-menu-navigation-explained.mp4` | 信息架构与导航逻辑逐项说明 |
+| ★ 角色菜单动效 | [YouTube `U_uRTrbBU5A`](https://www.youtube.com/watch?v=U_uRTrbBU5A) → `yt-23-character-menu-animations.mp4` | 过渡曲线；**角色界面的平坦浅色画布** |
+| ★ 实机演示 | [YouTube `oJ00ggFb8A0` 公测 PV](https://www.youtube.com/watch?v=oJ00ggFb8A0) → `yt-official-release-trailer-back-to-endfield.mp4` | 官方影像基调（4.2 min，⚠ 含 4:3 黑边） |
+| ★ PS5 Pro 实机 | [YouTube `jaH0HO9Y6Ug`](https://www.youtube.com/watch?v=jaH0HO9Y6Ug) → `yt-gameplay-demo-showcase-ps5pro.mp4` | 战斗 HUD、探索 |
 | 官方系统全景片 | [BV1zHkkB4ESQ 玩法前瞻「前进与开拓」](https://www.bilibili.com/video/BV1zHkkB4ESQ/) 10:42、1206 万播放 | 一次覆盖绝大多数界面形态 |
 | 官方实机长录 | [BV1qSJ9z7EMY 序章全流程演示](https://www.bilibili.com/video/BV1qSJ9z7EMY/) 14:50 | 真实交互节奏与转场 |
-| UI 专项 | [BV16zwne9Eod 整体 UI 展示+卡池展示](https://www.bilibili.com/video/BV16zwne9Eod/) 10:17 | 界面切换最密集 |
-| 纯 UI 录屏 | [YouTube PcG2xHzBYfc「UIを見る」](https://www.youtube.com/watch?v=PcG2xHzBYfc) | 无解说，抽帧效率最高 |
-| 菜单 IA | [YouTube 1m4WvuXY3Bg](https://www.youtube.com/watch?v=1m4WvuXY3Bg) | 菜单信息架构逐项讲解 |
-| 角色菜单动效 | [YouTube U_uRTrbBU5A](https://www.youtube.com/watch?v=U_uRTrbBU5A) | 过渡曲线参考 |
+| UI 专项 | [BV16zwne9Eod 整体 UI 展示+卡池展示](https://www.bilibili.com/video/BV16zwne9Eod/) 10:17 | 界面切换最密集（未下载，B 站流有 412 风控） |
 | **实现手法教学** | [BV1QHwYzPE1o](https://www.bilibili.com/video/BV1QHwYzPE1o/)（UI 元素）、[BV1S2zcB7EVL](https://www.bilibili.com/video/BV1S2zcB7EVL/)（扫描特效）、[BV1xMzgBKECZ](https://www.bilibili.com/video/BV1xMzgBKECZ/)（激光打印特效） | **直接教怎么做出官网那几种特效** |
-| 登录界面 | [BV1vewge7E7g](https://www.bilibili.com/video/BV1vewge7E7g/) | 逐帧登录页 |
-| 无 UI 场景（可作底图） | [BV19yNZedET4](https://www.bilibili.com/video/BV19yNZedET4/) | 21:9 纯净场景 |
+| 登录界面 | [BV1vewge7E7g](https://www.bilibili.com/video/BV1vewge7E7g/) | 逐帧登录页（未下载） |
+| 无 UI 场景（可作底图） | [BV19yNZedET4](https://www.bilibili.com/video/BV19yNZedET4/) | 21:9 纯净场景（未下载） |
 | 同源设计语言 | [BV1WFkwBJEhR 明日方舟「众生行记」UI/交互/动效记录](https://www.bilibili.com/video/BV1WFkwBJEhR/) | 鹰角 UI 动效规范的另一实例 |
+
 
 ## 6. 明确否定的来源（不要在这上面浪费时间）
 
@@ -88,3 +98,6 @@
 - Bilibili 搜索 API 需 wbi 签名（返回 0 结果）；但 `view?bvid=` 元数据接口可用（带 `Referer`）。**用 web 检索得到 BV 号，再用 API 取元数据与封面**是最省事的路径。
 - Bilibili 视频流下载易被 412 风控；本次以 **API 封面 + web 端页面**为主，视频流下载成功率不稳定。
 - 33 个字体文件的体积都很小（8–84 KB），说明是**子集化产物**（`Gilroy-Medium.woff2` 仅 8 KB），不要把它们当作完整字体使用。
+- **官网内嵌 MP4 是 5–24 秒的 PV 短片**（10 条合计约 102 秒），ffprobe 实测确认。**不要把它们当界面录屏用** —— 界面证据必须取自 `videos/` 下的长录屏。
+- **密抽帧（`07-dense-frames.ps1`）**：长录屏用 `-skip_frame nokey` + `fps=1/N` 抽帧，只解关键帧以换取速度；代价是**帧编号与视频时间码不严格对应**。接触表必须**按 40 张/页分页** —— 一次性拼 180 张会得到约 25000px 宽的图片，超过图像查看工具的 8192px 上限而无法阅读（这一点踩过一次）。
+- **判读抽帧时注意方向**：横向菜单里 `←`/`→` 是**页签切换**，`L1/R1` 是手柄肩键切页，不是内容滚动。
