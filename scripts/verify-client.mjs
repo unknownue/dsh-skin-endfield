@@ -223,6 +223,26 @@ check('endfield anchors are present (signal yellow + dark canvas)', () => {
 // ── guardrails: what the decor layer must NOT do ────────────────────────────
 const decor = styles.find((style) => style.dataset.pluginCss?.endsWith('/decor.css'))?.textContent ?? ''
 
+check('decor source has no unescaped backticks in its template literal', () => {
+  // The decor sheet is a JS template literal, so a stray backtick in a CSS
+  // comment terminates it early and the stylesheet silently loses everything
+  // after that point. `tsc` catches it, but this keeps the failure next to the
+  // behaviour it breaks.
+  const source = readFileSync(join(ROOT, 'src', 'client', 'decor.ts'), 'utf8')
+  const start = source.indexOf('export const endfieldDecor')
+  assert(start >= 0, 'endfieldDecor declaration not found')
+  const body = source.slice(start)
+  // Skip the opening delimiter, then look for another one before the closing
+  // sentinel at end of file.
+  const inner = body.slice(body.indexOf('`') + 1, body.lastIndexOf('`'))
+  const stray = inner.indexOf('`')
+  if (stray >= 0) {
+    const line = inner.slice(0, stray).split('\n').length
+    throw new Error(`unescaped backtick inside the decor template literal (line ~${line} of the literal)`)
+  }
+  return 'template literal intact'
+})
+
 check('decor never overrides font-family on elements (icon fonts would break)', () => {
   assert(!/font-family\s*:/i.test(decor), 'decor.css sets font-family')
   return 'no element-level font-family'
