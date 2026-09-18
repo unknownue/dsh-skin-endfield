@@ -37,6 +37,7 @@
     "verify": "pwsh -File scripts/verify-all.ps1",
     "verify:client": "node scripts/verify-client.mjs",
     "verify:host": "node scripts/verify-host.mjs",
+    "verify:corners": "node scripts/verify-corners-live.mjs",
     "verify:install": "pwsh -File scripts/verify-install.ps1",
     "smoke": "node scripts/smoke-browser.mjs",
     "showcase": "node scripts/showcase.mjs"
