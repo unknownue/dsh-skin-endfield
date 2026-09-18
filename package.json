@@ -33,7 +33,11 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "vendor:fonts": "pwsh -File scripts/vendor-fonts.ps1",
-    "verify": "node scripts/verify-client.mjs"
+    "verify": "pwsh -File scripts/verify-all.ps1",
+    "verify:client": "node scripts/verify-client.mjs",
+    "verify:host": "node scripts/verify-host.mjs",
+    "verify:install": "pwsh -File scripts/verify-install.ps1",
+    "smoke": "node scripts/smoke-browser.mjs"
   },
   "keywords": [
     "deepseek-harness",
