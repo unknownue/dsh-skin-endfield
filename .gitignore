@@ -7,6 +7,9 @@ tmp/
 .cache/
 *.log
 
+# smoke-test artifacts (page, context stub, screenshot, chrome profile)
+tests/out/
+
 # editor / OS
 .DS_Store
 Thumbs.db
@@ -16,3 +19,5 @@ Thumbs.db
 # NOTE: lib/ is intentionally NOT ignored — DSH plugins distribute built output
 # through git (pnpm blocks the prepare script), matching the convention of
 # dsh-workspace-enhancement / dsh-unknownue-plugins / dsh-win-docker-workspace.
+# assets/fonts/ IS committed: those three faces are OFL-licensed and the skin
+# must work offline.
