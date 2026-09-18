@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "endfield-design-tokens",
+  "version": "0.1.0",
+  "description": "《明日方舟：终末地》设计令牌。raw 段是官方取值（带来源与证据），dsl 段是映射到 DSH Web GUI 主题令牌的建议覆盖值。实现时以 dsl 段为准，raw 段仅供追溯。",
+  "provenance": {
+    "official-css": "官网 CSS bundle（web-static.hg-cdn.com/endfield/official-v4/_next/static/css/*.css），共 10 个文件 400,919 字符，2026-09 抓取",
+    "official-asset": "官网 CSS 引用的素材文件（165 个），本机取样",
+    "official-copy": "官方公告 API 97 条 + 官网正文",
+    "community": "社区设计分析文章（见 04-reference-sources.md）",
+    "inferred": "无直接证据的推断值"
+  },
+
+  "raw": {
+    "color": {
+      "accent": {
+        "signal-yellow": { "hex": "#FFFA00", "source": "official-css", "evidence": "CSS 出现 57 次；color-bar.png 取样一致", "role": "主强调：选中态/进度条/hover/装饰块" },
+        "signal-yellow-glow": { "hex": "#FFF000", "source": "official-css", "evidence": "10 次", "role": "发光变体" },
+        "signal-yellow-bright": { "hex": "#FDFD1F", "source": "official-css", "evidence": "6 次", "role": "变体" },
+        "signal-yellow-bright2": { "hex": "#FFFF21", "source": "official-css", "evidence": "3 次", "role": "变体" },
+        "triangle-yellow": { "hex": "#FCFC1F", "source": "official-asset", "evidence": "triangles.svg 的 fill 属性", "role": "三角母题专用" },
+        "amber": { "hex": "#FFCC1A", "source": "official-css", "evidence": "1 次", "role": "暖黄变体" }
+      },
+      "cmyk-colorbar": {
+        "note": "官方 color-bar.png（18x113px）实测五色，即强调色体系本身",
+        "magenta": { "hex": "#FF1AAC", "source": "official-asset", "evidence": "色标条取样 + CSS 6 次" },
+        "mint": { "hex": "#01FFA2", "source": "official-asset", "evidence": "色标条取样；CSS 写作 #00FFA2，9 次" },
+        "yellow": { "hex": "#FFFA00", "source": "official-asset", "evidence": "色标条取样" },
+        "gray": { "hex": "#D9D9D9", "source": "official-asset", "evidence": "色标条取样" },
+        "key": { "hex": "#000000", "source": "official-asset", "evidence": "色标条取样" }
+      },
+      "magenta-alt": { "hex": "#FF00F0", "source": "official-css", "evidence": "3 次", "role": "点缀变体" },
+      "surface-dark": {
+        "footer": { "hex": "#101010", "source": "official-css", "evidence": "官网 footer 背景声明", "role": "页脚/最底栏" },
+        "sunken": { "hex": "#141414", "source": "official-css", "evidence": "4 次", "role": "最深内嵌区" },
+        "canvas": { "hex": "#191919", "source": "official-css", "evidence": "深色最高频，85 次", "role": "主深色背景" },
+        "surface-2": { "hex": "#1F1F22", "source": "official-css", "evidence": "4 次；同时是 45 度斜线填充色", "role": "表面层" },
+        "surface-3": { "hex": "#2E2E2E", "source": "official-css", "evidence": "6 次", "role": "面板" },
+        "surface-4": { "hex": "#35373C", "source": "official-css", "evidence": "15 次；略带冷蓝调", "role": "面板/次级表面" },
+        "surface-5": { "hex": "#424242", "source": "official-css", "evidence": "9 次", "role": "抬起层" }
+      },
+      "text": {
+        "primary": { "hex": "#FFFFFF", "source": "official-css", "evidence": "95 次" },
+        "primary-alt": { "hex": "#FAFAFA", "source": "official-css", "evidence": "10 次" },
+        "primary-alt2": { "hex": "#F2F2F2", "source": "official-css", "evidence": "13 次" },
+        "secondary": { "hex": "#D9D9D9", "source": "official-css", "evidence": "33 次" },
+        "tertiary": { "hex": "#B3B3B3", "source": "official-css", "evidence": "8 次" },
+        "tertiary-alt": { "hex": "#A6A6A6", "source": "official-css", "evidence": "5 次" },
+        "quaternary": { "hex": "#999999", "source": "official-css", "evidence": "19 次" },
+        "muted": { "hex": "#7E7E7E", "source": "official-css", "evidence": "4 次" },
+        "muted-alt": { "hex": "#666666", "source": "official-css", "evidence": "10 次；也是 deco.svg 的 fill" }
+      },
+      "line": {
+        "hairline-light-1": { "hex": "#E7E7E7", "source": "official-css", "evidence": "1px solid 高频" },
+        "hairline-light-2": { "hex": "#E5E5E5", "source": "official-css", "evidence": "13 次" },
+        "hairline-light-3": { "hex": "#D9D9D9", "source": "official-css", "evidence": "33 次；虚线规与 1px solid 都用它" },
+        "hairline-light-4": { "hex": "#CCCCCC", "source": "official-css", "evidence": "12 次" }
+      }
+    },
+
+    "typography": {
+      "families": {
+        "display-latin": { "name": "Novecentosanswide", "weights": ["Medium", "DemiBold", "Bold"], "source": "official-css", "role": "拉丁标题/数字/标签；最标志性" },
+        "ui-latin": { "name": "Gilroy", "weights": ["Light", "Medium", "ExtraBold"], "source": "official-css", "role": "拉丁正文/UI" },
+        "base-latin": { "name": "Roboto", "weights": ["Regular", "Black"], "source": "official-css" },
+        "numeric-alt": { "name": "SpaceGrotesk", "weights": ["Regular"], "source": "official-css" },
+        "display-special": { "name": "ProtestStrike", "weights": ["Regular"], "source": "official-css", "role": "极少量的压缩模板体展示字" },
+        "cjk": { "name": "HarmonyOS Sans SC", "weights": ["Bold"], "source": "official-css", "role": "中文标题（站点以 SansRegular/Medium/Bold/Black 别名加载）" }
+      },
+      "system-fallback": "Segoe UI, Roboto, Helvetica Neue, Arial, PingFang SC, PingFang TC, Microsoft YaHei, Microsoft JhengHei, Hiragino Sans GB, Hiragino Kaku Gothic Pro, Yu Gothic UI, Meiryo, Apple SD Gothic Neo, Malgun Gothic, Leelawadee UI, Thonburi, Noto Sans, sans-serif",
+      "open-substitutes": {
+        "display": "\"Novecento Sans Wide\", Michroma, Orbitron, \"Saira Semi Condensed\", sans-serif",
+        "ui": "Jost, Poppins, Montserrat, system-ui, sans-serif",
+        "cjk": "\"HarmonyOS Sans SC\", \"HarmonyOS Sans\", \"Source Han Sans SC\", \"Noto Sans SC\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+        "mono": "\"JetBrains Mono\", \"IBM Plex Mono\", \"Roboto Mono\", ui-monospace, monospace"
+      },
+      "rules": {
+        "uppercase-latin-labels": { "value": true, "source": "official-css", "evidence": "text-transform:uppercase 出现 12 次" },
+        "display-letter-spacing": { "value": "-0.02em ~ -0.1em（含 -1px / -0.58rem）", "source": "official-css", "evidence": "大标题负字距是官方习惯" },
+        "small-label-letter-spacing": { "value": "0.05em（官方竖排小标签）；overline 建议 0.12em", "source": "official-css / inferred" },
+        "font-weight-declarations": { "value": 400, "source": "official-css", "evidence": "12 次；因为使用独立字重文件而非数值字重" },
+        "glow": { "value": "text-shadow: 0 0 10px #fff000", "source": "official-css" },
+        "scale-rem": { "value": [1, 1.125, 1.25, 1.375, 1.5, 1.625, 1.75, 1.875, 2, 2.25, 2.5, 2.625, 3, 3.5, 3.75, 4.5, 4.875, 8.125], "source": "official-css", "evidence": "font-size 频次由高到低" },
+        "viewport-scaling": { "value": "html.style.fontSize = 16 * min(vw/2560, vh/1440)", "source": "official-css", "evidence": "官网内联脚本；设计画布 2560x1440 横屏 / 1080x1920 竖屏" }
+      }
+    },
+
+    "shape": {
+      "radius": {
+        "default": "0（直角）",
+        "control": "2px / 4px（0.125rem / 0.25rem；0.25rem 出现 24 次）",
+        "pill": "1.875rem ~ 3.375rem（仅标签）",
+        "circle": "50%（圆点）",
+        "source": "official-css"
+      },
+      "border": {
+        "hairline": "1px solid",
+        "panel": "0.375rem solid #35373C（12 次）",
+        "dashed-rule": "0.125rem dashed #D9D9D9（10 次）",
+        "source": "official-css"
+      },
+      "shadow": {
+        "button": "0 0 0.75rem rgba(0,0,0,0.25)",
+        "deco-glow": "drop-shadow(0 0 0.25rem #FFF)",
+        "source": "official-css"
+      },
+      "clip-path": {
+        "arrow": "polygon(0 20%, 100% 50%, 0 80%, 0 80%)",
+        "reveal": "polygon(0 0, 0 0, 0 100%, 0 100%)",
+        "source": "official-css"
+      }
+    },
+
+    "texture": {
+      "hatching-45": { "css": "repeating-linear-gradient(-45deg, #1F1F22, #1F1F22 3px, transparent 0, transparent 6px)", "source": "official-css", "role": "选中项背景" },
+      "bars-vertical": { "css": "repeating-linear-gradient(90deg, #B2B2B2 0, 0.375rem, transparent 0, 0.5625rem)", "source": "official-css", "role": "条码/梯格纹理" },
+      "technical-frame": { "asset": "block-bg.svg", "spec": "方框描边 + 左上到右下对角线，stroke #000，stroke-width 2", "source": "official-asset" },
+      "contour": { "asset": "subpage-deco-lb.png / utton-texture.*.png", "spec": "极淡嵌套等高线地形底纹", "source": "official-asset" },
+      "dot-matrix": { "asset": "deco.svg", "spec": "7.09 单位方块错排矩阵，fill #666", "source": "official-asset" },
+      "pixel-stair": { "asset": "th-deco-rt.svg", "spec": "29.1 单位方块阶梯阵列（四角装饰）", "source": "official-asset" },
+      "triangles": { "asset": "triangles.svg", "spec": "3 个三角构成菱格，fill #FCFC1F", "source": "official-asset" },
+      "colorbar": { "asset": "color-bar.png", "spec": "18x113px，五色 CMYK 色标", "source": "official-asset" },
+      "blueprint-lineart": { "asset": "section_divider_icon_lore.png", "spec": "等轴测螺栓/螺母/螺纹杆线描，带剖面线与虚线尺寸标注", "source": "official-asset" },
+      "button-texture": { "asset": "button-texture.*.png", "spec": "按钮叠加贴图", "source": "official-asset" }
+    },
+
+    "motion": {
+      "flash-in": { "value": "1s ease-out forwards; 0% { opacity: 0 }", "source": "official-css", "evidence": "官网多个章节的 *_flashing keyframes", "role": "章节/面板激活时闪入" },
+      "loading-fade-in": { "value": "0.6s cubic-bezier(1, 0, 0.7, 1) 0.5s forwards", "source": "official-css", "evidence": "__00-Loading_fadeIn", "role": "加载页淡入" },
+      "activity-shake": { "value": "2s ease-in-out infinite", "source": "official-css", "role": "活动角标微抖" },
+      "background-breath": { "value": "同 downloadBgBreath", "source": "official-css", "role": "背景呼吸" },
+      "scroll-tip": { "value": "1.6s infinite", "source": "official-css", "role": "滚动提示浮动" },
+      "spinner": { "value": "1.5s linear infinite", "source": "official-css", "evidence": "OrigQuery_rotate" },
+      "transition-default": { "value": "0.3s", "source": "official-css", "evidence": "Pagination_block / Header_navItem / naviDot 统一 .3s" },
+      "wipe-reveal": { "value": "clip-path 宽度 0 -> 100%", "source": "official-css" },
+      "typewriter": { "value": "逐行/逐字显现", "source": "official-css", "evidence": "codePrinter 类名（位置 left:0; top:6.9375rem）" },
+      "easing": {
+        "default": "cubic-bezier(0.25, 0.8, 0.25, 1)",
+        "sharp": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "source": "official-css / inferred"
+      }
+    },
+
+    "copy-conventions": {
+      "block-prefix": "//",
+      "section-header": "▼//",
+      "sub-item": "■",
+      "system-name": "「」",
+      "item-reward": "【】",
+      "bullet": "•",
+      "footnote": "※",
+      "breadcrumb": " - ",
+      "protocol-number": "Chapter Ⅰ Process I / 第二章 - 进程Ⅵ",
+      "counter": "010 / 010（零填充 + 空格 + 斜杠）",
+      "vertical-tag": "/// ARKNIGHTS: ENDFIELD",
+      "source": "official-copy（97 条官方公告 + 官网正文；▼ 42 次、// 42 次、「」134 次、【】73 次）"
+    }
+  },
+
+  "dsl": {
+    "note": "映射到 DSH Web GUI 的主题令牌。Token 名已在 @deepseek-ai/dsh-client-ui-theme 中实测存在（79 个 --dsw-alias-* 全部核对通过）。通过 ctx.theme.overrideTokens(source, {token: {light, dark}}) 提交。",
+    "mapping": {
+      "--dsw-alias-bg-base":                        { "light": "#F4F4F1", "dark": "#191919", "reason": "官方主深色画布；浅色模式用极浅灰白" },
+      "--dsw-alias-bg-layer-1":                     { "light": "#FFFFFF", "dark": "#1F1F22", "reason": "surface-2" },
+      "--dsw-alias-bg-layer-2":                     { "light": "#FFFFFF", "dark": "#2E2E2E", "reason": "surface-3" },
+      "--dsw-alias-bg-layer-3":                     { "light": "#FAFAFA", "dark": "#35373C", "reason": "surface-4" },
+      "--dsw-alias-bg-overlay":                     { "light": "#FFFFFF", "dark": "#141414", "reason": "最深内嵌区" },
+      "--dsw-alias-bg-module-platform":             { "light": "#FFFFFF", "dark": "#191919", "reason": "画布" },
+      "--dsw-alias-bg-mask-1":                      { "light": "rgba(0,0,0,0.04)", "dark": "rgba(255,255,255,0.04)", "reason": "inferred" },
+      "--dsw-alias-bg-mask-2":                      { "light": "rgba(0,0,0,0.08)", "dark": "rgba(255,255,255,0.08)", "reason": "inferred" },
+      "--dsw-alias-bg-mask-3":                      { "light": "rgba(0,0,0,0.14)", "dark": "rgba(255,255,255,0.14)", "reason": "inferred" },
+      "--dsw-alias-bg-multi-select":                { "light": "rgba(255,250,0,0.28)", "dark": "rgba(255,250,0,0.22)", "reason": "信号黄多选底色" },
+      "--dsw-alias-bg-skeleton":                    { "light": "#EDEDED", "dark": "#2E2E2E", "reason": "inferred" },
+      "--dsw-alias-border-l1":                      { "light": "#D9D9D9", "dark": "#2E2E2E", "reason": "发丝线" },
+      "--dsw-alias-border-l2":                      { "light": "#D9D9D9", "dark": "#35373C", "reason": "面板描边（0.375rem solid #35373C 为官方高频）" },
+      "--dsw-alias-border-l2-darkmode-thin":        { "light": "#E7E7E7", "dark": "#3A3A3A", "reason": "更细的深色描边" },
+      "--dsw-alias-border-l3":                      { "light": "#CCCCCC", "dark": "#424242", "reason": "抬起层描边" },
+      "--dsw-alias-border-l4":                      { "light": "#B3B3B3", "dark": "#4D4D4D", "reason": "inferred" },
+      "--dsw-alias-border-inverted":                { "light": "#FFFFFF", "dark": "#191919", "reason": "反白体系" },
+      "--dsw-alias-border-inverted2":               { "light": "#FAFAFA", "dark": "#141414", "reason": "反白体系" },
+      "--dsw-alias-label-primary":                  { "light": "#191919", "dark": "#F2F2F2", "reason": "文字主色" },
+      "--dsw-alias-label-primary-bluish":           { "light": "#191919", "dark": "#FAFAFA", "reason": "inferred" },
+      "--dsw-alias-label-primary-dimmed":           { "light": "#424242", "dark": "#D9D9D9", "reason": "文字次色" },
+      "--dsw-alias-label-primary-inverted":         { "light": "#FFFFFF", "dark": "#191919", "reason": "反白文字" },
+      "--dsw-alias-label-primary-foreground":       { "light": "#FFFFFF", "dark": "#000000", "reason": "黄底上的前景（黄底用黑字）" },
+      "--dsw-alias-label-secondary":                { "light": "#424242", "dark": "#D9D9D9", "reason": "D9D9D9 出现 33 次" },
+      "--dsw-alias-label-tertiary":                 { "light": "#666666", "dark": "#999999", "reason": "#999 出现 19 次" },
+      "--dsw-alias-label-caption":                  { "light": "#7E7E7E", "dark": "#7E7E7E", "reason": "muted" },
+      "--dsw-alias-label-dimmed":                   { "light": "#A6A6A6", "dark": "#666666", "reason": "muted-alt" },
+      "--dsw-alias-brand-primary":                  { "light": "#E6E000", "dark": "#FFFA00", "reason": "信号黄；浅色模式略压暗以保对比" },
+      "--dsw-alias-brand-primary-invert":           { "light": "#191919", "dark": "#191919", "reason": "黄底上的墨色" },
+      "--dsw-alias-brand-text":                     { "light": "#191919", "dark": "#FFFA00", "reason": "品牌文字" },
+      "--dsw-alias-link":                           { "light": "#007A4E", "dark": "#00FFA2", "reason": "mint 作链接/次强调；浅色模式压暗" },
+      "--dsw-alias-state-success-primary":          { "light": "#007A4E", "dark": "#00FFA2", "reason": "mint（官方色标条含此色）" },
+      "--dsw-alias-state-success-secondary":        { "light": "#12A56B", "dark": "#4DFFBE", "reason": "inferred" },
+      "--dsw-alias-state-success-tertiary":         { "light": "rgba(0,255,162,0.16)", "dark": "rgba(0,255,162,0.16)", "reason": "inferred" },
+      "--dsw-alias-state-warn-primary":             { "light": "#B3A800", "dark": "#FFFA00", "reason": "警示由信号黄承担" },
+      "--dsw-alias-state-warn-secondary":           { "light": "#8C8400", "dark": "#FFF000", "reason": "inferred" },
+      "--dsw-alias-state-warn-tertiary":            { "light": "rgba(255,250,0,0.20)", "dark": "rgba(255,250,0,0.16)", "reason": "inferred" },
+      "--dsw-alias-state-warn-label":               { "light": "#6B6500", "dark": "#FFFA00", "reason": "inferred" },
+      "--dsw-alias-state-error-primary":            { "light": "#C4007A", "dark": "#FF1AAC", "reason": "品红；官方未定义 error，此为最佳候选（见 01 文档 2.5）" },
+      "--dsw-alias-state-error-secondary":          { "light": "#FF1AAC", "dark": "#FF62C4", "reason": "inferred" },
+      "--dsw-alias-state-business-primary":         { "light": "#007A4E", "dark": "#00FFA2", "reason": "inferred" },
+      "--dsw-alias-state-business-tertiary":        { "light": "rgba(0,255,162,0.16)", "dark": "rgba(0,255,162,0.16)", "reason": "inferred" },
+      "--dsw-alias-button-primary-fill":            { "light": "#FFFA00", "dark": "#FFFA00", "reason": "黄底主按钮（官方下载按钮素材即如此）" },
+      "--dsw-alias-button-primary-hover":           { "light": "#FFF000", "dark": "#FFF000", "reason": "官方发光变体" },
+      "--dsw-alias-button-primary-dimmed":          { "light": "rgba(255,250,0,0.45)", "dark": "rgba(255,250,0,0.45)", "reason": "inferred" },
+      "--dsw-alias-button-contrast-fill":           { "light": "#FFFFFF", "dark": "#FFFFFF", "reason": "反白高亮按钮（官方 Button_light = #FFF 底 + #000 字）" },
+      "--dsw-alias-button-elevated-fill":           { "light": "#FFFFFF", "dark": "#35373C", "reason": "surface-4" },
+      "--dsw-alias-button-floating-fill":           { "light": "#FFFFFF", "dark": "#2E2E2E", "reason": "surface-3" },
+      "--dsw-alias-button-floating-hover":          { "light": "#FAFAFA", "dark": "#424242", "reason": "surface-5" },
+      "--dsw-alias-button-ghost-active-fill":       { "light": "rgba(255,250,0,0.18)", "dark": "rgba(255,250,0,0.14)", "reason": "inferred" },
+      "--dsw-alias-button-ghost-active-hover":      { "light": "rgba(255,250,0,0.26)", "dark": "rgba(255,250,0,0.22)", "reason": "inferred" },
+      "--dsw-alias-button-ghost-active-border":     { "light": "#FFFA00", "dark": "#FFFA00", "reason": "inferred" },
+      "--dsw-alias-button-info-fill":               { "light": "#00FFA2", "dark": "#00FFA2", "reason": "mint" },
+      "--dsw-alias-button-info-hover":              { "light": "#4DFFBE", "dark": "#4DFFBE", "reason": "inferred" },
+      "--dsw-alias-button-tool-bar-fill":           { "light": "#FFFFFF", "dark": "#2E2E2E", "reason": "inferred" },
+      "--dsw-alias-button-tool-bar-fill-invisible": { "light": "rgba(255,255,255,0)", "dark": "rgba(46,46,46,0)", "reason": "inferred" },
+      "--dsw-alias-button-tool-bar-hover":          { "light": "#F2F2F2", "dark": "#424242", "reason": "inferred" },
+      "--dsw-alias-interactive-bg-hover":           { "light": "rgba(25,25,25,0.06)", "dark": "rgba(217,217,217,0.08)", "reason": "inferred" },
+      "--dsw-alias-interactive-bg-hover-accent":    { "light": "rgba(255,250,0,0.18)", "dark": "rgba(255,250,0,0.12)", "reason": "inferred" },
+      "--dsw-alias-interactive-bg-hover-danger":    { "light": "rgba(255,26,172,0.14)", "dark": "rgba(255,26,172,0.18)", "reason": "inferred" },
+      "--dsw-alias-interactive-bg-hover-solid":     { "light": "#EDEDED", "dark": "#2E2E2E", "reason": "inferred" },
+      "--dsw-alias-interactive-bg-active":          { "light": "rgba(25,25,25,0.10)", "dark": "rgba(217,217,217,0.12)", "reason": "inferred" },
+      "--dsw-alias-markdown-code-block":            { "light": "#F4F4F1", "dark": "#141414", "reason": "sunken" },
+      "--dsw-alias-markdown-code-block-banner":     { "light": "#EDEDED", "dark": "#1F1F22", "reason": "inferred" },
+      "--dsw-alias-markdown-code-segment-selected": { "light": "#FFFA00", "dark": "#FFFA00", "reason": "信号黄" },
+      "--dsw-alias-markdown-code-segment-unselected": { "light": "#D9D9D9", "dark": "#35373C", "reason": "inferred" },
+      "--dsw-alias-markdown-inline-code":           { "light": "rgba(25,25,25,0.07)", "dark": "rgba(217,217,217,0.10)", "reason": "inferred" },
+      "--dsw-alias-markdown-placeholder":           { "light": "#A6A6A6", "dark": "#666666", "reason": "inferred" },
+      "--dsw-alias-markdown-tag":                   { "light": "rgba(255,250,0,0.22)", "dark": "rgba(255,250,0,0.18)", "reason": "inferred" },
+      "--dsw-alias-markdown-citation":              { "light": "#007A4E", "dark": "#00FFA2", "reason": "inferred" },
+      "--dsw-alias-scrollbar-bg-l1":                { "light": "rgba(25,25,25,0.18)", "dark": "rgba(217,217,217,0.20)", "reason": "inferred" },
+      "--dsw-alias-scrollbar-bg-l2":                { "light": "rgba(25,25,25,0.12)", "dark": "rgba(217,217,217,0.14)", "reason": "inferred" },
+      "--dsw-alias-scrollbar-hover-l1":             { "light": "rgba(25,25,25,0.32)", "dark": "rgba(255,250,0,0.55)", "reason": "hover 时转信号黄" },
+      "--dsw-alias-scrollbar-hover-l2":             { "light": "rgba(25,25,25,0.24)", "dark": "rgba(255,250,0,0.40)", "reason": "inferred" },
+      "--dsw-alias-toast-bg":                       { "light": "#FFFFFF", "dark": "#35373C", "reason": "inferred" },
+      "--dsw-alias-tooltip-bg":                     { "light": "#191919", "dark": "#F2F2F2", "reason": "黑黄体系里最可靠的做法：tooltip 反白（浅色模式用深底）" }
+    },
+    "globalOverrides": {
+      "--dsw-font-family": { "light": "Jost, Poppins, Montserrat, system-ui, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif", "dark": "Jost, Poppins, Montserrat, system-ui, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif", "reason": "Gilroy 的开源替代（Jost 几何无衬线最接近）" },
+      "--ds-font-family-code": { "light": "\"JetBrains Mono\", \"IBM Plex Mono\", ui-monospace, Consolas, monospace", "dark": "\"JetBrains Mono\", \"IBM Plex Mono\", ui-monospace, Consolas, monospace", "reason": "等宽数字语汇" }
+    },
+    "pendingVerification": [
+      "浅色模式取值全部为派生值（官方站以浅色为主，但皮肤需自洽），实现后需逐屏取色复核对比度",
+      "rgba() 形式的 mask/hover 值为推断，需在真实 UI 上校准",
+      "--dsw-corner-shape（默认 superellipse(1.5)）应改为直角以符合终末地语言：值待确认"
+    ]
+  }
+}
