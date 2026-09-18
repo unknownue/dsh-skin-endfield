@@ -21,8 +21,12 @@
 | `screenshots/06-official-news-dev3846.png` | 公告正文页（`「」`/`【】`/对角线 + 黄底技术框横幅） |
 | `ui-primitives/sheet-frames-decor.png` | 18 个"框架/装饰"母题切片：`block-bg`（框+对角线）、`deco_text`（`"MISSION-DEPENDENT PAYLOAD SYSTEM INTERFACES"`）、`eft-deco-text`（`/// ARKNIGHTS: ENDFIELD`）、`th-deco-rt`（像素方块阶梯）、`triangles`（黄三角三元组）、`bpage-deco`、`th-deco-lb`（虚线段） |
 | `ui-primitives/sheet-ui-controls.png` | 按钮/控件母题：黄底下载按钮（左上黑三角 + 右箭头）、`utton-texture`（等高线纹理）、`arrow`、`cloud-game` |
+| `ui-primitives/in-game-frame-menu-collection.jpg` | **实机帧证据 ①**：角色详情 / 技能树（雷达图+`RANK`）/ 武器强化（`BIOFIELD`）/ 装备面板 / 地图 / 战斗 HUD / `// 谷地通道` / 等级提升弹窗 |
+| `ui-primitives/in-game-frame-menus-and-hud.jpg` | **实机帧证据 ②**：探索 HUD 四角布局 / `NEWS`+`NOTICES` 双栏面板 / AIC 科技树（黄菱形节点+黄连线）/ `//GUIDE`+`Manual|Daily|Tracking|Hints` 页签 / `//PROTOCOL EXCHANGE` 兑换网格（`Sold out` 置灰）/ `//CRAFTING / CRAFTING MANUAL` / 教程面板 |
+| `ui-primitives/in-game-frame-detail-cards.jpg` | **实机帧证据 ③**：任务 HUD / 剧情字幕 / **白色详情卡（武器 `アングロス・スレイヤー`：白底+顶部深色标题栏+底部操作行）** / 四栏菜单底部 / 登录过场（纯黑 + 白字标 + 方格装饰 + 黄边长条） |
 | `ui-primitives/sheet-backgrounds.png` | 背景与纹理：等高线纹理 `utton-texture.*`、`grid`（蓝图网格）、`points-bg`（点阵）、`tape-wave-bg`（波纹）、`sider_bg`、`wave-bg`、`est-notice-bg`（黄底通讯横幅）、`block-bg` |
 | `ui-primitives/sheet-logos-marks.png` | 标识：`END FIELD` 字标、`OVER THE FRONTIER` 字标、`endfield.bcc6fe39`（三角徽章）、黄底 logo |
+| `ui-primitives/sheet-video-refs.png` | 优先参考视频的封面总览（B 站官方/社区/教程 + YouTube） |
 | `ui-primitives/color-bar.1f0aa038.png` | **官方 CMYK 色标条**（18×113，实测五色） |
 | `ui-primitives/block-bg.f05eda37.svg` | **技术框原型的原始 SVG**（框 + 对角线，`stroke #000` `stroke-width 2`） |
 | `ui-primitives/deco.dbe18bea.svg` | 点阵/装饰原始 SVG（`fill #666`） |
