@@ -126,8 +126,11 @@ try {
     // getComputedStyle serialises a content string with its quotes: `"//"`.
     // Strip them before comparing, or the assertion fails on a correct rule.
     const unquote = (v) => (typeof v === 'string' ? v.replace(/^"|"$/g, '') : v)
-    check(unquote(b.headerPrefix) === '//', `header prefix content=${JSON.stringify(b.headerPrefix)}`)
-    check(b.headerTransform === 'uppercase', `header transform ${b.headerTransform}`)
+    const prefix = unquote(b.headerPrefix)
+    check(prefix === '//' || prefix === 'none', `header prefix content=${JSON.stringify(b.headerPrefix)}`)
+    // The header must NOT be force-uppercased: a first row is often a command
+    // line or a path, and an earlier version shouted those (it has been removed).
+    check(b.headerTransform === 'none', `header transform ${b.headerTransform} (must stay as typed)`)
   }
 
   console.log(fails === 0 ? '\nOK: technical readout chrome is applied' : `\n${fails} check(s) failed`)

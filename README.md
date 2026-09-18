@@ -9,15 +9,33 @@
 | 阶段 | 状态 |
 |------|------|
 | Step 1 — 设计参考资料收集 | ✅ 完成（`docs/design-reference/`） |
-| Step 2 — 插件实现 | ✅ 可构建、可验证（三层测试全绿） |
-| Step 3 — 载入真实 GUI 观察 | ⏳ **待你确认**（见下方「装到 GUI 上」） |
+| Step 2 — 插件实现 | ✅ 可构建、可验证（离线 17/17 + 9/9） |
+| Step 3 — 载入真实 GUI 观察 | ✅ 已装载并逐项实测（见下「实测验证」） |
+| Step 4 — 皮肤设置页 | ✅ 已实现（需重启 `dsh web` 完成宿主侧注册，见下） |
 
 ## 这是什么
 
 一个标准 DSH 插件包，两半：
 
-- **宿主半边**（`lib/index.js`）：把包注册为 loader 行，并提供一条只读字体路由 `/skin-endfield/fonts`。
-- **浏览器半边**（`lib/client.js`）：调用官方主题接缝 `ctx.theme.overrideTokens()` 覆盖 78 个 `--dsw-alias-*` 令牌，再叠一层装饰样式（角括号、`//` 标题、45° 斜线、直角、菱形）。
+- **宿主半边**（`lib/index.js`）：把包注册为 loader 行、提供只读字体路由 `/skin-endfield/fonts`，并注册持久化设置命名空间 `dsh-skin-endfield`。
+- **浏览器半边**（`lib/client.js`）：调用官方主题接缝 `ctx.theme.overrideTokens()` 覆盖 78 个 `--dsw-alias-*` 令牌，再叠一层装饰样式；同时把设置值写成 CSS 变量，并往 **设置 → Endfield Skin** 注册一个设置页。
+
+## 设置页（皮肤可调项）
+
+设置面板里新增一节 **Endfield Skin**，四项都即时生效并写入 Harness 的设置文档：
+
+| 项 | 作用 |
+|----|------|
+| **Accent tint** | 选中/焦点描边色。默认黄绿 `#D0E94F`（实机取色），可任意改成你喜欢的颜色 |
+| **Bloom** | 描边外发光强度，`0` 只留描边不留光 |
+| **Corner radius** | 皮肤把输入框/代码块/消息气泡压平；`0` 保持直角，正数可重新圆回来 |
+| **Section marker** | 是否显示 `//` 前缀标记 |
+
+### 为什么设置页不是 import 出来的
+
+`@deepseek-ai/dsh-client-modules` 会**拒绝任何 require 了平台基线之外包的动态 bundle**，而且失败会**中断整个 Web 启动**。所以设置基座包（`dsh-client-ui-settings`）不能 import —— 皮肤通过 **service** 拿到 `ctx.slots` / `ctx.settingsScope`，用静态模块表里的 `react` 渲染，bundle 的 `require` 只有一条 `react`。
+
+同样地，宿主半边**不 provide 任何 Cordis 服务**：注册设置命名空间是 fiber 上的 effect，不是提供服务（接缝规则禁止同 scope 第二个 provider）。
 
 **不替换任何组件、不引用任何 hashed 类名、不 provide 任何服务** —— 整个皮肤是加法，卸载即完全还原（已被测试证明）。
 
@@ -26,13 +44,31 @@
 ```sh
 pnpm install
 pnpm build          # tsdown: lib/index.js + lib/client.js
+pnpm watch          # 免重启环路：改 src/client/* 保存即生效（详见下节）
 pnpm typecheck
-node scripts/verify-client.mjs    # 15 项：bundle 契约、令牌、装饰层护栏、卸载对称性
+node scripts/verify-client.mjs    # 17 项：bundle 契约、令牌、装饰层护栏、卸载对称性
 node scripts/verify-host.mjs      #  9 项：字体路由、路径穿越防护、注册/卸载对称性
 node scripts/smoke-browser.mjs    # 真浏览器渲染 + 截图 tests/out/smoke.png
 node scripts/showcase.mjs         # 案例参考：把皮肤铺到 DSH 界面元素上并输出对照图
 pwsh -File scripts/verify-all.ps1 # 一次跑全部（verify:install 在未安装前会报未注册，属预期）
 ```
+
+## 去真实 GUI 上实测
+
+上面几个脚本只证明**样式表发出了、作用域没跑偏**，证明不了**规则真的赢了**。外壳把输入框写成 22px、各类代码块写成 12px、消息气泡写成 22px，而且用三条不同机制下发，所以下面三个脚本会**打开运行中的 GUI、读回计算值**：
+
+```powershell
+# 需要 token：GUI 没有 token 会回 401，脚本会在抓到空 DOM 时明确报错而不是假通过
+$env:DSH_URL = (Select-String -Path "$env:USERPROFILE\.dsh-web.out.log" `
+  -Pattern 'http://\S*token=\S*').Matches.Value | Select-Object -Last 1
+
+node scripts/verify-corners-live.mjs          # 输入框 / 代码块 7 类 / 6 个半径变量 = 0px
+node scripts/verify-focus-signature.mjs       # 黄绿描边+柔光真的生效；两黄确实不同值
+node scripts/verify-tool-block-chrome.mjs     # 代码块的角括号、发丝线、// 前缀
+node scripts/verify-typography-and-bubble.mjs # 全局无强制大写；消息气泡为直角
+```
+
+> 后一个脚本必须**先进入一个已有会话**才有效：应用启动落在 New Session 空页面（没有消息列表），侧栏会话行也要先展开 "Show N more sessions"。这一点踩过两次 —— 直接探会得到「0 个气泡」，那不能证明任何事。
 
 ## 案例参考（评估效果用）
 

@@ -124,6 +124,16 @@ const contextScript = `window.__skinSmoke = (() => {
   let registration = null;
   window.__ModuleLoader__ = { load(entry) { registration = entry } };
 
+  // The shell seeds "react" in its static module table, so the bundle's single
+  // external request is react. This stub stands in for that table: the smoke
+  // run never renders the settings page (the slot ledger's inject callback only
+  // runs when the settings panel mounts), so only the module's shape is needed.
+  const reactStub = {
+    createElement(type, props, ...children) { return { type, props, children } },
+    useState(initial) { return [typeof initial === 'function' ? initial() : initial, () => {}] },
+    useEffect() {},
+  };
+
   const ctx = {
     theme: {
       overrideTokens(source, layer) {
@@ -145,6 +155,7 @@ const contextScript = `window.__skinSmoke = (() => {
     if (registration === null) throw new Error('bundle never registered with the loader');
     if (typeof registration.factory !== 'function') throw new Error('loader entry has no factory');
     const exports = registration.factory((spec) => {
+      if (spec === 'react') return reactStub;
       throw new Error('bundle requested unresolved platform module: ' + spec);
     });
     if (typeof exports.apply !== 'function') throw new Error('bundle exports no apply()');

@@ -1,25 +1,52 @@
 /**
  * Host half of dsh-skin-endfield.
  *
- * The host row exists for two reasons:
+ * The host row exists for three reasons:
  *   1. it makes this package a loader entry, which is what makes the harness
  *      pick up the `dsh.client` browser bundle at all;
  *   2. it serves the vendored open-source font faces from `/skin-endfield/fonts/`
- *      so the browser half never needs a data: URI or an external CDN.
+ *      so the browser half never needs a data: URI or an external CDN;
+ *   3. it registers the durable settings namespace behind the Skin settings
+ *      page, so the accent tint survives a reload instead of living in memory.
  *
- * It intentionally provides no Cordis service: the DSH seam rules forbid a
- * second provider in the same scope, and a skin has no service to offer.
+ * It intentionally provides no Cordis service of its own: the DSH seam rules
+ * forbid a second provider in the same scope, and a skin has no service to
+ * offer. Registering a settings *namespace* is not providing a service — it is
+ * a registration effect on this plugin's fiber.
  */
 import { createReadStream, statSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
 import { dirname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import z from '@deepseek-ai/schemastery'
+import { SKIN_SETTINGS_DEFAULTS, SKIN_SETTINGS_NAMESPACE } from './settings.ts'
 import type { HostContext } from './types.ts'
 
 export const name = 'dsh-skin-endfield'
 
-/** Injected service names this plugin needs on the host plane. */
+/**
+ * Injected service names this plugin needs before it runs. A settings service
+ * is deliberately NOT listed: namespacing is optional here, and listing it would
+ * make the whole plugin wait on (and fail without) a service that the skin can
+ * happily run without. `apply` reaches for `ctx.settings` defensively instead.
+ */
 export const inject = ['webServer']
+
+/**
+ * Durable skin settings.
+ *
+ * The defaults here are duplicated in `SKIN_SETTINGS_DEFAULTS` on purpose: the
+ * schema is the authority for what the Host will accept and persist, while the
+ * constant is the authority the browser falls back on when no settings service
+ * is composed at all. `src/verify-settings-parity` in the test suite asserts the
+ * two agree, so they cannot drift silently.
+ */
+export const SkinSettingsSchema = z.object({
+  tint: z.string().default(SKIN_SETTINGS_DEFAULTS.tint),
+  bloom: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.bloom),
+  cornerRadius: z.number().min(0).max(24).default(SKIN_SETTINGS_DEFAULTS.cornerRadius),
+  labelPrefix: z.boolean().default(SKIN_SETTINGS_DEFAULTS.labelPrefix),
+})
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 /** `lib/` -> package root; fonts are shipped in `assets/fonts`. */
@@ -68,7 +95,33 @@ function handleFontRequest(rawUrl: string | undefined, res: ServerResponse): voi
   createReadStream(target).pipe(res)
 }
 
+/** Register the durable settings namespace when a settings service is composed. */
+function registerSkinSettings(ctx: HostContext): boolean {
+  if (ctx.settings === undefined) {
+    ctx.logger?.warn?.(
+      'dsh-skin-endfield: no settings service composed — the Skin settings page will be '
+      + 'inert and the skin uses its built-in defaults.',
+    )
+    return false
+  }
+  try {
+    ctx.settings.register(SKIN_SETTINGS_NAMESPACE, SkinSettingsSchema)
+    ctx.logger?.info?.(`dsh-skin-endfield: settings namespace "${SKIN_SETTINGS_NAMESPACE}" registered`)
+    return true
+  } catch (error) {
+    // A schema the Host refuses must not take the whole plugin (and with it the
+    // font route and the skin) down; report it and keep running on defaults.
+    ctx.logger?.warn?.(
+      `dsh-skin-endfield: settings registration failed (${error instanceof Error ? error.message : String(error)}) — `
+      + 'the skin continues on its built-in defaults.',
+    )
+    return false
+  }
+}
+
 export function apply(ctx: HostContext): void {
+  registerSkinSettings(ctx)
+
   if (ctx.webServer === undefined) {
     ctx.logger?.warn?.(
       'dsh-skin-endfield: ctx.webServer unavailable — the vendored fonts will not be served; '
