@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+*.tsbuildinfo
+
+# local caches / large reference material (see assets/manifest.md)
+tmp/
+.cache/
+*.log
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# NOTE: lib/ is intentionally NOT ignored — DSH plugins distribute built output
+# through git (pnpm blocks the prepare script), matching the convention of
+# dsh-workspace-enhancement / dsh-unknownue-plugins / dsh-win-docker-workspace.

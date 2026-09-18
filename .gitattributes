@@ -1,0 +1,12 @@
+# Keep textual sources LF for reproducible diffs; do not let autocrlf rewrite them.
+*.md    text eol=lf
+*.json  text eol=lf
+*.mjs   text eol=lf
+*.ps1   text eol=lf
+*.ts    text eol=lf
+
+# Reference screenshots are binary assets.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.svg   text eol=lf
