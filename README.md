@@ -137,8 +137,10 @@ assets/fonts/             OFL 开源字体（见 assets/fonts/NOTICE.md）
 | 路径 | 例子 | 打法 |
 |------|------|------|
 | 元素自己声明变量 | 终端块在自身类规则里写 `--dsl-terminal-radius: 12px` | 变量必须声明在 `body *` 上 —— 声明在 `body` 会被元素的自身规则遮蔽 |
-| 元素读变量 | `border-radius: var(--dsl-*-radius)` | 把 6 个 `--dsl-*-radius` 全置 0，新块类型自动跟着直角 |
+| 元素读变量 | `border-radius: var(--dsl-*-radius)` | 6 个 `--dsl-*-radius` 全部指向 `--endfield-corner-radius`，改一个变量即可重圆，新块类型自动跟随 |
 | 字面量、无变量 | 行内代码 `border-radius: 6px` | 只能显式选择器，且**必须够具体** |
+
+> **关于设置页的 Corner radius**：皮肤是**主动把圆角抹成 0** 的，所以把该值调大时，这些表面会**统一**变成同一个半径 —— 它不会还原成"外壳原本那样有的 22px、有的 12px、有的 6px"。这是扁平化设计的固有代价，不是 bug。
 
 外壳还让 `corner-shape` 取 `--dsw-corner-shape`（默认 `superellipse(1.5)`）；半径为 0 时它仍会读作圆角方框，所以被压平的表面都显式钉 `corner-shape: round`。
 
