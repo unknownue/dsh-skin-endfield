@@ -11,6 +11,7 @@
  * second provider in the same scope, and a skin has no service to offer.
  */
 import { createReadStream, statSync } from 'node:fs'
+import type { ServerResponse } from 'node:http'
 import { dirname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { HostContext } from './types.ts'
@@ -33,14 +34,10 @@ const MIME: Record<string, string> = {
 }
 
 /**
- * Serve `assets/fonts` read-only. `path` is normalised and then checked
- * against the font directory, so `..` cannot escape it.
+ * Serve `assets/fonts` read-only. `path` is normalised and then checked against
+ * the font directory, so `..` cannot escape it.
  */
-function handleFontRequest(rawUrl: string | undefined, res: {
-  statusCode?: number
-  setHeader(name: string, value: string): void
-  end(body?: unknown): void
-}): void {
+function handleFontRequest(rawUrl: string | undefined, res: ServerResponse): void {
   const pathOnly = (rawUrl ?? '').split('?')[0] ?? ''
   const relative = decodeURIComponent(pathOnly.slice(FONT_ROUTE.length)).replace(/^\/+/, '')
   const target = normalize(join(FONT_DIR, relative))
@@ -68,7 +65,7 @@ function handleFontRequest(rawUrl: string | undefined, res: {
   res.setHeader('content-length', String(size))
   // Vendored faces are immutable per release; keep them cacheable.
   res.setHeader('cache-control', 'public, max-age=86400')
-  createReadStream(target).pipe(res as unknown as NodeJS.WritableStream)
+  createReadStream(target).pipe(res)
 }
 
 export function apply(ctx: HostContext): void {
@@ -84,7 +81,7 @@ export function apply(ctx: HostContext): void {
     kind: 'prefix',
     path: FONT_ROUTE,
     handler: (req, res) => {
-      handleFontRequest((req as { url?: string }).url, res as never)
+      handleFontRequest(req.url, res)
     },
   }), 'dsh-skin-endfield: font route')
 
