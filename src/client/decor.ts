@@ -246,9 +246,76 @@ body :is([data-tone], [data-state]):not(:has(p, pre, ul, ol, table)) {
   font-variant-caps: all-small-caps;
 }
 
-/* ── 11. focus ring: a hard yellow outline, not a halo ─────────────────── */
+/* ── 11. focus / selection: the chartreuse signature ───────────────────── */
+/* The treatment that most reads as "Endfield": in-game every focused or
+   selected item gets a ~2px chartreuse outline plus a soft outer bloom. It was
+   measured across six screen families (ability matrix, gear slots, market,
+   theme list, mission board, settings), so it is treated here as the skin's
+   single interactive signature rather than a per-component style.
+
+   Deliberately NOT palette tokens: these live in the decor layer so the
+   semantic aliases keep their official-yellow meaning. The split is on purpose
+   anyway -- big solid areas keep the official signal yellow, while this small
+   accent bloom takes the greener game value (#D0E94F .. #E6F35B as sampled
+   from frames, which run cooler than the website's #FFFA00). */
+body {
+  --endfield-focus: #D0E94F;
+  --endfield-focus-bloom: rgba(208, 233, 79, 0.28);
+}
 body :focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline: 2px solid var(--endfield-focus);
   outline-offset: 1px;
+  box-shadow: 0 0 0.75rem var(--endfield-focus-bloom);
+}
+/* Selected rows/options carry the same signal as focus. The shell exposes these
+   as ARIA state, so no component knowledge is needed. */
+body :is([role="option"][aria-selected="true"], [aria-checked="true"], [aria-current="page"]) {
+  outline: 2px solid var(--endfield-focus);
+  outline-offset: -2px;
+  box-shadow: 0 0 0.75rem var(--endfield-focus-bloom);
+}
+
+/* ── 12. code / tool blocks: technical readout chrome ──────────────────── */
+/* The game renders machine output as a bracketed readout, not a soft card:
+   square corners (done in 1c), a hairline, corner brackets, and a prefixed
+   header. The blocks are addressable through the shell's own data attributes,
+   and the shell clips them (overflow: hidden), so the brackets sit inside. */
+body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) {
+  position: relative;
+  border: 1px solid var(--dsw-alias-border-l1);
+}
+body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web])::before,
+body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web])::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  border: 0 solid var(--dsw-alias-brand-primary);
+  z-index: 2;
+}
+body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web])::before {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web])::after {
+  right: 0;
+  bottom: 0;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+/* The first row is the readout label: prefixed, uppercase, letter-spaced. */
+body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) > *:first-child::before {
+  content: "//";
+  margin-inline-end: 0.45em;
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) > *:first-child {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 `
