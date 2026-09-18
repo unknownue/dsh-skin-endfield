@@ -79,11 +79,12 @@ const body = `
       <div class="msg user"><div class="bubble">继续</div></div>
 
       <div class="msg assistant">
-        <p>已把 <code>ctx.theme.overrideTokens</code> 接上：78 个令牌全部核对过，装饰层零 <code>!important</code>。</p>
+        <p>已把 <code>ctx.theme.overrideTokens</code> 接上：78 个令牌全部核对过，装饰层零优先级强制声明。</p>
         <div class="toolcall">
           <div class="toolcall-head"><span class="mono">▸</span> bash · npm run verify</div>
-          <pre class="mono">[PASS] 15/15 checks passed
-[PASS]  9/9  checks passed
+          <pre class="mono">[PASS] verify-client  16/16 checks passed
+[PASS] verify-host     9/9  checks passed
+[PASS] verify-corners  16/16 on the live GUI
 smoke OK — tests/out/smoke.png</pre>
         </div>
         <p class="muted">下一步：把皮肤装进真实 GUI 目视确认。</p>
