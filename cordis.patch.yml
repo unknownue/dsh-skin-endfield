@@ -1,0 +1,12 @@
+# dsh-skin-endfield bundle patch.
+#
+# A package's `dsh.client` manifest alone does NOT put its browser bundle into
+# the boot graph: the package must also own a host loader row, and that row's
+# `name` must stay the package name (the harness discovers the client bundle
+# through require.resolve(<row name> + "/package.json")).
+#
+# The host half is a near-no-op: it only registers a static font route so the
+# browser half can load the vendored open-source faces without CSP surprises.
+- insert:
+    - id: skin-endfield
+      name: 'dsh-skin-endfield'

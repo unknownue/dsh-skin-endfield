@@ -2,35 +2,87 @@
 
 以《明日方舟：终末地》(Arknights: Endfield) 平面设计语言为主题的 **DSH Web GUI 皮肤插件**。
 
-> 状态：**Step 1 —— 设计参考资料收集已完成**（本仓库当前只包含设计参考与素材索引，尚未实现插件本体）。
+深色工业画布 `#191919` + 信号黄 `#FFFA00` + 薄荷 `#00FFA2`；直角面板、发丝线、角括号框、`//` 标签、45° 斜线、菱形节点。
 
-## 这个仓库是什么
+## 状态
 
-一个独立 DSH 插件仓库，目标是把 DSH Web GUI 的视觉层重绘为终末地工业的界面语言：
+| 阶段 | 状态 |
+|------|------|
+| Step 1 — 设计参考资料收集 | ✅ 完成（`docs/design-reference/`） |
+| Step 2 — 插件实现 | ✅ 可构建、可验证（三层测试全绿） |
+| Step 3 — 载入真实 GUI 观察 | ⏳ **待你确认**（见下方「装到 GUI 上」） |
 
-- 深色画布 `#191919` + 信号黄 `#FFFA00` + 薄荷绿 `#00FFA2` 的点缀体系
-- 直角面板、发丝线、角括号框、`//` 标签、等宽数字
-- 工业警示语汇：斜线纹理、等高线底纹、CMYK 色标条、扫描/擦除动效
+## 这是什么
 
-## 目录
+一个标准 DSH 插件包，两半：
+
+- **宿主半边**（`lib/index.js`）：把包注册为 loader 行，并提供一条只读字体路由 `/skin-endfield/fonts`。
+- **浏览器半边**（`lib/client.js`）：调用官方主题接缝 `ctx.theme.overrideTokens()` 覆盖 78 个 `--dsw-alias-*` 令牌，再叠一层装饰样式（角括号、`//` 标题、45° 斜线、直角、菱形）。
+
+**不替换任何组件、不引用任何 hashed 类名、不 provide 任何服务** —— 整个皮肤是加法，卸载即完全还原（已被测试证明）。
+
+## 快速开始
+
+```sh
+pnpm install
+pnpm build          # tsdown: lib/index.js + lib/client.js
+pnpm typecheck
+node scripts/verify-client.mjs    # 15 项：bundle 契约、令牌、装饰层护栏、卸载对称性
+node scripts/verify-host.mjs      #  9 项：字体路由、路径穿越防护、注册/卸载对称性
+node scripts/smoke-browser.mjs    # 真浏览器渲染 + 截图 tests/out/smoke.png
+```
+
+### 装到 GUI 上（**可选，会改动你的 profile**）
+
+```sh
+dsh plugin --profile web add E:/Workspace/submodules/dsh-skin-endfield
+dsh plugin --profile web install
+# 然后重启 dsh web，刷新 http://127.0.0.1:13080
+```
+
+> ⚠️ 这会写 `~/.dsh/profiles/web/package.json`。操作前先备份该文件；浏览器半边改 `lib/client.js` 会触发 HMR，但**首次装载需要重启 `dsh web`**。卸载：`dsh plugin --profile web remove dsh-skin-endfield` 后重启。
+
+## 设计与实现
+
+| 文档 | 内容 |
+|------|------|
+| [`docs/design-reference/README.md`](docs/design-reference/README.md) | 资料总览、可信度分级、每个 DSH 部件的终末地原型映射表 |
+| [`01-visual-language.md`](docs/design-reference/01-visual-language.md) | 风格定位、配色、字体、排版规则、图形母题、动效 |
+| [`02-ui-inventory.md`](docs/design-reference/02-ui-inventory.md) | **实机画面实证** + 界面清单 + 组件解剖 |
+| [`03-design-tokens.json`](docs/design-reference/03-design-tokens.json) | 官方取值（带来源）与 DSH 令牌映射 |
+| [`04-reference-sources.md`](docs/design-reference/04-reference-sources.md) | 来源总表（含"明确否定的来源"） |
+| [`05-dsh-plugin-integration.md`](docs/design-reference/05-dsh-plugin-integration.md) | 已核对的 DSH 接缝与硬约束 |
+| [`assets/manifest.md`](assets/manifest.md) | 素材清单与抓取复现方式 |
+
+### 代码结构
 
 ```
-docs/design-reference/     设计参考资料（本步产物，可直接用于实现阶段）
-  README.md                资料总览与使用方式
-  01-visual-language.md    风格定位、配色、字体、版式、图形母题、动效
-  02-ui-inventory.md       界面清单、组件解剖、信息架构、动效规范、字段映射
-  03-design-tokens.json    机器可读设计令牌
-  04-reference-sources.md  参考来源总表（含可信度标注）
-assets/                    素材索引与获取脚本（大体积素材不入库）
-  README.md
-  manifest.md              已收集素材清单
-scripts/harvest/           可复现的素材抓取脚本
+src/index.ts              宿主半边：字体静态路由（含路径穿越防护）
+src/types.ts              本地结构性类型（不依赖 @deepseek-ai/* 类型包）
+src/client/index.ts       apply(ctx)：4 个 effect（令牌 + 字体 + 全局变量 + 装饰层）
+src/client/palette.ts     78 个令牌映射 + 字体栈 + @font-face
+src/client/decor.ts       装饰层（全部选择器以 body 开头，零 !important）
+scripts/                  vendor-fonts / refresh-known-tokens / 三个验证脚本
+assets/fonts/             OFL 开源字体（见 assets/fonts/NOTICE.md）
 ```
 
-## 快速开始（实现阶段）
+### 为什么用 `overrideTokens` 而不是 `register`
 
-先读 `docs/design-reference/README.md`，其中「实现落点」一节给出了每个 DSH 界面元素对应的终末地设计原型。
+`register({id, ...})` 会创建第三方主题 id：不持久化、也不出现在产品的 Appearance 行。`overrideTokens(source, tokens)` 是叠加层，跟着用户当前的 light/dark 走，卸载精确还原。
+
+注意：alias 令牌由 presenter **内联写在 `body` 上**，所以纯 CSS 覆写必须 `!important` —— 而 `overrideTokens` 改的就是那条内联写入路径，没有优先级问题。这也是装饰层能保持零 `!important` 的原因。
 
 ## 授权与合规
 
-终末地是鹰角网络（Hypergryph）的商标与版权作品。本仓库**不附带**任何官方字体文件、游戏内素材或官方图集；`scripts/harvest/` 中的脚本仅用于从公开来源抓取研究用参考资料到本地缓存。字体请使用 `03-design-tokens.json` 中列出的可开源替代栈。
+- 代码：MIT。
+- **不附带**任何官方字体、游戏素材、官方图集。`assets/fonts/` 里是三个 OFL 授权开源字体（Jost / Michroma / JetBrains Mono），作为商业字体的**角色替代**（详见 `assets/fonts/NOTICE.md`）。
+- `docs/design-reference/` 与 `assets/screenshots|ui-primitives/` 是**设计研究引用**，版权归鹰角网络（Hypergryph）所有，不得随皮肤分发。
+- 每个 `@font-face` 先声明 `local(...)`：机器上若装了原版字体会直接用原版，其他机器静默回落到开源替代 —— 两种情况下都不再分发受版权保护的字体。
+- 本项目与鹰角网络、DeepSeek 均无关联。
+
+## 已知限制
+
+- 浅色模式取值为派生值，尚未逐屏做对比度复核。
+- `--dsw-corner-shape` 的实际生效情况未验证（浅色/深色下都靠 `border-radius: 0` 兜底）。
+- 装饰层的 `::before/::after` 只在 `[role="dialog"|"menu"|"listbox"]` 上；若外壳把这些角色放在没有 `position` 的容器上，角括号可能落在可视区外（无害）。
+- 未在真实 GUI 里目视确认过（Step 3）。

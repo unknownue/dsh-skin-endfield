@@ -235,7 +235,7 @@
       "--dsw-alias-scrollbar-hover-l1":             { "light": "rgba(25,25,25,0.32)", "dark": "rgba(255,250,0,0.55)", "reason": "hover 时转信号黄" },
       "--dsw-alias-scrollbar-hover-l2":             { "light": "rgba(25,25,25,0.24)", "dark": "rgba(255,250,0,0.40)", "reason": "inferred" },
       "--dsw-alias-toast-bg":                       { "light": "#FFFFFF", "dark": "#35373C", "reason": "inferred" },
-      "--dsw-alias-tooltip-bg":                     { "light": "#191919", "dark": "#F2F2F2", "reason": "黑黄体系里最可靠的做法：tooltip 反白（浅色模式用深底）" }
+      "--dsw-alias-tooltip-bg":                     { "light": "#191919", "dark": "#191919", "reason": "两种外观都保持深色：深色主题下 label token 是浅色文字，浅底会变成浅底浅字；黑黄体系里提示的正确做法是深色实底（已由 scripts/smoke-browser.mjs 复现验证）" }
     },
     "globalOverrides": {
       "--dsw-font-family": { "light": "Jost, Poppins, Montserrat, system-ui, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif", "dark": "Jost, Poppins, Montserrat, system-ui, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif", "reason": "Gilroy 的开源替代（Jost 几何无衬线最接近）" },
