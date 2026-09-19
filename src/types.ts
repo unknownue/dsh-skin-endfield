@@ -83,14 +83,17 @@ export interface HostContext {
     register(route: WebServerRoute): () => void
   }
   /**
-   * Durable settings service. Optional on purpose: a deployment without a
-   * settings provider still loads the plugin, and the skin then runs on its
-   * built-in defaults.
+   * Durable settings service. Reachable only from the context handed to the
+   * nested `inject(["settings"], ...)` callback — reading `ctx.settings` outside
+   * that inject throws rather than yielding `undefined`, so the optionality is
+   * expressed by the inject, not by a check on the value.
    */
   settings?: {
     register(name: string, schema: unknown): unknown
     get(name: string): unknown
   }
+  /** Run `callback` on a child context once every named service is composed. */
+  inject(names: string[], callback: (ctx: HostContext) => void): void
   effect?(callback: () => void | (() => void), label?: string): void
   logger?: {
     info?(message: string): void

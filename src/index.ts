@@ -27,8 +27,9 @@ export const name = 'dsh-skin-endfield'
 /**
  * Injected service names this plugin needs before it runs. A settings service
  * is deliberately NOT listed: namespacing is optional here, and listing it would
- * make the whole plugin wait on (and fail without) a service that the skin can
- * happily run without. `apply` reaches for `ctx.settings` defensively instead.
+ * make the whole plugin wait on a service that the skin can happily run without.
+ * The settings namespace is registered from a nested `ctx.inject(["settings"])`
+ * instead — see `registerSkinSettings`.
  */
 export const inject = ['webServer']
 
@@ -38,8 +39,10 @@ export const inject = ['webServer']
  * The defaults here are duplicated in `SKIN_SETTINGS_DEFAULTS` on purpose: the
  * schema is the authority for what the Host will accept and persist, while the
  * constant is the authority the browser falls back on when no settings service
- * is composed at all. `src/verify-settings-parity` in the test suite asserts the
- * two agree, so they cannot drift silently.
+ * is composed at all, and what the settings page shows before a value loads.
+ * `scripts/verify-settings-parity.mjs` resolves this schema against an empty
+ * section and compares every field with that constant, so the two cannot drift
+ * silently — a split would make a fresh install look different from a stored one.
  */
 export const SkinSettingsSchema = z.object({
   tint: z.string().default(SKIN_SETTINGS_DEFAULTS.tint),
@@ -95,28 +98,34 @@ function handleFontRequest(rawUrl: string | undefined, res: ServerResponse): voi
   createReadStream(target).pipe(res)
 }
 
-/** Register the durable settings namespace when a settings service is composed. */
-function registerSkinSettings(ctx: HostContext): boolean {
-  if (ctx.settings === undefined) {
-    ctx.logger?.warn?.(
-      'dsh-skin-endfield: no settings service composed — the Skin settings page will be '
-      + 'inert and the skin uses its built-in defaults.',
-    )
-    return false
-  }
-  try {
-    ctx.settings.register(SKIN_SETTINGS_NAMESPACE, SkinSettingsSchema)
-    ctx.logger?.info?.(`dsh-skin-endfield: settings namespace "${SKIN_SETTINGS_NAMESPACE}" registered`)
-    return true
-  } catch (error) {
-    // A schema the Host refuses must not take the whole plugin (and with it the
-    // font route and the skin) down; report it and keep running on defaults.
-    ctx.logger?.warn?.(
-      `dsh-skin-endfield: settings registration failed (${error instanceof Error ? error.message : String(error)}) — `
-      + 'the skin continues on its built-in defaults.',
-    )
-    return false
-  }
+/**
+ * Register the durable settings namespace when a settings service is composed.
+ *
+ * `settings` is reachable only through a nested `inject`: reading an undeclared
+ * service off the context does not yield `undefined`, it throws
+ * (`cannot get property "settings" without inject`), so a defensive
+ * `if (ctx.settings === undefined)` is itself the crash. The nested inject is
+ * what makes the service optional in the way this plugin wants — the callback
+ * runs once a provider is composed and simply never runs otherwise, leaving the
+ * skin on its built-in defaults.
+ *
+ * This is the pattern the harness's own `dsh-client-ui-theme` uses for the same
+ * seam (`ctx.inject(["settings"], settingsCtx => settingsCtx.settings.register(...))`).
+ */
+function registerSkinSettings(ctx: HostContext): void {
+  ctx.inject(['settings'], (settingsCtx) => {
+    try {
+      settingsCtx.settings?.register(SKIN_SETTINGS_NAMESPACE, SkinSettingsSchema)
+      settingsCtx.logger?.info?.(`dsh-skin-endfield: settings namespace "${SKIN_SETTINGS_NAMESPACE}" registered`)
+    } catch (error) {
+      // A schema the Host refuses must not take the whole plugin (and with it the
+      // font route and the skin) down; report it and keep running on defaults.
+      settingsCtx.logger?.warn?.(
+        `dsh-skin-endfield: settings registration failed (${error instanceof Error ? error.message : String(error)}) — `
+        + 'the skin continues on its built-in defaults.',
+      )
+    }
+  })
 }
 
 export function apply(ctx: HostContext): void {
