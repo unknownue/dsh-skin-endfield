@@ -16,8 +16,9 @@
  * through the bound scope, so the effect on the skin is visible while the panel
  * is open; there is no save step to get out of step with what is painted.
  */
-import { HEX_COLOR, SKIN_SETTINGS_DEFAULTS, safeTint } from '../settings.ts'
+import { HEX_COLOR, SKIN_SETTINGS_DEFAULTS, safeAccent, safeTint } from '../settings.ts'
 import type { SettingsScope } from '../types.ts'
+import { accentScale } from './colors.ts'
 
 /** The slice of React this page uses. */
 export interface ReactLike {
@@ -35,7 +36,9 @@ export interface ReactLike {
 
 /** The settings shape this page edits. */
 interface SkinDraft {
+  accent: string
   tint: string
+  surfaceFill: boolean
   bloom: number
   cornerRadius: number
   labelPrefix: boolean
@@ -68,7 +71,9 @@ export function createSkinSection(React: ReactLike) {
       ? (snapshot.value as Record<string, unknown>)
       : {}
     return {
+      accent: safeAccent(typeof value.accent === 'string' ? value.accent : undefined),
       tint: safeTint(typeof value.tint === 'string' ? value.tint : undefined),
+      surfaceFill: value.surfaceFill === undefined ? SKIN_SETTINGS_DEFAULTS.surfaceFill : value.surfaceFill === true,
       bloom: typeof value.bloom === 'number' ? value.bloom : SKIN_SETTINGS_DEFAULTS.bloom,
       cornerRadius: typeof value.cornerRadius === 'number' ? value.cornerRadius : SKIN_SETTINGS_DEFAULTS.cornerRadius,
       labelPrefix: value.labelPrefix === undefined ? SKIN_SETTINGS_DEFAULTS.labelPrefix : value.labelPrefix !== false,
@@ -141,46 +146,100 @@ export function createSkinSection(React: ReactLike) {
       })
     }
 
-    const tintValid = HEX_COLOR.test(draft.tint)
-    const swatch = h('span', {
-      style: {
-        display: 'inline-block',
-        width: '22px',
-        height: '22px',
-        background: tintValid ? draft.tint : 'transparent',
-        border: '1px solid var(--dsw-alias-border-l2)',
-        borderRadius: '0',
-      },
-    })
-
-    const tintRow = row(
-      'Accent tint',
-      'Drives the selection and focus outline. The bloom below is derived from it.',
-      [
-        swatch,
+    /**
+     * One colour preference: a blind swatch, a native picker, a hex field and a
+     * preview of the shades the value will be expanded into.
+     *
+     * The preview is not decoration. The stored value is ONE colour, but the skin
+     * derives a light pair, a dark pair, a hover step and a wash from it (see
+     * colors.ts), and those derived values are what most surfaces actually paint —
+     * so the row shows them rather than pretending the field is the whole story.
+     */
+    const colorRow = (
+      field: 'accent' | 'tint',
+      label: string,
+      hint: string,
+      value: string,
+      fallback: string,
+      shades?: (v: string) => { label: string; color: string }[],
+    ) => {
+      const valid = HEX_COLOR.test(value)
+      const picker = valid ? value : fallback
+      return row(label, hint, [
+        h('span', {
+          key: 'swatch',
+          style: {
+            display: 'inline-block',
+            width: '22px',
+            height: '22px',
+            background: valid ? value : 'transparent',
+            border: '1px solid var(--dsw-alias-border-l2)',
+            borderRadius: '0',
+          },
+        }),
         h('input', {
           key: 'picker',
           type: 'color',
-          value: tintValid ? draft.tint : SKIN_SETTINGS_DEFAULTS.tint,
-          onInput: (e: { target: { value: string } }) => commit('tint', e.target.value.toUpperCase()),
+          value: picker,
+          onInput: (e: { target: { value: string } }) => commit(field, e.target.value.toUpperCase()),
           style: { width: '34px', height: '26px', padding: 0, border: '1px solid var(--dsw-alias-border-l2)', borderRadius: '0', background: 'transparent', cursor: 'pointer' },
         }),
         h('input', {
           key: 'hex',
           type: 'text',
-          value: draft.tint,
+          value,
           spellCheck: false,
           onInput: (e: { target: { value: string } }) => {
             const next = e.target.value.toUpperCase()
-            setDraft((prev) => ({ ...prev, tint: next }))
+            setDraft((prev) => ({ ...prev, [field]: next }))
             // Only a complete, valid hex is persisted; typing '#' or '#12' is
             // left alone rather than pushed as a broken colour.
-            if (HEX_COLOR.test(next)) commit('tint', next)
+            if (HEX_COLOR.test(next)) commit(field, next)
           },
           style: { width: '96px', fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', padding: '5px 8px', borderRadius: '0', border: '1px solid var(--dsw-alias-border-l2)', background: 'var(--dsw-alias-bg-layer-1)', color: 'var(--dsw-alias-label-primary)' },
         }),
-        tintValid ? null : h('span', { key: 'bad', style: { fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, 'expected #RRGGBB'),
-      ].filter(Boolean),
+        valid ? null : h('span', { key: 'bad', style: { fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, 'expected #RRGGBB'),
+        valid && shades
+          ? h('span', { key: 'shades', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', marginLeft: '2px' } },
+              shades(value).map((s) => h('span', {
+                key: s.label,
+                title: `${s.label} ${s.color}`,
+                style: {
+                  display: 'inline-block',
+                  width: '14px',
+                  height: '14px',
+                  background: s.color,
+                  border: '1px solid var(--dsw-alias-border-l2)',
+                  borderRadius: '0',
+                },
+              })))
+          : null,
+      ].filter(Boolean))
+    }
+
+    const accentRow = colorRow(
+      'accent',
+      'Accent',
+      'Repaints the shell\'s brand and status family: the send button, the module icon of an active workspace, badges, links and the composer caret. Default is the game\'s mint.',
+      draft.accent,
+      SKIN_SETTINGS_DEFAULTS.accent,
+      (v) => {
+        const scale = accentScale(v)
+        return [
+          { label: 'light', color: scale.light },
+          { label: 'dark', color: scale.dark },
+          { label: 'hover', color: scale.darkHover },
+          { label: 'wash', color: scale.lightWash },
+        ]
+      },
+    )
+
+    const tintRow = colorRow(
+      'tint',
+      'Focus outline',
+      'Drives the selection and focus outline, and its bloom. Default is the game\'s chartreuse.',
+      draft.tint,
+      SKIN_SETTINGS_DEFAULTS.tint,
     )
 
     const bloomRow = row(
@@ -215,6 +274,23 @@ export function createSkinSection(React: ReactLike) {
       ],
     )
 
+    const surfaceRow = row(
+      'Panel fill',
+      'The composer card and the message bubble. Off leaves the corner brackets and a hairline on the canvas instead of a filled panel.',
+      [
+        h('label', { key: 'l', style: { display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)', cursor: 'pointer' } }, [
+          h('input', {
+            key: 'cb',
+            type: 'checkbox',
+            checked: draft.surfaceFill,
+            onChange: (e: { target: { checked: boolean } }) => commit('surfaceFill', e.target.checked),
+            style: { accentColor: 'var(--endfield-focus)' },
+          }),
+          h('span', { key: 's' }, 'Keep the filled panel'),
+        ]),
+      ],
+    )
+
     const prefixRow = row(
       'Section marker',
       'Endfield prefixes section headings and tool-block headers with a double slash.',
@@ -243,7 +319,7 @@ export function createSkinSection(React: ReactLike) {
         ? h('p', { style: { margin: '0 0 8px', fontSize: '12px', color: 'var(--dsw-alias-state-warn-primary)' } },
             'No durable settings service is composed, so nothing here can be saved.')
         : null,
-      tintRow, bloomRow, radiusRow, prefixRow,
+      accentRow, tintRow, surfaceRow, bloomRow, radiusRow, prefixRow,
       error
         ? h('p', { style: { margin: '10px 0 0', fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, `Save failed: ${error}`)
         : null,
@@ -252,7 +328,9 @@ export function createSkinSection(React: ReactLike) {
           children: 'Reset to defaults',
           disabled: missing,
           onClick: () => {
+            commit('accent', SKIN_SETTINGS_DEFAULTS.accent)
             commit('tint', SKIN_SETTINGS_DEFAULTS.tint)
+            commit('surfaceFill', SKIN_SETTINGS_DEFAULTS.surfaceFill)
             commit('bloom', SKIN_SETTINGS_DEFAULTS.bloom)
             commit('cornerRadius', SKIN_SETTINGS_DEFAULTS.cornerRadius)
             commit('labelPrefix', SKIN_SETTINGS_DEFAULTS.labelPrefix)

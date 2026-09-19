@@ -17,12 +17,16 @@
  * reached as an injected *service*: the client module system rejects any bundle
  * requiring a package outside that baseline, so importing the settings base
  * package here would abort the whole web boot.
+ *
+ * The palette itself is settings-dependent, so the token layer is (re-)laid by
+ * the settings subscription below rather than once at apply time — a colour
+ * change is a re-composition, not a reload.
  */
 import React from 'react'
 import { SKIN_SETTINGS_NAMESPACE } from '../settings.ts'
 import type { ClientContext } from '../types.ts'
 import { endfieldDecor } from './decor.ts'
-import { endfieldFontFace, endfieldGlobals, endfieldTokens } from './palette.ts'
+import { endfieldFontFace, endfieldGlobals } from './palette.ts'
 import { applySkinSettings, clearSkinSettings } from './settings-apply.ts'
 import { createSkinSection } from './settings-page.ts'
 
@@ -55,25 +59,33 @@ function injectStyle(name: string, css: string): () => void {
 }
 
 export function apply(ctx: ClientContext): void {
-  ctx.effect(
-    () => ctx.theme.overrideTokens(PLUGIN_ID, endfieldTokens),
-    `${PLUGIN_ID}: palette`,
-  )
   ctx.effect(() => injectStyle('fonts.css', endfieldFontFace), `${PLUGIN_ID}: fonts`)
   ctx.effect(() => injectStyle('globals.css', endfieldGlobals), `${PLUGIN_ID}: globals`)
   ctx.effect(() => injectStyle('decor.css', endfieldDecor), `${PLUGIN_ID}: decor`)
 
-  // Durable settings -> CSS variables, then the page that edits them.
+  // Durable settings -> theme token layer + CSS variables, then the page that
+  // edits them.
   //
-  // The scope binding is created first so the first paint already carries the
-  // stored tint instead of flashing the default. Both halves are guarded: a
-  // deployment without a settings service must still render the skin.
+  // The palette is part of this subscription rather than of a one-shot effect:
+  // the accent is a setting, and re-laying the token layer is how a changed
+  // colour reaches the shell's own components without a reload. The subscription
+  // is created before the page so the first paint already carries the stored
+  // colours instead of flashing the defaults.
+  //
+  // The scope binding is guarded: a deployment without a settings service must
+  // still render the skin, so that case applies the defaults once.
   const scope = ctx.settingsScope?.bind({ namespace: SKIN_SETTINGS_NAMESPACE }) as
     | import('../types.ts').SettingsScope
     | undefined
 
+  const applySection = (section: unknown) => applySkinSettings(section, ctx.theme)
+
   if (scope === undefined) {
     ctx.logger?.warn?.(`${PLUGIN_ID}: no settings scope — running on built-in defaults`)
+    ctx.effect(() => {
+      applySection(undefined)
+      return clearSkinSettings
+    }, `${PLUGIN_ID}: default palette`)
   } else {
     ctx.effect(() => {
       // A bound scope whose namespace is not registered yet (the Host half has
@@ -86,14 +98,14 @@ export function apply(ctx: ClientContext): void {
           return undefined
         }
       }
-      const sync = () => applySkinSettings(read())
+      const sync = () => applySection(read())
       sync()
       const unsubscribe = scope.subscribe(sync)
       return () => {
         unsubscribe()
         clearSkinSettings()
       }
-    }, `${PLUGIN_ID}: settings -> css variables`)
+    }, `${PLUGIN_ID}: settings -> palette + css variables`)
   }
 
   const slots = ctx.slots

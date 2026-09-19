@@ -13,121 +13,229 @@
  *   magenta       #FF1AAC   official CSS + colour bar
  *   hairlines     #D9D9D9 / #35373C / #2E2E2E
  *
+ * The mint is the one entry that the skin used to hardcode, and it is the single
+ * most visible thing it changes about the shell: it repaints the shell's whole
+ * brand/status family, so the module icon, the send button and the "Preview"
+ * badge all came out green. That family is now derived from the `accent` setting
+ * (see colors.ts) — the values below are the defaults, not fixed hues.
+ *
  * Light-mode values are derived: the official site itself is light-first, but
  * the game's menu chrome is dark, so the light column keeps the same hue
  * relationships at a contrast level that works on white. They are marked
  * `derived` in `docs/design-reference/03-design-tokens.json` and still need a
  * contrast pass on the real GUI.
  */
+import type { SkinSettings } from '../settings.ts'
 import type { ThemeTokenOverrides } from '../types.ts'
+import { accentScale, hexToRgb, rgbTriple, toLuminance } from './colors.ts'
 
 const SIGNAL_YELLOW = '#FFFA00'
 const SIGNAL_YELLOW_DEEP = '#E6E000'
-const MINT = '#00FFA2'
 const MAGENTA = '#FF1AAC'
 
-export const endfieldTokens: ThemeTokenOverrides = {
-  // ── surfaces ────────────────────────────────────────────────────────────
-  '--dsw-alias-bg-base': { light: '#F4F4F1', dark: '#191919' },
-  '--dsw-alias-bg-layer-1': { light: '#FFFFFF', dark: '#1F1F22' },
-  '--dsw-alias-bg-layer-2': { light: '#FFFFFF', dark: '#2A2A2A' },
-  '--dsw-alias-bg-layer-3': { light: '#FAFAFA', dark: '#35373C' },
-  '--dsw-alias-bg-overlay': { light: '#FFFFFF', dark: '#141414' },
-  '--dsw-alias-bg-module-platform': { light: '#FFFFFF', dark: '#191919' },
-  '--dsw-alias-bg-skeleton': { light: '#EDEDED', dark: '#2E2E2E' },
-  '--dsw-alias-bg-mask-1': { light: 'rgba(25,25,25,0.04)', dark: 'rgba(255,255,255,0.04)' },
-  '--dsw-alias-bg-mask-2': { light: 'rgba(25,25,25,0.08)', dark: 'rgba(255,255,255,0.08)' },
-  '--dsw-alias-bg-mask-3': { light: 'rgba(25,25,25,0.14)', dark: 'rgba(255,255,255,0.14)' },
-  '--dsw-alias-bg-multi-select': { light: 'rgba(255,250,0,0.28)', dark: 'rgba(255,250,0,0.20)' },
-  '--dsw-alias-bg-mask-drop': { light: 'rgba(25,25,25,0.12)', dark: 'rgba(0,0,0,0.45)' },
-  '--dsw-alias-bg-mask-photo': { light: 'rgba(25,25,25,0.60)', dark: 'rgba(0,0,0,0.70)' },
+/**
+ * A surface that the flat/panel setting owns: transparent when off, the given
+ * surface when on.
+ *
+ * `transparent` rather than a very dark grey on purpose. A near-canvas grey would
+ * still be a filled box — it would still paint over the canvas and still need a
+ * matching value in the other appearance — whereas `transparent` means the canvas
+ * itself shows through, so the setting needs no second colour and cannot drift.
+ */
+function surfaceToken(
+  settings: SkinSettings,
+  light: string,
+  dark: string,
+): { light: string; dark: string } {
+  return settings.surfaceFill ? { light, dark } : { light: 'transparent', dark: 'transparent' }
+}
 
-  // ── hairlines ───────────────────────────────────────────────────────────
-  '--dsw-alias-border-l1': { light: '#E7E7E7', dark: '#2E2E2E' },
-  '--dsw-alias-border-l2': { light: '#D9D9D9', dark: '#35373C' },
-  '--dsw-alias-border-l2-darkmode-thin': { light: '#E7E7E7', dark: '#3A3A3A' },
-  '--dsw-alias-border-l3': { light: '#CCCCCC', dark: '#424242' },
-  '--dsw-alias-border-l4': { light: '#B3B3B3', dark: '#4D4D4D' },
-  '--dsw-alias-border-inverted': { light: '#FFFFFF', dark: '#191919' },
-  '--dsw-alias-border-inverted2': { light: '#FAFAFA', dark: '#141414' },
+/**
+ * Build the token layer for one resolved settings section.
+ *
+ * A function, not a constant: the accent is a setting now, and the theme seam is
+ * re-layered from the same subscription that writes the CSS variables, so a
+ * colour change is a re-composition rather than a reload
+ * (`overrideTokens` replaces a source's whole layer and restacks it).
+ *
+ * @param settings - the normalised settings (see settings.ts).
+ * @returns the `--dsw-alias-*` overrides for both appearances.
+ */
+export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
+  const accent = accentScale(settings.accent)
+  // Text-on-a-light-canvas roles: the accent used as ink (links, citations) needs
+  // its own deep step, because the filled-control step is the boundary value for
+  // white ink and reads too faint as text.
+  const accentLinkLight = toLuminance(settings.accent, 0.13)
+  const accentInkLight = toLuminance(settings.accent, 0.08)
+  const accentInkDark = toLuminance(settings.accent, 0.80)
 
-  // ── labels ──────────────────────────────────────────────────────────────
-  '--dsw-alias-label-primary': { light: '#191919', dark: '#F2F2F2' },
-  '--dsw-alias-label-primary-bluish': { light: '#191919', dark: '#FAFAFA' },
-  '--dsw-alias-label-primary-dimmed': { light: '#424242', dark: '#D9D9D9' },
-  '--dsw-alias-label-primary-inverted': { light: '#FFFFFF', dark: '#191919' },
-  '--dsw-alias-label-primary-foreground': { light: '#FFFFFF', dark: '#000000' },
-  '--dsw-alias-label-secondary': { light: '#424242', dark: '#D9D9D9' },
-  '--dsw-alias-label-tertiary': { light: '#666666', dark: '#999999' },
-  '--dsw-alias-label-caption': { light: '#7E7E7E', dark: '#7E7E7E' },
-  '--dsw-alias-label-dimmed': { light: '#A6A6A6', dark: '#666666' },
+  return {
+    // ── surfaces ──────────────────────────────────────────────────────────
+    '--dsw-alias-bg-base': { light: '#F4F4F1', dark: '#191919' },
+    '--dsw-alias-bg-layer-1': { light: '#FFFFFF', dark: '#1F1F22' },
+    '--dsw-alias-bg-layer-2': { light: '#FFFFFF', dark: '#2A2A2A' },
+    '--dsw-alias-bg-layer-3': { light: '#FAFAFA', dark: '#35373C' },
+    '--dsw-alias-bg-overlay': { light: '#FFFFFF', dark: '#141414' },
+    '--dsw-alias-bg-module-platform': { light: '#FFFFFF', dark: '#191919' },
+    '--dsw-alias-bg-skeleton': { light: '#EDEDED', dark: '#2E2E2E' },
+    '--dsw-alias-bg-mask-1': { light: 'rgba(25,25,25,0.04)', dark: 'rgba(255,255,255,0.04)' },
+    '--dsw-alias-bg-mask-2': { light: 'rgba(25,25,25,0.08)', dark: 'rgba(255,255,255,0.08)' },
+    '--dsw-alias-bg-mask-3': { light: 'rgba(25,25,25,0.14)', dark: 'rgba(255,255,255,0.14)' },
+    // Selection washes follow the accent rather than the official yellow: at the
+    // shipped default the two are the same colour, but a user who moves the
+    // accent must not leave yellow behind on every multi-select.
+    '--dsw-alias-bg-multi-select': {
+      light: `rgba(${accent.triple}, 0.28)`,
+      dark: `rgba(${accent.triple}, 0.20)`,
+    },
+    '--dsw-alias-bg-mask-drop': { light: 'rgba(25,25,25,0.12)', dark: 'rgba(0,0,0,0.45)' },
+    '--dsw-alias-bg-mask-photo': { light: 'rgba(25,25,25,0.60)', dark: 'rgba(0,0,0,0.70)' },
 
-  // ── brand ───────────────────────────────────────────────────────────────
-  '--dsw-alias-brand-primary': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
-  '--dsw-alias-brand-primary-invert': { light: '#191919', dark: '#191919' },
-  '--dsw-alias-brand-text': { light: '#191919', dark: SIGNAL_YELLOW },
-  '--dsw-alias-link': { light: '#007A4E', dark: MINT },
+    // ── hairlines ───────────────────────────────────────────────────────────
+    '--dsw-alias-border-l1': { light: '#E7E7E7', dark: '#2E2E2E' },
+    '--dsw-alias-border-l2': { light: '#D9D9D9', dark: '#35373C' },
+    '--dsw-alias-border-l2-darkmode-thin': { light: '#E7E7E7', dark: '#3A3A3A' },
+    '--dsw-alias-border-l3': { light: '#CCCCCC', dark: '#424242' },
+    '--dsw-alias-border-l4': { light: '#B3B3B3', dark: '#4D4D4D' },
+    '--dsw-alias-border-inverted': { light: '#FFFFFF', dark: '#191919' },
+    '--dsw-alias-border-inverted2': { light: '#FAFAFA', dark: '#141414' },
 
-  // ── states (the game has no dedicated semantic palette: yellow *is* the
-  //    warning colour, mint is success, magenta is the only rare/danger hue) ──
-  '--dsw-alias-state-success-primary': { light: '#007A4E', dark: MINT },
-  '--dsw-alias-state-success-secondary': { light: '#12A56B', dark: '#4DFFBE' },
-  '--dsw-alias-state-success-tertiary': { light: 'rgba(0,255,162,0.16)', dark: 'rgba(0,255,162,0.16)' },
-  '--dsw-alias-state-warn-primary': { light: '#B3A800', dark: SIGNAL_YELLOW },
-  '--dsw-alias-state-warn-secondary': { light: '#8C8400', dark: '#FFF000' },
-  '--dsw-alias-state-warn-tertiary': { light: 'rgba(255,250,0,0.22)', dark: 'rgba(255,250,0,0.16)' },
-  '--dsw-alias-state-warn-label': { light: '#6B6500', dark: SIGNAL_YELLOW },
-  '--dsw-alias-state-error-primary': { light: '#C4007A', dark: MAGENTA },
-  '--dsw-alias-state-error-secondary': { light: MAGENTA, dark: '#FF62C4' },
-  '--dsw-alias-state-business-primary': { light: '#007A4E', dark: MINT },
-  '--dsw-alias-state-business-tertiary': { light: 'rgba(0,255,162,0.16)', dark: 'rgba(0,255,162,0.16)' },
+    // ── labels ──────────────────────────────────────────────────────────────
+    '--dsw-alias-label-primary': { light: '#191919', dark: '#F2F2F2' },
+    '--dsw-alias-label-primary-bluish': { light: '#191919', dark: '#FAFAFA' },
+    '--dsw-alias-label-primary-dimmed': { light: '#424242', dark: '#D9D9D9' },
+    '--dsw-alias-label-primary-inverted': { light: '#FFFFFF', dark: '#191919' },
+    '--dsw-alias-label-primary-foreground': { light: '#FFFFFF', dark: '#000000' },
+    '--dsw-alias-label-secondary': { light: '#424242', dark: '#D9D9D9' },
+    '--dsw-alias-label-tertiary': { light: '#666666', dark: '#999999' },
+    '--dsw-alias-label-caption': { light: '#7E7E7E', dark: '#7E7E7E' },
+    '--dsw-alias-label-dimmed': { light: '#A6A6A6', dark: '#666666' },
 
-  // ── buttons (the game's primary action is a solid yellow block with black
-  //    ink; "highlight" in a black/yellow system means inversion, not glow) ──
-  '--dsw-alias-button-primary-fill': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
-  '--dsw-alias-button-primary-hover': { light: '#F0EA00', dark: '#FFF000' },
-  '--dsw-alias-button-primary-dimmed': { light: 'rgba(230,224,0,0.45)', dark: 'rgba(255,250,0,0.45)' },
-  '--dsw-alias-button-contrast-fill': { light: '#191919', dark: '#FFFFFF' },
-  '--dsw-alias-button-elevated-fill': { light: '#FFFFFF', dark: '#35373C' },
-  '--dsw-alias-button-floating-fill': { light: '#FFFFFF', dark: '#2A2A2A' },
-  '--dsw-alias-button-floating-hover': { light: '#FAFAFA', dark: '#424242' },
-  '--dsw-alias-button-ghost-active-fill': { light: 'rgba(255,250,0,0.20)', dark: 'rgba(255,250,0,0.14)' },
-  '--dsw-alias-button-ghost-active-hover': { light: 'rgba(255,250,0,0.30)', dark: 'rgba(255,250,0,0.22)' },
-  '--dsw-alias-button-ghost-active-border': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
-  '--dsw-alias-button-info-fill': { light: MINT, dark: MINT },
-  '--dsw-alias-button-info-hover': { light: '#4DFFBE', dark: '#4DFFBE' },
-  '--dsw-alias-button-tool-bar-fill': { light: '#EDEDED', dark: '#2A2A2A' },
-  '--dsw-alias-button-tool-bar-fill-invisible': { light: 'rgba(255,255,255,0)', dark: 'rgba(42,42,42,0)' },
-  '--dsw-alias-button-tool-bar-hover': { light: '#E4E4E4', dark: '#424242' },
+    // ── brand ───────────────────────────────────────────────────────────────
+    '--dsw-alias-brand-primary': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
+    '--dsw-alias-brand-primary-invert': { light: '#191919', dark: '#191919' },
+    '--dsw-alias-brand-text': { light: '#191919', dark: SIGNAL_YELLOW },
+    '--dsw-alias-link': { light: accentLinkLight, dark: accent.dark },
 
-  // ── interaction ─────────────────────────────────────────────────────────
-  '--dsw-alias-interactive-bg-hover': { light: 'rgba(25,25,25,0.06)', dark: 'rgba(217,217,217,0.08)' },
-  '--dsw-alias-interactive-bg-hover-accent': { light: 'rgba(255,250,0,0.20)', dark: 'rgba(255,250,0,0.12)' },
-  '--dsw-alias-interactive-bg-hover-danger': { light: 'rgba(255,26,172,0.14)', dark: 'rgba(255,26,172,0.18)' },
-  '--dsw-alias-interactive-bg-hover-solid': { light: '#EDEDED', dark: '#2E2E2E' },
-  '--dsw-alias-interactive-bg-active': { light: 'rgba(25,25,25,0.10)', dark: 'rgba(217,217,217,0.12)' },
+    // ── states (the game has no dedicated semantic palette: yellow *is* the
+    //    warning colour, mint is success, magenta is the only rare/danger hue) ──
+    '--dsw-alias-state-success-primary': { light: accent.light, dark: accent.dark },
+    '--dsw-alias-state-success-secondary': { light: accent.lightHover, dark: accent.darkHover },
+    '--dsw-alias-state-success-tertiary': {
+      light: `rgba(${accent.triple}, 0.16)`,
+      dark: `rgba(${accent.triple}, 0.16)`,
+    },
+    '--dsw-alias-state-warn-primary': { light: '#B3A800', dark: SIGNAL_YELLOW },
+    '--dsw-alias-state-warn-secondary': { light: '#8C8400', dark: '#FFF000' },
+    '--dsw-alias-state-warn-tertiary': { light: 'rgba(255,250,0,0.22)', dark: 'rgba(255,250,0,0.16)' },
+    '--dsw-alias-state-warn-label': { light: '#6B6500', dark: SIGNAL_YELLOW },
+    '--dsw-alias-state-error-primary': { light: '#C4007A', dark: MAGENTA },
+    '--dsw-alias-state-error-secondary': { light: MAGENTA, dark: '#FF62C4' },
+    // The shell's own "brand" alias — stock DSH paints it the same colour as
+    // state-business-primary, so it follows the accent for the same reason.
+    '--dsw-alias-state-business-primary': { light: accent.light, dark: accent.dark },
+    '--dsw-alias-state-business-tertiary': { light: accent.lightWash, dark: accent.darkWash },
 
-  // ── markdown / code ─────────────────────────────────────────────────────
-  '--dsw-alias-markdown-code-block': { light: '#F4F4F1', dark: '#141414' },
-  '--dsw-alias-markdown-code-block-banner': { light: '#EDEDED', dark: '#1F1F22' },
-  '--dsw-alias-markdown-code-segment-selected': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
-  '--dsw-alias-markdown-code-segment-unselected': { light: '#D9D9D9', dark: '#35373C' },
-  '--dsw-alias-markdown-inline-code': { light: 'rgba(25,25,25,0.07)', dark: 'rgba(217,217,217,0.10)' },
-  '--dsw-alias-markdown-placeholder': { light: '#A6A6A6', dark: '#666666' },
-  '--dsw-alias-markdown-tag': { light: 'rgba(255,250,0,0.24)', dark: 'rgba(255,250,0,0.18)' },
-  '--dsw-alias-markdown-citation': { light: '#007A4E', dark: MINT },
+    // ── buttons (the game's primary action is a solid yellow block with black
+    //    ink; "highlight" in a black/yellow system means inversion, not glow) ──
+    '--dsw-alias-button-primary-fill': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
+    '--dsw-alias-button-primary-hover': { light: '#F0EA00', dark: '#FFF000' },
+    '--dsw-alias-button-primary-dimmed': { light: 'rgba(230,224,0,0.45)', dark: 'rgba(255,250,0,0.45)' },
+    '--dsw-alias-button-contrast-fill': { light: '#191919', dark: '#FFFFFF' },
+    '--dsw-alias-button-elevated-fill': { light: '#FFFFFF', dark: '#35373C' },
+    '--dsw-alias-button-floating-fill': { light: '#FFFFFF', dark: '#2A2A2A' },
+    '--dsw-alias-button-floating-hover': { light: '#FAFAFA', dark: '#424242' },
+    '--dsw-alias-button-ghost-active-fill': {
+      light: `rgba(${accent.triple}, 0.20)`,
+      dark: `rgba(${accent.triple}, 0.14)`,
+    },
+    '--dsw-alias-button-ghost-active-hover': {
+      light: `rgba(${accent.triple}, 0.30)`,
+      dark: `rgba(${accent.triple}, 0.22)`,
+    },
+    '--dsw-alias-button-ghost-active-border': { light: accent.light, dark: accent.dark },
+    // This is the composer's send button. Stock DSH points it at its brand
+    // colour, and the skin's remap is what turned it green.
+    '--dsw-alias-button-info-fill': { light: accent.light, dark: accent.dark },
+    '--dsw-alias-button-info-hover': { light: accent.lightHover, dark: accent.darkHover },
+    '--dsw-alias-button-tool-bar-fill': { light: '#EDEDED', dark: '#2A2A2A' },
+    '--dsw-alias-button-tool-bar-fill-invisible': { light: 'rgba(255,255,255,0)', dark: 'rgba(42,42,42,0)' },
+    '--dsw-alias-button-tool-bar-hover': { light: '#E4E4E4', dark: '#424242' },
 
-  // ── chrome ──────────────────────────────────────────────────────────────
-  '--dsw-alias-scrollbar-bg-l1': { light: 'rgba(25,25,25,0.18)', dark: 'rgba(217,217,217,0.20)' },
-  '--dsw-alias-scrollbar-bg-l2': { light: 'rgba(25,25,25,0.12)', dark: 'rgba(217,217,217,0.14)' },
-  '--dsw-alias-scrollbar-hover-l1': { light: 'rgba(25,25,25,0.32)', dark: 'rgba(255,250,0,0.55)' },
-  '--dsw-alias-scrollbar-hover-l2': { light: 'rgba(25,25,25,0.24)', dark: 'rgba(255,250,0,0.40)' },
-  '--dsw-alias-toast-bg': { light: '#FFFFFF', dark: '#35373C' },
-  // Tooltips keep dark ink in BOTH appearances. The label tokens are light-on-dark
-  // in the dark theme, so a light tooltip panel would render light-on-light; the
-  // high-contrast way to raise a nudge in a black/yellow system is a solid dark
-  // plate (and it reads like the game's black technical overlays).
-  '--dsw-alias-tooltip-bg': { light: '#191919', dark: '#191919' },
+    // ── interaction ─────────────────────────────────────────────────────────
+    '--dsw-alias-interactive-bg-hover': { light: 'rgba(25,25,25,0.06)', dark: 'rgba(217,217,217,0.08)' },
+    '--dsw-alias-interactive-bg-hover-accent': {
+      light: `rgba(${accent.triple}, 0.20)`,
+      dark: `rgba(${accent.triple}, 0.12)`,
+    },
+    '--dsw-alias-interactive-bg-hover-danger': { light: 'rgba(255,26,172,0.14)', dark: 'rgba(255,26,172,0.18)' },
+    '--dsw-alias-interactive-bg-hover-solid': { light: '#EDEDED', dark: '#2E2E2E' },
+    '--dsw-alias-interactive-bg-active': { light: 'rgba(25,25,25,0.10)', dark: 'rgba(217,217,217,0.12)' },
+
+    // ── markdown / code ─────────────────────────────────────────────────────
+    '--dsw-alias-markdown-code-block': { light: '#F4F4F1', dark: '#141414' },
+    '--dsw-alias-markdown-code-block-banner': { light: '#EDEDED', dark: '#1F1F22' },
+    '--dsw-alias-markdown-code-segment-selected': { light: SIGNAL_YELLOW_DEEP, dark: SIGNAL_YELLOW },
+    '--dsw-alias-markdown-code-segment-unselected': { light: '#D9D9D9', dark: '#35373C' },
+    '--dsw-alias-markdown-inline-code': { light: 'rgba(25,25,25,0.07)', dark: 'rgba(217,217,217,0.10)' },
+    '--dsw-alias-markdown-placeholder': { light: '#A6A6A6', dark: '#666666' },
+    '--dsw-alias-markdown-tag': { light: 'rgba(255,250,0,0.24)', dark: 'rgba(255,250,0,0.18)' },
+    '--dsw-alias-markdown-citation': { light: accentInkLight, dark: accentInkDark },
+
+    // ── chrome ──────────────────────────────────────────────────────────────
+    '--dsw-alias-scrollbar-bg-l1': { light: 'rgba(25,25,25,0.18)', dark: 'rgba(217,217,217,0.20)' },
+    '--dsw-alias-scrollbar-bg-l2': { light: 'rgba(25,25,25,0.12)', dark: 'rgba(217,217,217,0.14)' },
+    // The scrollbar hover follows the focus outline, not the brand: it is the
+    // skin's own "you are touching this" signal. Light mode keeps the neutral
+    // step it always had — the accent is only loud enough for this on a dark
+    // surface, which is why the two columns differ here.
+    '--dsw-alias-scrollbar-hover-l1': {
+      light: 'rgba(25,25,25,0.32)',
+      dark: `rgba(${rgbTriple(hexToRgb(settings.tint))}, 0.55)`,
+    },
+    '--dsw-alias-scrollbar-hover-l2': {
+      light: 'rgba(25,25,25,0.24)',
+      dark: `rgba(${rgbTriple(hexToRgb(settings.tint))}, 0.40)`,
+    },
+    '--dsw-alias-toast-bg': { light: '#FFFFFF', dark: '#35373C' },
+    // Tooltips keep dark ink in BOTH appearances. The label tokens are light-on-dark
+    // in the dark theme, so a light tooltip panel would render light-on-light; the
+    // high-contrast way to raise a nudge in a black/yellow system is a solid dark
+    // plate (and it reads like the game's black technical overlays).
+    '--dsw-alias-tooltip-bg': { light: '#191919', dark: '#191919' },
+
+    // ── component surfaces (`--dsw-specific-*`) ─────────────────────────────
+    // NOT alias tokens, and that is exactly why they need to be here: ten of the
+    // eleven resolve to a `--dsw-static-*` blue-grey in the stock theme rather than
+    // to an alias, so remapping the alias layer alone leaves them behind. Measured
+    // on the live GUI, the composer card and the user bubble both painted #2c2c2e
+    // from those statics — a stock blue-grey, on a canvas the skin had just turned
+    // #191919, which is what read as "a dark grey box that does not belong".
+    // Sourcing each from the skin's own surface scale is what makes them behave
+    // like every other surface, including in the light appearance, where the
+    // statics would have left a dark composer on a cream page.
+    //
+    // Declaring them under the alias name still works: `overrideTokens` takes any
+    // `--dsw-*` pair, and the shell reads these through `var()`, so the shell's own
+    // declaration is what resolves to our value.
+    //
+    // The two the user actually works in — the composer card and the message
+    // bubble — follow the `surfaceFill` setting instead of a fixed grey. With it
+    // off (the default) they are transparent, so only the corner brackets and the
+    // canvas remain; with it on they are the layer-2 surface.
+    '--dsw-specific-input-major': surfaceToken(settings, '#FFFFFF', '#2A2A2A'),
+    '--dsw-specific-bubble': surfaceToken(settings, '#FFFFFF', '#2A2A2A'),
+    '--dsw-specific-bubble-highlight': { light: '#F4F4F1', dark: '#35373C' },
+    '--dsw-specific-menu': { light: '#FAFAFA', dark: '#35373C' },
+    '--dsw-specific-sidebar-fill': { light: '#F4F4F1', dark: '#1F1F22' },
+    '--dsw-specific-sidebar-nav-item-hover': { light: '#FAFAFA', dark: '#2A2A2A' },
+    '--dsw-specific-sidebar-nav-item-active': { light: '#EDEDED', dark: '#35373C' },
+    '--dsw-specific-sidebar-nav-item-active-accent': { light: '#E7E7E7', dark: '#35373C' },
+    '--dsw-specific-selector': { light: '#FAFAFA', dark: '#35373C' },
+    '--dsw-specific-tip': { light: '#FAFAFA', dark: '#35373C' },
+    '--dsw-specific-login-input': { light: '#F4F4F1', dark: '#1F1F22' },
+  }
 }
 
 /**

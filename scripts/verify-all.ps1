@@ -52,11 +52,13 @@ Step 'verify: install'  { pwsh -NoProfile -File scripts/verify-install.ps1 }
 Step 'smoke: browser'   { node scripts/smoke-browser.mjs }
 
 if ($env:DSH_URL) {
+    Step 'live: composition (skin is served)'     { node scripts/verify-composition.mjs }
     Step 'live: corners (composer + code blocks)' { node scripts/verify-corners-live.mjs }
     Step 'live: focus signature'                  { node scripts/verify-focus-signature.mjs }
     Step 'live: tool-block chrome'                { node scripts/verify-tool-block-chrome.mjs }
     Step 'live: shell chrome (sidebar + header)'  { node scripts/verify-sidebar-chrome.mjs }
     Step 'live: typography + message bubble'      { node scripts/verify-typography-and-bubble.mjs }
+    Step 'live: corner brackets (composer+bubble)' { node scripts/verify-brackets-live.mjs }
 } else {
     Write-Host ""
     Write-Host "=== live layers skipped ===" -ForegroundColor Yellow

@@ -279,8 +279,10 @@ try {
     }
   })()`)
   step('tokens resolve to Endfield values',
+    // `success` is the dark step of the accent family, which the settings drive;
+    // #00E08E is what the default mint derives to, not a hardcoded constant.
     resolved.base === '#191919' && resolved.brand === '#FFFA00'
-      && resolved.success === '#00FFA2' && resolved.tooltip === '#191919',
+      && resolved.success === '#00E08E' && resolved.tooltip === '#191919',
     JSON.stringify(resolved))
 
   const decorApplied = await evaluate(`(() => {

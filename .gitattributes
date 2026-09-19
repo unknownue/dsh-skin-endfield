@@ -4,6 +4,14 @@
 *.mjs   text eol=lf
 *.ps1   text eol=lf
 *.ts    text eol=lf
+*.yml   text eol=lf
+
+# Built output. It IS committed (plugins distribute through git), but it must not
+# be line-ending-converted: the bundler writes CRLF on Windows, and a `text`
+# rule would make git re-normalise the file on every build, so the tree showed
+# lib/*.js as modified even when nothing had changed. `-text` keeps the bytes as
+# written, so a real content change is the only thing that shows up.
+lib/**  -text
 
 # Reference screenshots are binary assets.
 *.png   binary
