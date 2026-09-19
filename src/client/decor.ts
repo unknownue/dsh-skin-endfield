@@ -276,16 +276,26 @@ body :is([data-tone], [data-state]):not(:has(p, pre, ul, ol, table)) {
    theme list, mission board, settings), so it is treated here as the skin's
    single interactive signature rather than a per-component style.
 
-   Deliberately NOT palette tokens: these live in the decor layer so the
+   Deliberately NOT palette tokens: the outline lives in the decor layer so the
    semantic aliases keep their official-yellow meaning. The split is on purpose
    anyway -- big solid areas keep the official signal yellow, while this small
    accent bloom takes the greener game value (#D0E94F .. #E6F35B as sampled
    from frames, which run cooler than the website's #FFFA00).
 
+   The colour is a SETTING, and the shell's own brand/status family is a separate
+   one. Both are read through custom properties, so this layer has no fixed hue:
+   --endfield-focus is the outline above, and --endfield-accent is the family the
+   palette remaps (send button, module icon, status glyphs) -- the decor layer
+   only needs the latter where it paints an accent the tokens cannot reach.
+
    These are defaults, not fixed values: the Skin settings page writes
-   --endfield-focus / --endfield-focus-bloom / --endfield-corner-radius onto
-   documentElement, which wins over anything declared here. */
+   --endfield-accent / --endfield-focus / --endfield-focus-bloom /
+   --endfield-corner-radius onto documentElement, which wins over anything
+   declared here. The fallbacks are the shipped defaults, so a deployment with no
+   settings service still paints the full skin. */
 body {
+  --endfield-accent: #00FFA2;
+  --endfield-accent-ink: #191919;
   --endfield-focus: #D0E94F;
   --endfield-focus-bloom: rgba(208, 233, 79, 0.28);
   --endfield-corner-radius: 0px;
@@ -294,6 +304,24 @@ body {
      rooted at body; that invariant is what lets the guardrail prove the scope,
      and reaching for html to read a flag would trade it away for a boolean. */
   --endfield-prefix: "//";
+}
+/* The skin's own root class, added by the settings path (SURFACE_CLASS there).
+   A CLASS on html is the one scope nothing in the shell competes for: its elevation
+   rule matches body descendants, so a declaration of ours on the body element is outranked on
+   the way down, and one on body descendants merely ties it and loses on document order.
+   Declaring under html.endfield loses nothing -- the skin adds the class itself, so
+   documentElement stays the only element this layer touches. */
+html.endfield {
+  /* Default shadow for the two surfaces in hand, written out rather than referenced:
+     the shell re-declares the elevation family on every descendant, so a value that
+     still names its tokens resolves against whatever redefinition is in force at the
+     element that reads it. The settings path overrides this property per the
+     surfaceFill setting. */
+  --endfield-surface-shadow: 0 0 0 .5px #4D4D4D, 0 4px 16px 0 #00000008, 0 0 24px 0 #00000008;
+  /* The hairline that frames the composer and the bubble when their fill is off;
+     with a fill it reads as a normal border, which is why it is always on rather
+     than tied to the setting. */
+  --endfield-frame: rgba(217, 217, 217, 0.14);
 }
 body :focus-visible {
   outline: 2px solid var(--endfield-focus);
@@ -306,6 +334,15 @@ body :is([role="option"][aria-selected="true"], [aria-checked="true"], [aria-cur
   outline: 2px solid var(--endfield-focus);
   outline-offset: -2px;
   box-shadow: 0 0 0.75rem var(--endfield-focus-bloom);
+}
+/* A control filled with the accent needs ink that is legible ON the accent; the
+   shell hardcodes white there, which only holds for its own mid-blue. The ink is
+   derived from the accent's contrast (see colors.ts) rather than assumed. One
+   element class, matched on its "_primary" fragment: the composer send button is
+   the only accent-filled control in the shell, and the rest of that control has
+   to stay addressable, so this sets "color" only -- no size, no shape. */
+body button[class*='_primary'] {
+  color: var(--endfield-accent-ink, #191919);
 }
 
 /* ── 12. code / tool blocks: technical readout chrome ──────────────────── */
@@ -359,7 +396,7 @@ body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) >
    each group sitting on its own field.
 
    Two distinctions the shell makes available WITHOUT a class name, both taken
-   from the live DOM (see scripts/verify-settings-namespace.mjs --chrome):
+   from the live DOM (see scripts/inspect-shell-dom.mjs):
      - a workspace name is [role=treeitem] carrying projectRow, a session row is
        [role=treeitem] carrying sessionRow. Role alone would not separate them --
        there are 98 treeitems and the first of them is a workspace.
@@ -459,8 +496,8 @@ body [role='tree'] [role='treeitem'][class*='projectRow'] {
 }
 /* The expanded workspace is the one in hand. It is marked by TEXT WEIGHT, not by
    an outline: an inset ring lived here and it was reported, correctly, as a
-   border on the workspace title. Measured with the --chrome diagnostic in
-   verify-settings-namespace.mjs, that ring was the ONLY edge left on any of the
+   border on the workspace title. Measured with the inspector in
+   scripts/inspect-shell-dom.mjs, that ring was the ONLY edge left on any of the
    fifteen rows -- the other fourteen were already flat. A heading should not
    also be a box. */
 body [role='tree'] [role='treeitem'][class*='projectRow'][aria-expanded='true'] {
@@ -508,4 +545,105 @@ body [role='tree'] [role='treeitem'][class*='sessionRow'][aria-selected='true']:
 body [data-slot='conversation.session.header'] {
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
+
+/* ── 14. corner brackets on the two elements in hand ───────────────────── */
+/* The same 10px bracket the settings dialog carries, brought to the two surfaces
+   a user is actually working in: the composer card and the message bubble it
+   produces. Settings/overlay chrome sits at the edge of attention; these two are
+   where attention already is, so the frame reads as "this is live" rather than as
+   more decoration. Feedback was that the settings page looked right and the
+   composer looked plain -- this closes that gap with one treatment, not two.
+
+   Targets are measured, not guessed (scripts/probe-composer-dom.mjs):
+     - [data-composer-card] is the element that FRAMES the input: it is the
+       bordered, filled surface the user sees as the box, and it is already
+       position:relative with both pseudo-elements free. The input area
+       ([data-composer-input]) is a 1256x36 strip INSIDE it, so bracketing both
+       would put two brackets a few pixels apart on the same corner. The card is
+       the input box; it gets the bracket.
+     - the bubble is a hashed class, so it is matched by the same substring
+       fragment technique section 13 uses, and its own rule declares neither a
+       pseudo-element nor a position.
+     - the bubble therefore NEEDS an explicit position. A first version of this
+       section omitted it on the theory that the bubble was inline-block and would
+       behave as its own containing block; measured, it resolves to display:block,
+       so its ::after escaped to the nearest positioned ancestor and rendered
+       1200px away from the bubble (offset 1278,7535 in
+       scripts/probe-bracket-live.mjs). add relative, and keep measuring: this is
+       exactly the failure the geometry assertion in that probe exists to catch.
+       The change is safe to apply because it only makes the bubble a containing
+       block for DESCENDANTS, which must already have been resolving against an
+       outer box -- i.e. none of them were positioned inside it to begin with.
+
+   Colour is --endfield-focus, not the brand yellow: these two elements are the
+   focus/selection family (the outline, the active session bar), and the brand
+   yellow is deliberately reserved for the solid brand blocks elsewhere.
+
+   The FILL is a separate decision and lives in the palette (the surfaceFill setting), because
+   it is a theme token the shell reads (--dsw-specific-input-major / -bubble).
+   With the fill off, the hairline below is what keeps the surface readable at all:
+   the brackets mark the corners, the hairline marks the box, and the canvas shows
+   through the middle. Without it an empty composer is two right angles floating in
+   space, which reads as a rendering bug rather than as a flat style. */
+body [data-composer-card][class],
+body [class*='_bubble'][class] {
+  border: 1px solid var(--endfield-frame, var(--dsw-alias-border-l1));
+  /* The shadow is the second half of the fill removal, and the half that is easy to
+     miss: with the fill off, a soft drop shadow still makes an empty surface read as
+     a raised panel.
+     The value the settings path writes on documentElement reaches this card by plain
+     inheritance, so the only job here is to read the property and to win the
+     cascade. Two measured traps shaped this rule:
+       - the fallback must not mention the shell's elevation tokens. The shell
+         declares that family in a body-plus-body-star rule, so a reference resolves
+         against whatever redefinition is in force at the element -- measured as the
+         full soft shadow after the settings path had written the flat value;
+       - the trailing [class] is what settles precedence against the card's own
+         class rule, which otherwise wins purely on document order. It costs nothing:
+         both elements always carry a class. */
+  box-shadow: var(--endfield-surface-shadow,
+    0 0 0 .5px #4D4D4D, 0 4px 16px 0 #00000008, 0 0 24px 0 #00000008);
+}
+body [data-composer-card]::before,
+body [data-composer-card]::after,
+body [class*='_bubble']::before,
+body [class*='_bubble']::after {
+  content: '';
+  position: absolute;
+  width: var(--endfield-bracket, 10px);
+  height: var(--endfield-bracket, 10px);
+  pointer-events: none;
+  border: 0 solid var(--endfield-focus);
+  z-index: 3;
+}
+body [data-composer-card]::before,
+body [class*='_bubble']::before {
+  top: 2px;
+  left: 2px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+body [data-composer-card]::after,
+body [class*='_bubble']::after {
+  right: 2px;
+  bottom: 2px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+/* The containing block for the bubble's brackets. See the note above: it is NOT a
+   no-op, the measured display is block. */
+body [class*='_bubble'] {
+  position: relative;
+}
+/* No bloom on these two, by request. A focus-time glow lived here (gated on
+   :has(:focus-visible) so only the active element carried it); it was reported as
+   glow and removed rather than tuned down.
+
+   On a FILLED surface a glow reads as depth and the brackets read as the accent on
+   top of it. On the flat surface these two now have -- no fill, one hairline -- the
+   same glow reads as a halo: there is nothing for it to sit on, so it just muddies
+   the hairline's edges. The one property that was here is gone rather than set to
+   none, so nothing is left to reintroduce it by accident. Note the brackets still
+   get the focus signal from section 11: the focus-visible rule there outlines the focused
+   element itself, which is what a user actually needs to see. */
 `

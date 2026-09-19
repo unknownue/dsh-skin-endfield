@@ -9,9 +9,10 @@
 1. **皮肤插件 = 一个 package + 两半**：宿主半边（`lib/index.js`，可为空壳）让包成为 loader 条目；浏览器半边（`lib/client.js`）经 `window.__ModuleLoader__.load({id, factory})` 注册，导出 `apply(ctx)` / `inject`。
 2. **没有专门的 skin API，但有官方主题扩展点 `ctx.theme`**：`overrideTokens(source, {token: {light, dark}})` —— 推荐路径。
 3. **样式权威是 `--dsw-*` design token**，声明于 `dsh-client-ui-theme` 的 6 张样式表。
-4. **类名不可依赖**：客户端组件用 CSS Modules（hashed）。稳定的选择器只有 `[data-ds-dark-theme]`、`[data-state]`、`[data-tone]` 等少数 data 属性。
+4. **类名不可依赖**：客户端组件用 CSS Modules（hashed）。但外壳公开的**具名钩子比最初以为的多** —— `data-slot`（`sidebar`、`sidebar.workspaces`、`conversation.session.header`、`conversation.composer` …）、`role` + `aria-selected` / `aria-expanded` / `aria-current`，以及 `[data-ds-dark-theme]` / `[data-state]` / `[data-tone]`。装饰层现在**全部**锚在这些上面。用 `pnpm inspect:dom` 可随时导出完整清单。
 5. **品牌槽位可整体顶掉**：`sidebar.brand.mark` / `sidebar.brand.name` / `conversation.hero.brand.mark`。
 6. **样式表必须带 `data-plugin="<包名>"`**，否则 HMR 不会清理。
+7. **`settings.section` 是加一节设置页的接缝**，不需要 `children`；`data-slot` / `role` 之外，容器层级本身也是契约（例如每个工作区在一个 `groupSection` 里，它是标题与该工作区会话行的共同祖先 —— 字段变量因此能一次继承给整组）。
 
 ## 1. 包结构
 
@@ -91,7 +92,7 @@ window.__ModuleLoader__.load({
 | `register(definition) {` | 1336 |
 | `overrideTokens(source, tokens) {` | 1364 |
 | `composeActive(active)` | 1396 |
-| 6 张样式表：`base.css` / `corner-shape.css` / `design-platform.css` / `scrollbar.css` / `gradient-shadow-text.css` / `shiki.css` | 样式表定义处 |
+| 样式表数量 | **随版本变，不要当契约**：初稿核对时是 6 张，后来实测已不止。要按需现数，别写死 |
 | `--dsw-alias-*` 去重后共 **79** 个 | 全量清点 |
 
 **推荐做法**：`overrideTokens('<pkg>', {...})` —— 按 seq 叠加在用户当前 light/dark 之上，卸载精确还原，且随用户切换明暗自动生效。
@@ -168,23 +169,30 @@ dsh plugin --profile web install
 8. **`lib/` 要提交入库**（走 git 分发时 pnpm 阻断 `prepare`）。
 9. 客户端 bundle：**跨插件 value import 被禁止**（构建门会报 `client bundle purity` 错误）；协作只能走 Cordis 服务。
 10. 浏览器里 `process.env.NODE_ENV` 未定义 —— 若依赖 immer/zustand 之类，需 `define: {'process.env.NODE_ENV': '"production"'}`。
+11. **未在 `inject` 里声明的服务，读它不返回 `undefined`，而是抛异常**（`cannot get property "settings" without inject`）。所以 `if (ctx.settings === undefined)` **不是护栏，那一行本身就是崩溃点**。可选服务必须走**嵌套** `ctx.inject([...], child => ...)`：回调只在 provider 组合好之后运行，否则根本不运行 —— 这正是"可选"的写法。本插件曾因此让 `dsh web` 无法启动。
 
-## 8. 对本皮肤的落地设计
+## 8. 本皮肤的实际落点（实现后回填）
+
+计划与实现的差异都记在这里，避免下次照着初稿改：
 
 ```
 src/
-  index.ts              # 宿主半边：空壳（或未来用 ctx.webServer 发字体/背景静态资源）
+  index.ts                宿主半边：字体路由 + 设置命名空间注册（不是空壳）
+  settings.ts             设置 schema（两半共享）
+  types.ts / react.d.ts / schemastery.d.ts   本地结构性类型
   client/
-    index.ts            # apply(ctx): ctx.theme.overrideTokens(...) + 装饰层 style + 品牌槽位
-    palette.ts          # 终末地调色板 -> --dsw-alias-* {light, dark} 映射
-    decor.ts            # 装饰 CSS：角括号、斜线纹理、等高线、`//` 标签、直角
-    brand.tsx           # sidebar.brand.mark / conversation.hero.brand.mark（终末地工业标记）
+    index.ts              apply(ctx)：5 个 effect（令牌 / 字体 / 全局 / 装饰 / 设置→变量）+ 设置页注册
+    palette.ts            78 个 --dsw-alias-* 映射 {light, dark}
+    decor.ts              装饰层（选择器全部以 body 为根，零 !important）
+    settings-apply.ts     设置值 → CSS 变量
+    settings-page.ts      设置页（react 作为参数传入）
 ```
 
-装饰层的三个"非 token"手法（必须走 `<style data-plugin>`）：
+装饰层最终的手法：
 
-1. **直角**：`--dsw-corner-shape` 覆写 + `border-radius: 0` 兜底
-2. **技术框**：用 `::before/::after` 在面板角落画 1px 括号 + 对角线（`block-bg.svg` 母题）
-3. **`//` 标签**：装饰层用属性选择器难以定位，建议改为**在品牌槽位组件里渲染**，或对少量稳定 data 属性（`[data-state]`、`[data-tone]`）做增强
+1. **直角** —— 外壳没有半径令牌，只能靠 CSS，且半径有**三条下发路径**（元素自声明变量 / 读变量 / 字面量），打法见 README。
+2. **技术框** —— 用 `::before/::after` 在 `[role=dialog|menu|listbox]` 与代码/工具块上画 1px 括号。
+3. **`//` 标记** —— 没有走品牌槽位组件，而是 `content: var(--endfield-prefix)`，开关由设置页写变量控制。
+4. **设置页** —— `ctx.slots.inject('settings.section', ...)`，`react` 取自静态模块表；**不能 import 设置基座包**（基线之外的 require 会中断整个 Web 启动）。
 
-> **待实现阶段验证**：`--dsw-corner-shape` 的合法取值、装饰层选择器的实际命中率（需要在真实 GUI 上试）。本次未验证，不要当成事实。
+**已复验（实现后）**：`--dsw-corner-shape` 的兜底做法正确 —— 半径为 0 时 `superellipse` 仍读作圆角，所以被压平的表面都显式钉 `corner-shape: round`；装饰层选择器在真实 GUI 的命中率由六层 live 检查逐项回读计算值确认。

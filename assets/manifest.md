@@ -93,7 +93,20 @@
 
 > **抽帧的两套数据别混用**：`frames/` 是首轮每片 1 张，用于快速确认"这视频里有没有 UI"；`frames2/` 才是**界面状态清单的证据源**。密抽帧用 `-skip_frame nokey` 只解关键帧以换取速度，**帧编号不等于视频时间码**，不要用它推算时长。
 >
-> **`_chrome-profile/` 与 `_cdp-profile/`**（合计约 660 MB）是 headless Chrome 抓 SPA 时留下的临时 profile，**不是素材**，可随时删除。
+> **当前缓存规模**：1056 个文件 / 约 2.96 GB（不含下条已清理的部分）。其中 2.2 GB 是 `videos/` 的 6 条长录屏 —— 证据价值最高、也最占地方，是唯一建议定期确认"还要不要留"的一项。
+>
+> **已清理（2026-09）**：`_chrome-profile/` 与 `_cdp-profile/`（约 660 MB），以及分析过程中的临时目录 `_pickcheck/`、`_offcheck/`。这些是 headless Chrome 抓 SPA 留下的 profile 和一次性挑帧产物，**不是素材**。**`_probe/` 保留** —— 那是首轮研究者的取样与探针证据。
+>
+> **同样的清理适用于插件仓库**：`tests/out/` 里每个脚本各留一个 Chrome profile，跑一轮就会涨到几百 MB。清理命令：
+> ```powershell
+> Get-ChildItem tests\out -Force -Directory | Where-Object Name -like '_chrome*' | Remove-Item -Recurse -Force
+> ```
+> 若删除报"文件被占用"，那是**上次运行残留的 headless Chrome 还在跑**。只杀属于本插件的那些，别用 `Stop-Process -Name chrome`：
+> ```powershell
+> Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" |
+>   Where-Object { $_.CommandLine -match 'dsh-skin-endfield' } |
+>   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+> ```
 
 
 ## 3. 官方站内嵌 MP4（全部已下载）
@@ -245,3 +258,26 @@ node 00-cdp-fetch.mjs <outDir>
 ```
 
 脚本默认落盘到 `E:\Workspace\tmp\endfield-refs\`；改路径请编辑脚本头部的 `$root`。
+
+## 7. 验证与探查（不是抓取，但同一批脚本）
+
+抓取脚本只产出资料；下面这些用来证明**皮肤确实生效**，也是改装饰层前该跑的东西。全部在仓库根的 `scripts/` 下：
+
+```powershell
+pnpm verify                 # 12 步：离线五层 + live 六层
+pnpm inspect:dom            # 导出 shell 的 data-slot / 分层 / 边框来源（改样式前先跑）
+```
+
+单独的 live 检查需要一个运行中的 `dsh web`。脚本会自己从 `~/.dsh-web.out.log` 捞 token；`DSH_URL` 缺失时 `verify-all` 会明确报「跳过」而不是假装通过。
+
+| 脚本 | 用途 |
+|------|------|
+| `verify-client.mjs` / `verify-host.mjs` / `verify-settings-parity.mjs` | 离线契约、护栏、卸载对称性、schema 一致性 |
+| `verify-install.ps1` | profile 能否装载本包 |
+| `smoke-browser.mjs` | 真浏览器里 apply/dispose + 截图 |
+| `verify-composition.mjs` | 运行中的组合是否发出了本插件 |
+| `verify-corners-live.mjs` / `verify-focus-signature.mjs` / `verify-tool-block-chrome.mjs` / `verify-sidebar-chrome.mjs` / `verify-typography-and-bubble.mjs` | 对运行中 GUI 读**计算值** |
+| `showcase.mjs` | 把皮肤铺到 shell 的 DOM 形状上，出对照图（`tests/out/`） |
+
+> **`tests/out/` 会膨胀**：每个脚本各留一个 Chrome profile 目录，跑一轮就几百 MB。`tests/out/` 已在 `.gitignore` 中，但磁盘会涨 —— 清理方式见第 2 节末尾。
+

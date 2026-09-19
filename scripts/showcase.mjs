@@ -20,6 +20,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { endfieldDecor } from '../src/client/decor.ts'
 import { endfieldFontFace, endfieldGlobals, endfieldTokens } from '../src/client/palette.ts'
+import { SKIN_SETTINGS_DEFAULTS } from '../src/settings.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = join(ROOT, 'tests', 'out')
@@ -27,9 +28,17 @@ const PORT = 9412
 const PROFILE = join(OUT, '_chrome-profile-showcase')
 mkdirSync(OUT, { recursive: true })
 
+/**
+ * The token layer for one accent. The palette is a function of the settings now
+ * (the accent is configurable), so the showcase resolves it with the shipped
+ * defaults — exactly what a fresh install paints.
+ */
+const resolveTokens = (accent = SKIN_SETTINGS_DEFAULTS.accent) =>
+  endfieldTokens({ ...SKIN_SETTINGS_DEFAULTS, accent })
+
 /** Flatten the token layer into CSS for one appearance. */
-function tokensToCss(appearance) {
-  return Object.entries(endfieldTokens)
+function tokensToCss(appearance, tokens) {
+  return Object.entries(tokens)
     .map(([name, pair]) => `  ${name}: ${pair[appearance]};`)
     .join('\n')
 }
@@ -79,7 +88,7 @@ const body = `
       <div class="msg user"><div class="bubble">继续</div></div>
 
       <div class="msg assistant">
-        <p>已把 <code>ctx.theme.overrideTokens</code> 接上：78 个令牌全部核对过，装饰层零优先级强制声明。</p>
+        <p>已把 <code>ctx.theme.overrideTokens</code> 接上：89 个令牌全部核对过，装饰层零优先级强制声明。</p>
         <div class="toolcall">
           <div class="toolcall-head"><span class="mono">▸</span> bash · npm run verify</div>
           <pre class="mono">[PASS] verify-client  16/16 checks passed
@@ -141,7 +150,7 @@ smoke OK — tests/out/smoke.png</pre>
     <div role="menuitem">Copy transcript</div>
     <div role="menuitem" aria-checked="true" role="menuitemcheckbox">Pin to top</div>
   </div>
-  <div class="toast" data-state="done">Skin applied — 78 tokens · 3 stylesheets</div>
+  <div class="toast" data-state="done">Skin applied — 89 tokens · 3 stylesheets</div>
   <div role="tooltip" class="tooltip">//MISSION-DEPENDENT PAYLOAD SYSTEM INTERFACES</div>
 </div>
 \${LEGEND}
@@ -222,7 +231,7 @@ const shell = `
 `
 
 /** A token legend, generated from the shipped mapping so the table cannot go stale. */
-function legendHtml(appearance) {
+function legendHtml(appearance, tokens) {
   const groups = [
     ['surface', (n) => n.includes('bg-base') || n.includes('bg-layer') || n.includes('bg-overlay')],
     ['accent', (n) => n.includes('brand-') || n.includes('link')],
@@ -232,7 +241,7 @@ function legendHtml(appearance) {
     ['line', (n) => n.includes('border-')],
   ]
   const rows = groups.map(([label, match]) => {
-    const cells = Object.entries(endfieldTokens)
+    const cells = Object.entries(tokens)
       .filter(([name]) => match(name))
       .slice(0, 14)
       .map(([name, pair]) => `
@@ -243,10 +252,41 @@ function legendHtml(appearance) {
         </div>`).join('')
     return `<div class="tk-group"><div class="sect-label">// ${label} (${appearance})</div><div class="tk-row">${cells}</div></div>`
   }).join('')
-  return `<section class="legend"><h2>Endpoint 调色板 · 令牌对照（${appearance}）</h2>${rows}</section>`
+  return `<section class="legend"><h2>Endpoint 调色板 · 令牌对照（${appearance}）</h2>${rows}${accentSwatchHtml(appearance)}</section>`
+
+/**
+ * The accent setting, drawn as the two things it actually repaints: the solid
+ * control fill and the status glyph. One row per candidate hue, resolved through
+ * the same palette builder the skin uses, so this table is always the truth about
+ * what a given accent produces rather than a hand-kept list.
+ */
+function accentSwatchHtml(appearance) {
+  const accents = [
+    ['mint (default)', SKIN_SETTINGS_DEFAULTS.accent],
+    ['signal yellow', '#FFFA00'],
+    ['shell blue', '#4D6BFE'],
+    ['mint / focus outline', '#7CFF4F'],
+    ['magenta', '#FF1AAC'],
+  ]
+  const rows = accents.map(([label, accent]) => {
+    const t = resolveTokens(accent)
+    const fill = t['--dsw-alias-button-info-fill'][appearance]
+    const glyph = t['--dsw-alias-state-business-primary'][appearance]
+    const wash = t['--dsw-alias-state-business-tertiary'][appearance]
+    return `
+      <div class="tk">
+        <span class="tk-sw" style="background:${fill}"></span>
+        <span class="tk-sw" style="background:${glyph}"></span>
+        <span class="tk-sw" style="background:${wash}"></span>
+        <span class="tk-name mono">${label}</span>
+        <span class="tk-hex mono">${accent}</span>
+      </div>`
+  }).join('')
+  return `<div class="tk-group"><div class="sect-label">// accent setting → control fill / status glyph / wash (${appearance})</div><div class="tk-row">${rows}</div></div>`
+}
 }
 
-function page(appearance) {
+function page(appearance, tokens) {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>dsh-skin-endfield showcase (${appearance})</title>
 <style>
@@ -254,7 +294,7 @@ function page(appearance) {
 :root { ${SHELL_FALLBACK} }
 ${shell}
 /* 2. the skin: token layer for the active appearance */
-body { ${tokensToCss(appearance)} }
+body { ${tokensToCss(appearance, tokens)} }
 /* 3. the skin: fonts + globals */
 ${endfieldFontFace}
 ${endfieldGlobals}
@@ -262,13 +302,16 @@ ${endfieldGlobals}
 ${endfieldDecor}
 </style></head>
 <body${appearance === 'dark' ? ' data-ds-dark-theme="true"' : ''}>
-${body.replace('${LEGEND}', legendHtml(appearance))}
+${body.replace('${LEGEND}', legendHtml(appearance, tokens))}
 </body></html>`
 }
 
+// One accent, resolved once: the token layer is a function of the settings, so
+// the showcase pins the shipped defaults and every panel below shares the result.
+const TOKENS = resolveTokens()
 const pages = [
-  { name: 'dark', file: join(OUT, 'showcase-dark.html'), html: page('dark') },
-  { name: 'light', file: join(OUT, 'showcase-light.html'), html: page('light') },
+  { name: 'dark', file: join(OUT, 'showcase-dark.html'), html: page('dark', TOKENS) },
+  { name: 'light', file: join(OUT, 'showcase-light.html'), html: page('light', TOKENS) },
 ]
 for (const entry of pages) writeFileSync(entry.file, entry.html, 'utf8')
 

@@ -45,7 +45,9 @@ export const inject = ['webServer']
  * silently — a split would make a fresh install look different from a stored one.
  */
 export const SkinSettingsSchema = z.object({
+  accent: z.string().default(SKIN_SETTINGS_DEFAULTS.accent),
   tint: z.string().default(SKIN_SETTINGS_DEFAULTS.tint),
+  surfaceFill: z.boolean().default(SKIN_SETTINGS_DEFAULTS.surfaceFill),
   bloom: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.bloom),
   cornerRadius: z.number().min(0).max(24).default(SKIN_SETTINGS_DEFAULTS.cornerRadius),
   labelPrefix: z.boolean().default(SKIN_SETTINGS_DEFAULTS.labelPrefix),
