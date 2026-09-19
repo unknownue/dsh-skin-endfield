@@ -350,4 +350,162 @@ body :is([data-terminal], [data-read], [data-search], [data-diff], [data-web]) >
   font-weight: 700;
   letter-spacing: 0;
 }
+
+/* ── 13. shell chrome: sidebar ─────────────────────────────────────────── */
+/* Modelled on the game's mail screen (assets/in-game-frames/22-item-detail-
+   orange-head.jpg). What transfers from it is not the orange -- it is the
+   STRUCTURE of a two-column readout: a hairline column divider, a ruled column
+   header, a LEFT TYPE BAR marking the row in hand, a diamond on that row, and
+   each group sitting on its own field.
+
+   Two distinctions the shell makes available WITHOUT a class name, both taken
+   from the live DOM (see scripts/verify-settings-namespace.mjs --chrome):
+     - a workspace name is [role=treeitem] carrying projectRow, a session row is
+       [role=treeitem] carrying sessionRow. Role alone would not separate them --
+       there are 98 treeitems and the first of them is a workspace.
+     - the active session is the sessionRow with aria-selected=true.
+   The class *fragment* is used only as a discriminator between two groups that
+   already share a role; no full hashed name appears here. */
+
+body [data-slot='sidebar'] {
+  border-inline-end: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* Column header: label treatment only. There is deliberately NO rule under it:
+   an earlier revision put a dashed line here, which read as chrome competing
+   with the per-workspace title rules below. */
+body [data-slot='sidebar.workspaces'] [class*='sectionLabel'] {
+  letter-spacing: 0.08em;
+  color: var(--dsw-alias-label-secondary);
+}
+/* Square the column header and every sidebar row. Both carry a radius from the
+   shell's own workspace stylesheet -- measured at 12px on the section header and
+   8px on the rows (WorkspaceBrowser.module.css / Rows.module.css) -- and a
+   rounded block inside a squared column is the one shape that reads as a
+   leftover, not as a choice. */
+body [data-slot='sidebar.workspaces'] [class*='sectionHeader'],
+body [data-slot='sidebar.workspaces'] [class*='projectRow'],
+body [data-slot='sidebar.workspaces'] [class*='sessionRow'] {
+  border-radius: 0;
+  corner-shape: round;
+}
+
+/* ── 13a. one field per workspace ──────────────────────────────────────── */
+/* Each workspace sits in its own wrapper (a groupSection, measured as a direct
+   child of the tree -- 15 of them, one per workspace), and that wrapper is an
+   ancestor of BOTH the workspace name and that workspace's session rows. So the
+   field variable is declared there once and inherits to everything inside.
+
+   Numbering must be on the wrapper, not on the name row: the name row is the
+   only element in its own subtree, so it is child 1 of everything and every
+   :nth-child on it matched, which made all fifteen fields identical (measured).
+
+   The field is NEUTRAL GREY, not hue. An earlier revision tinted each workspace
+   with a brand colour; the intent was "slightly lighter than the canvas, so
+   groups separate", and hue was doing work nobody asked for -- brand colour is
+   reserved for interaction. So the ring is five steps of white over the dark
+   canvas. The steps were then darkened on request: the first set sat around
+   0.022..0.062 and read as panels rather than as a ground, so the ring now runs
+   0.010..0.026 -- still a step above the canvas, but only just, which is what
+   separates the groups without turning the rail into a stack of cards.
+
+   The steps are deliberately small and even, and the ring repeats past five
+   workspaces. A per-workspace unique shade would need numbering persisted at
+   runtime (a daemon, and it would have to survive reloads) for a difference the
+   eye can barely resolve at these levels. */
+body [data-slot='sidebar.workspaces'] [class*='groupSection'] {
+  --endfield-field: transparent;
+  /* The gap between groups is part of the separation: a field that butts
+     straight against the next one cannot show where a group begins. */
+  margin-block: 3px;
+}
+body [data-slot='sidebar.workspaces'] [class*='groupSection']:nth-child(5n + 1) {
+  --endfield-field: rgba(255, 255, 255, 0.01);
+}
+body [data-slot='sidebar.workspaces'] [class*='groupSection']:nth-child(5n + 2) {
+  --endfield-field: rgba(255, 255, 255, 0.014);
+}
+body [data-slot='sidebar.workspaces'] [class*='groupSection']:nth-child(5n + 3) {
+  --endfield-field: rgba(255, 255, 255, 0.018);
+}
+body [data-slot='sidebar.workspaces'] [class*='groupSection']:nth-child(5n + 4) {
+  --endfield-field: rgba(255, 255, 255, 0.022);
+}
+body [data-slot='sidebar.workspaces'] [class*='groupSection']:nth-child(5n + 5) {
+  --endfield-field: rgba(255, 255, 255, 0.026);
+}
+/* Paint the field on the wrapper itself, so the whole group reads as one block
+   rather than only its title row. */
+body [data-slot='sidebar.workspaces'] [class*='groupSection'] {
+  background-color: var(--endfield-field);
+}
+/* The workspace name must not add a second, darker field inside the group: it
+   paints the same value so the group looks continuous. */
+body [role='tree'] [role='treeitem'][class*='projectRow'] {
+  background-color: var(--endfield-field);
+}
+
+/* ── 13b. the workspace name ───────────────────────────────────────────── */
+/* No border on the title. An earlier revision ruled it off (dashed, then a
+   darker solid hairline); on request that outline is gone entirely, because the
+   grouping is already carried by the field and the gap between fields, and a
+   line on top of a field reads as a box rather than as a separator. The title
+   itself now only takes the stronger type colour, so it still reads as a
+   heading rather than as one more row. */
+body [role='tree'] [role='treeitem'][class*='projectRow'] {
+  position: relative;
+  background-color: var(--endfield-field);
+  color: var(--dsw-alias-label-primary);
+}
+/* The expanded workspace is the one in hand. It is marked by TEXT WEIGHT, not by
+   an outline: an inset ring lived here and it was reported, correctly, as a
+   border on the workspace title. Measured with the --chrome diagnostic in
+   verify-settings-namespace.mjs, that ring was the ONLY edge left on any of the
+   fifteen rows -- the other fourteen were already flat. A heading should not
+   also be a box. */
+body [role='tree'] [role='treeitem'][class*='projectRow'][aria-expanded='true'] {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+/* ── 13c. the active session ───────────────────────────────────────────── */
+/* Only the session in hand gets the bar and the diamond; the rest stay quiet.
+   An earlier revision barred every row, which read as 98 competing markers and
+   said nothing about which one was active -- the user asked for it to be
+   limited to the workspace names and the active session, and that is right. */
+body [role='tree'] [role='treeitem'][class*='sessionRow'] {
+  position: relative;
+}
+body [role='tree'] [role='treeitem'][class*='sessionRow'][aria-selected='true'] {
+  background-color: var(--endfield-field, transparent);
+}
+body [role='tree'] [role='treeitem'][class*='sessionRow'][aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  inset-block: 3px;
+  inset-inline-start: -4px;
+  width: 2px;
+  background: var(--endfield-focus);
+  box-shadow: 0 0 0.5rem var(--endfield-focus-bloom);
+}
+body [role='tree'] [role='treeitem'][class*='sessionRow'][aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  background: var(--dsw-alias-brand-primary);
+  transform: rotate(45deg);
+}
+
+/* ── 13d. conversation header ──────────────────────────────────────────── */
+/* A plain hairline only. The accent rule that used to live here is gone on
+   request: the lead-in is reserved for the workspace names and the active
+   session, so repeating it across the header diluted it. The hairline is kept
+   because it is structure, not accent -- measured at 0px before this rule. */
+body [data-slot='conversation.session.header'] {
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
 `

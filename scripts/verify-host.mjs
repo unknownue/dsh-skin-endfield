@@ -46,8 +46,18 @@ class StubResponse {
 
 const routes = []
 const disposers = []
+const registered = []
+/**
+ * Model Cordis' nested inject: the callback runs only once every named service
+ * is composed, and never otherwise. `settings` is absent here, so the settings
+ * namespace must not register — the same shape the real host has before a
+ * settings provider activates.
+ */
 const host = {
   provided: [],
+  inject(names, callback) {
+    if (names.every((name) => this[name] !== undefined)) callback(this)
+  },
   webServer: {
     register(route) {
       routes.push(route)
@@ -127,9 +137,34 @@ await check('route answers 404 for an unknown font', () => {
 
 await check('apply() is a no-op when ctx.webServer is absent', () => {
   const before = routes.length
-  module.apply({ effect() {}, logger: { info() {}, warn() {} } })
+  module.apply({ inject() {}, effect() {}, logger: { info() {}, warn() {} } })
   assert(routes.length === before, 'a route was registered without webServer')
   return 'guarded'
+})
+
+await check('no settings provider -> no namespace registered, no throw', () => {
+  // apply(host) above ran against a ctx with no `settings`; had it read
+  // `ctx.settings` directly it would have thrown, which is the regression this
+  // check pins down.
+  assert(registered.length === 0, `unexpected registrations: ${registered.length}`)
+  assert(module.inject.includes('webServer'), 'webServer must stay a hard inject')
+  return 'namespace left unregistered'
+})
+
+await check('a composed settings provider gets the namespace and schema', () => {
+  const withSettings = {
+    ...host,
+    settings: {
+      register(ns, schema) { registered.push({ ns, schema }) },
+      get() { return undefined },
+    },
+  }
+  module.apply(withSettings)
+  assert(registered.length === 1, `expected 1 registration, got ${registered.length}`)
+  const [entry] = registered
+  assert(entry.ns === 'dsh-skin-endfield', `unexpected namespace: ${entry.ns}`)
+  assert(entry.schema !== undefined && entry.schema !== null, 'schema not passed')
+  return `${entry.ns} registered`
 })
 
 await check('disposers remove the route', () => {

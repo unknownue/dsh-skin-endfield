@@ -47,6 +47,7 @@ Step 'typecheck'        { pnpm run typecheck }
 Step 'build'            { pnpm run build }
 Step 'verify: client'   { node scripts/verify-client.mjs }
 Step 'verify: host'     { node scripts/verify-host.mjs }
+Step 'verify: settings' { node scripts/verify-settings-parity.mjs }
 Step 'verify: install'  { pwsh -NoProfile -File scripts/verify-install.ps1 }
 Step 'smoke: browser'   { node scripts/smoke-browser.mjs }
 
@@ -54,6 +55,7 @@ if ($env:DSH_URL) {
     Step 'live: corners (composer + code blocks)' { node scripts/verify-corners-live.mjs }
     Step 'live: focus signature'                  { node scripts/verify-focus-signature.mjs }
     Step 'live: tool-block chrome'                { node scripts/verify-tool-block-chrome.mjs }
+    Step 'live: shell chrome (sidebar + header)'  { node scripts/verify-sidebar-chrome.mjs }
     Step 'live: typography + message bubble'      { node scripts/verify-typography-and-bubble.mjs }
 } else {
     Write-Host ""
