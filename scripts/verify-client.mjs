@@ -233,23 +233,74 @@ await check('endfield anchors are present (signal yellow + dark canvas)', () => 
   const tokens = overrideCalls[0].tokens
   assert(tokens['--dsw-alias-brand-primary']?.dark === '#FFFA00', 'brand-primary dark must be #FFFA00')
   assert(tokens['--dsw-alias-bg-base']?.dark === '#191919', 'bg-base dark must be #191919')
-  // The accent family is derived from the default accent, and the derivation must
-  // land on the colours the skin shipped before it became a setting: the default
-  // accent is the game's mint, the dark step is what the module icon, the send
-  // button and the status glyphs have always painted, and the light step is the
-  // deep green the light column used.
-  assert(tokens['--dsw-alias-state-success-primary']?.dark === '#00E08E',
-    `default accent dark step must be #47FFBC, got ${tokens['--dsw-alias-state-success-primary']?.dark}`)
-  assert(tokens['--dsw-alias-state-business-primary']?.dark === tokens['--dsw-alias-state-success-primary']?.dark,
-    'the shell models brand and success as one shade; they must not diverge')
-  assert(tokens['--dsw-alias-state-success-primary']?.light === '#007F51',
-    `default accent light step must be #00A368, got ${tokens['--dsw-alias-state-success-primary']?.light}`)
+  // The BRAND family is derived from the default accent, and the derivation must land
+  // on the colours the skin shipped before the accent became a setting: the module
+  // icon, the send button and the badge all paint this dark step.
+  //
+  // It is `state-business-primary` that carries that family now, NOT
+  // `state-success-*` — success was split off and pinned to the shell's own green
+  // because a diff's added line reads this token as meaning rather than as brand (the
+  // reason is spelled out in palette.ts). So this assertion is about the business
+  // token, and the diff-specific one lives in its own check below.
+  assert(tokens['--dsw-alias-state-business-primary']?.dark === '#00E08E',
+    `default accent dark step must be #00E08E, got ${tokens['--dsw-alias-state-business-primary']?.dark}`)
+  assert(tokens['--dsw-alias-state-business-primary']?.light === '#007F51',
+    `default accent light step must be #007F51, got ${tokens['--dsw-alias-state-business-primary']?.light}`)
   assert(tokens['--dsw-alias-state-business-tertiary']?.dark === '#DBFFF2',
     `the badge wash must derive from the accent, got ${tokens['--dsw-alias-state-business-tertiary']?.dark}`)
   // The light column must not reuse the same values blindly: light brand must
   // be darkened for contrast on white.
   assert(tokens['--dsw-alias-brand-primary']?.light !== '#FFFA00', 'brand-primary light is the raw yellow — contrast will fail on white')
-  return 'yellow/dark anchors verified; accent family derived, light column differentiated'
+  return 'yellow/dark anchors verified; accent family derived on business-*, light column differentiated'
+})
+
+/**
+ * A diff must read added-green / removed-red whatever the accent is.
+ *
+ * This is the regression the right pane actually showed: the shell's DiffBlock paints
+ * an added line with `--dsw-alias-state-success-primary` and a removed line with
+ * `--dsw-alias-state-error-primary`, and the palette used to route the success family
+ * through the user's accent — so with a blue accent every diff came out blue-and-red
+ * and stopped saying "added / removed". Green here is INFORMATION, not brand, so it is
+ * pinned to the shell's own green and must stay independent of the setting.
+ */
+await check('the diff keeps its green/red whatever the accent is', async () => {
+  const tokens = overrideCalls[0].tokens
+  // Imported from SOURCE on purpose: this is arithmetic over the settings, and Node's
+  // type stripping lets the .ts be imported directly (the same reason the colour
+  // derivation check below reads source rather than the bundle).
+  const { endfieldTokens } = await import(pathToFileURL(join(ROOT, 'src', 'client', 'palette.ts')).href)
+  const { SKIN_SETTINGS_DEFAULTS } = await import(pathToFileURL(join(ROOT, 'src', 'settings.ts')).href)
+  assert(typeof endfieldTokens === 'function', 'endfieldTokens was not importable for the accent sweep')
+  const isGreen = (value) => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(value ?? '')
+    if (!m) return false
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16))
+    return g >= 0xc0 && g > r + 0x30 && g > b + 0x30
+  }
+  assert(isGreen(tokens['--dsw-alias-state-success-primary']?.light),
+    `the added-line ink must be green, got ${tokens['--dsw-alias-state-success-primary']?.light}`)
+  assert(isGreen(tokens['--dsw-alias-state-success-primary']?.dark),
+    `the added-line ink must be green in the dark column too, got ${tokens['--dsw-alias-state-success-primary']?.dark}`)
+  assert(tokens['--dsw-alias-state-success-primary']?.light === '#22C55E',
+    `the light added-line ink is the shell's green-500, got ${tokens['--dsw-alias-state-success-primary']?.light}`)
+  assert(tokens['--dsw-alias-state-success-primary']?.dark === '#4ED17E',
+    `the dark added-line ink is the shell's green-400, got ${tokens['--dsw-alias-state-success-primary']?.dark}`)
+  // The sweep is the point: for accents the skin never shipped, added must stay green
+  // and the brand family must still move.
+  const failures = []
+  for (const accent of ['#0080FF', '#FF1AAC', '#FF6B00', '#FFFF00', '#7F7F7F']) {
+    const swept = endfieldTokens({ ...SKIN_SETTINGS_DEFAULTS, accent })
+    if (swept['--dsw-alias-state-success-primary'].dark !== tokens['--dsw-alias-state-success-primary'].dark) {
+      failures.push(`${accent} repainted success -> ${swept['--dsw-alias-state-success-primary'].dark}`)
+    }
+    if (swept['--dsw-alias-state-business-primary'].dark === tokens['--dsw-alias-state-business-primary'].dark) {
+      failures.push(`${accent} left the brand family unchanged`)
+    }
+  }
+  assert(failures.length === 0, failures.join('; '))
+  const removed = tokens['--dsw-alias-state-error-primary']?.dark
+  return `added ${tokens['--dsw-alias-state-success-primary'].dark} / removed ${removed} in dark; unchanged across 5 accents, while the brand family still follows them`
 })
 
 /**

@@ -54,6 +54,7 @@
     "verify:font-choice": "node scripts/verify-font-choice-live.mjs",
     "verify:todo-dock": "node scripts/verify-todo-dock-live.mjs",
     "verify:title-underline": "node scripts/verify-title-underline-live.mjs",
+    "verify:diff-colors": "node scripts/verify-diff-colors-live.mjs",
     "inspect:dom": "node scripts/inspect-shell-dom.mjs",
     "inspect:green": "node scripts/probe-green.mjs",
     "inspect:composer": "node scripts/probe-composer-dom.mjs",
