@@ -48,6 +48,20 @@ const GEOMETRY = `(() => {
       }
     }),
     accent: getComputedStyle(document.body).getPropertyValue('--dsw-alias-state-business-primary').trim(),
+    // The band's own painted colour, resolved through a throwaway element: the row's fill is a
+    // color-mix, so its computed backgroundColor is transparent and a hover tint has to be
+    // composited over the RESOLVED band to be judged. Reading the custom property and letting
+    // the browser resolve it is the only way to get that value without duplicating the mix.
+    rowFill: (() => {
+      const probe = document.createElement('div')
+      probe.style.background = 'var(--endfield-band, #2E2E2E)'
+      probe.style.position = 'absolute'
+      probe.style.left = '-10000px'
+      document.body.appendChild(probe)
+      const resolved = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return resolved
+    })(),
   }
 })()`
 
@@ -124,6 +138,25 @@ try {
         const tint = rgb(tab.background)
         const isAccent = tint && rgb(geometry.accent) && tint.join(',') === rgb(geometry.accent).join(',')
         check(!isAccent, `the hover fill is neutral, not the accent it will become (${tab.background})`)
+        // HOW VISIBLE the answer is, not merely that it exists. Measured: the shell's own 0.08
+        // wash composited to #2C2C2C over a #222222 band — about ten steps of mean channel,
+        // which the eye cannot find on a dark canvas, and which is what "the background is too
+        // light" was about. The bar is 20 steps: the skin's 0.22 wash (-> #393939) is 23 and
+        // clears it, the value it replaced is 10 and does not. Both sides are composited over
+        // the band, because a translucent wash is not comparable to a solid fill on its own.
+        const band = rgb(geometry.rowFill) ?? [25, 25, 25]
+        const composite = (value) => {
+          const m = /rgba?\(([^)]+)\)/.exec(value || '')
+          if (!m) return null
+          const parts = m[1].split(',').map((v) => parseFloat(v))
+          const alpha = parts.length > 3 ? parts[3] : 1
+          return parts.slice(0, 3).map((channel, i) => Math.round(channel * alpha + band[i] * (1 - alpha)))
+        }
+        const mean = (c) => (c ? (c[0] + c[1] + c[2]) / 3 : null)
+        const tintOnBand = composite(tab.background)
+        const delta = mean(tintOnBand) !== null ? Math.round(mean(tintOnBand) - mean(band)) : null
+        check(delta !== null && Math.abs(delta) >= 20,
+          `and the tint is strong enough to see (${delta === null ? 'not comparable' : `${delta} steps of mean channel`} over the band ${geometry.rowFill})`)
         break
       }
       await sleep(300)
