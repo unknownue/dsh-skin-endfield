@@ -28,7 +28,7 @@ import {
   tintChannels,
 } from '../settings.ts'
 import type { ThemeTokenOverrides } from '../types.ts'
-import { accentInk } from './colors.ts'
+import { accentInk, accentScale } from './colors.ts'
 import { endfieldTokens } from './palette.ts'
 
 /** The slice of `ctx.theme` this module drives. */
@@ -39,6 +39,17 @@ interface ThemeLike {
 /** The consumers of these names are in `decor.ts`; keep the two lists in step. */
 export const ACCENT_VAR = '--endfield-accent'
 export const ACCENT_INK_VAR = '--endfield-accent-ink'
+/**
+ * The deepest step of the accent family — the colour the filled plate uses.
+ *
+ * Exposed so decor chrome can paint the SAME colour the shell's own active surfaces
+ * paint, instead of a lookalike: the header's unit row previews its click with this
+ * on hover, and the click lands on a plate drawn from `state-business-primary`, which
+ * the palette derives from this very step. Publishing it here rather than deriving it
+ * again in CSS (a `color-mix` or a hand-tuned alpha) is what keeps the preview and the
+ * result from drifting apart when the accent moves.
+ */
+export const ACCENT_DEEP_VAR = '--endfield-accent-deep'
 export const TINT_VAR = '--endfield-focus'
 export const BLOOM_VAR = '--endfield-focus-bloom'
 export const RADIUS_VAR = '--endfield-corner-radius'
@@ -110,6 +121,10 @@ export function applySkinSettings(
   root.classList.add(SURFACE_CLASS)
   root.style.setProperty(ACCENT_VAR, settings.accent)
   root.style.setProperty(ACCENT_INK_VAR, accentInk(settings.accent))
+  // The deepest family step, published for decor chrome that has to match a filled
+  // plate. Read from the SAME derivation the palette maps into state-business-primary,
+  // so the two cannot drift: one seed, one arithmetic.
+  root.style.setProperty(ACCENT_DEEP_VAR, accentScale(settings.accent).dark)
   root.style.setProperty(TINT_VAR, settings.tint)
   root.style.setProperty(BLOOM_VAR, `rgba(${r}, ${g}, ${b}, ${settings.bloom})`)
   root.style.setProperty(RADIUS_VAR, `${settings.cornerRadius}px`)
@@ -132,6 +147,7 @@ export function clearSkinSettings(): void {
   root.classList.remove(SURFACE_CLASS)
   root.style.removeProperty(ACCENT_VAR)
   root.style.removeProperty(ACCENT_INK_VAR)
+  root.style.removeProperty(ACCENT_DEEP_VAR)
   root.style.removeProperty(TINT_VAR)
   root.style.removeProperty(BLOOM_VAR)
   root.style.removeProperty(RADIUS_VAR)

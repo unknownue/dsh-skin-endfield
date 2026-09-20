@@ -135,28 +135,32 @@ try {
       if (tab && resting && tab.background !== resting.background) {
         check(tab.background !== 'rgba(0, 0, 0, 0)', `an inactive unit answers the pointer with a fill (${resting.background} -> ${tab.background})`)
         check(tab.color !== resting.color, `and its label brightens (${resting.color} -> ${tab.color})`)
-        const tint = rgb(tab.background)
-        const isAccent = tint && rgb(geometry.accent) && tint.join(',') === rgb(geometry.accent).join(',')
-        check(!isAccent, `the hover fill is neutral, not the accent it will become (${tab.background})`)
-        // HOW VISIBLE the answer is, not merely that it exists. Measured: the shell's own 0.08
-        // wash composited to #2C2C2C over a #222222 band — about ten steps of mean channel,
-        // which the eye cannot find on a dark canvas, and which is what "the background is too
-        // light" was about. The bar is 20 steps: the skin's 0.22 wash (-> #393939) is 23 and
-        // clears it, the value it replaced is 10 and does not. Both sides are composited over
-        // the band, because a translucent wash is not comparable to a solid fill on its own.
-        const band = rgb(geometry.rowFill) ?? [25, 25, 25]
-        const composite = (value) => {
-          const m = /rgba?\(([^)]+)\)/.exec(value || '')
-          if (!m) return null
-          const parts = m[1].split(',').map((v) => parseFloat(v))
-          const alpha = parts.length > 3 ? parts[3] : 1
-          return parts.slice(0, 3).map((channel, i) => Math.round(channel * alpha + band[i] * (1 - alpha)))
+        // The hover fill must be the SAME colour the click produces, not an approximation of
+        // it: the active plate is drawn from state-business-primary, and the hovered unit from
+        // the deepest accent step those tokens come from. Two earlier values are on record —
+        // the shell's 0.08 white wash (10 steps of mean channel over the band, invisible) and a
+        // 0.22 wash (38 steps) — and both were only ever an approximation of the plate. This
+        // asserts the identity instead, which is the property that makes the preview honest.
+        const hoverRgb = rgb(tab.background)
+        const activeRgb = active ? rgb(active.background) : null
+        check(hoverRgb !== null && activeRgb !== null && hoverRgb.join(',') === activeRgb.join(','),
+          `and it is the very colour the click produces (hover ${tab.background} vs the active plate ${active ? active.background : 'n/a'})`)
+        // The ink has to read on that fill, since the hovered unit now carries the same colour
+        // the selected one does — including for a pale accent, where the ink flips to dark.
+        const inkRgb = rgb(tab.color)
+        const lum = (c) => {
+          const [r, g, b] = c.map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b
         }
+        const inkContrast = hoverRgb && inkRgb ? (Math.max(lum(hoverRgb), lum(inkRgb)) + 0.05) / (Math.min(lum(hoverRgb), lum(inkRgb)) + 0.05) : 0
+        check(inkContrast >= 4.5,
+          `and its label is legible on that fill (${tab.color} on ${tab.background} = ${inkContrast.toFixed(2)}:1)`)
+        // And it has to clear the band by a wide margin, so "too light" cannot come back.
+        const band = rgb(geometry.rowFill) ?? [25, 25, 25]
         const mean = (c) => (c ? (c[0] + c[1] + c[2]) / 3 : null)
-        const tintOnBand = composite(tab.background)
-        const delta = mean(tintOnBand) !== null ? Math.round(mean(tintOnBand) - mean(band)) : null
-        check(delta !== null && Math.abs(delta) >= 20,
-          `and the tint is strong enough to see (${delta === null ? 'not comparable' : `${delta} steps of mean channel`} over the band ${geometry.rowFill})`)
+        const delta = mean(hoverRgb) !== null ? Math.round(mean(hoverRgb) - mean(band)) : null
+        check(delta !== null && Math.abs(delta) >= 60,
+          `and it is far stronger than the band it sits on (${delta === null ? 'not comparable' : `${delta} steps of mean channel`} over ${geometry.rowFill})`)
         break
       }
       await sleep(300)
