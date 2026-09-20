@@ -1050,22 +1050,21 @@ body header[class*='_header'] [role='tab'] {
   letter-spacing: 0.1em;
   corner-shape: round;
 }
-/* An inactive unit needs to answer the pointer. The shell answered with its own hover tint (a
-   blue-grey plate), which the skin removed along with every other plate in the band and never
-   replaced -- so the row read as five labels, not five controls. The skin's answer is the wash
-   the game uses on list rows, in the band's own neutral: it previews the filled plate the click
-   will produce without borrowing the accent it will become. The ACTIVE unit is excluded -- it is
-   already a plate, and tinting it would dim its own ink.
-   The wash is the skin's OWN token rather than --dsw-alias-interactive-bg-hover, which is
-   reported too faint on a band that is already a raised tint. Measured on the live band: the
-   shell's 0.08 white wash lands on #2C2C2C against a #222222 band -- a difference of ten steps,
-   which reads as nothing on a dark canvas. 0.22 gives #393939, a plate the eye can find without
-   it competing with the accent the active unit carries. One declaration covers both appearances:
-   white over a dark band, black over the light one. */
+/* An inactive unit answers the pointer with the colour the click will produce: the deepest
+   step of the accent family, which is exactly what the ACTIVE unit's plate is drawn from
+   (state-business-primary, derived from the same step — see ACCENT_DEEP_VAR in
+   settings-apply.ts). So hovering previews the result rather than approximating it. The
+   ACTIVE unit is excluded from the rule: it is already that plate.
+   Two earlier values are on record because each was reported in turn: the shell's
+   --dsw-alias-interactive-bg-hover (0.08 white) composited to #2C2C2C over the #222222 band —
+   ten steps of mean channel, invisible on a dark canvas — and a 0.22 white wash reached 38.
+   The accent itself replaces both: it is ~180 steps from the band, and it is the same colour
+   the plate uses, so the ink derived for that plate (--endfield-accent-ink) reads on the
+   hovered unit as well as on the selected one. */
 body header[class*='_header'] [role='tab']:hover:not([aria-selected='true']),
 body header[class*='_header'] [role='tab']:focus-visible:not([aria-selected='true']) {
-  background: rgba(217, 217, 217, 0.22);
-  color: var(--dsw-alias-label-primary);
+  background: var(--endfield-accent-deep, var(--dsw-alias-state-business-primary));
+  color: var(--endfield-accent-ink, #191919);
 }
 /* The unit's icon: a small diamond outline, the system's node primitive (05 图形元素). Placed
    absolutely so the label keeps its position -- a tab's label is a bare text node, so an
