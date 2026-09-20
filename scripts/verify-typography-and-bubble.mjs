@@ -8,54 +8,19 @@
  *
  * Run: $env:DSH_URL='...token=...'; node scripts/verify-typography-and-bubble.mjs
  */
-import { spawn } from 'node:child_process'
+import { connectCdp } from './cdp-pipe.mjs'
 
-const PORT = Number(process.env.CDP_PORT ?? 9421)
 const DSH_URL = process.env.DSH_URL
+if (!DSH_URL) { console.error('set DSH_URL (the URL printed by dsh web)'); process.exit(2) }
 if (!DSH_URL) { console.error('set DSH_URL (the URL printed by dsh web)'); process.exit(2) }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-const child = spawn('chrome', ['--headless=new', `--remote-debugging-port=${PORT}`,
-  `--user-data-dir=${process.env.TEMP}\\_chrome-typo-bubble`, '--no-first-run', '--disable-gpu',
-  '--window-size=1600,1000', 'about:blank'], { stdio: 'ignore' })
 
-async function wsUrl() {
-  for (let i = 0; i < 80; i++) {
-    try { const j = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); if (j.webSocketDebuggerUrl) return j.webSocketDebuggerUrl } catch {}
-    await sleep(250)
-  }
-  throw new Error('devtools never came up')
-}
-class CDP {
-  constructor(ws) {
-    this.ws = ws; this.id = 0; this.pending = new Map(); this.sessionId = null
-    ws.addEventListener('message', (e) => {
-      const m = JSON.parse(e.data)
-      if (m.id && this.pending.has(m.id)) {
-        const { resolve, reject } = this.pending.get(m.id); this.pending.delete(m.id)
-        m.error ? reject(new Error(JSON.stringify(m.error))) : resolve(m.result)
-      }
-    })
-  }
-  send(method, params = {}, useSession = true) {
-    const id = ++this.id; const msg = { id, method, params }
-    if (useSession && this.sessionId) msg.sessionId = this.sessionId
-    return new Promise((res, rej) => { this.pending.set(id, { resolve: res, reject: rej }); this.ws.send(JSON.stringify(msg)) })
-  }
-}
-const evalIn = async (cdp, expr) => {
-  const r = await cdp.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true })
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.text)
-  return r.result.value
-}
+const cdp = await connectCdp({ profile: '_chrome-typo-bubble' })
+const evalIn = async (_cdp, expr) => cdp.evalIn(expr)
+
 
 try {
-  const ws = new WebSocket(await wsUrl())
-  await new Promise((res, rej) => { ws.addEventListener('open', res); ws.addEventListener('error', rej) })
-  const cdp = new CDP(ws)
-  const { targetInfos } = await cdp.send('Target.getTargets', {}, false)
-  const page = targetInfos.find((t) => t.type === 'page')
-  cdp.sessionId = (await cdp.send('Target.attachToTarget', { targetId: page.targetId, flatten: true }, false)).sessionId
   await cdp.send('Runtime.enable'); await cdp.send('Page.enable')
   await cdp.send('Page.navigate', { url: DSH_URL })
   await sleep(9000)
@@ -73,7 +38,14 @@ try {
     // specifies uppercase + positive tracking for small LATIN labels, and the frame-12\n
     // redesign applies it to the tab row. What must never be uppercased is CONTENT --\n
     // paths, code and prompt text -- which is the regression this check was written for.\n
+    // The to-do dock is the second allowed place, for the same reason: its title is a\n
+    // SECTION LABEL ("To-dos"), not content, and the skin gives it the caption voice\n
+    // deliberately (decor section 17). Rows INSIDE it -- which do carry the agent\\'s own\n
+    // task text -- are still checked, so this exemption cannot hide an uppercased task.\n
     '  const bar = document.querySelector("header[class*=\'_header\']");',
+    '  const labelled = (el) => (bar && bar.contains(el))\n'
+   + '    || (el.closest && el.closest("[data-testid=todo-panel]") !== null\n'
+   + '        && el.matches && !el.closest("li"));',
     '  const offenders = [];',
     '  const barLabels = [];',
     '  for (const el of document.querySelectorAll("body *")) {',
@@ -81,7 +53,7 @@ try {
     '    if ((cs.textTransform || "").toLowerCase() !== "uppercase") continue;',
     '    if (!(el.textContent || "").trim()) continue;',
     '    const row = { tag: el.tagName, cls: String(el.className).slice(0, 50), text: (el.textContent || "").trim().slice(0, 40) };',
-    '    if (bar && bar.contains(el)) barLabels.push(row); else offenders.push(row);',
+    '    if (labelled(el)) barLabels.push(row); else offenders.push(row);',
     '  }',
     '  return {',
     '    offenderCount: offenders.length, offenders: offenders.slice(0, 6),',
@@ -139,10 +111,9 @@ try {
 
   console.log(fails === 0 ? '\nOK: no forced uppercase, and the bubble is square' : `\n${fails} check(s) failed`)
   process.exitCode = fails === 0 ? 0 : 1
-  ws.close()
 } catch (e) {
   console.error('error:', e.message)
   if (!process.exitCode) process.exitCode = 3
 } finally {
-  child.kill()
+  cdp.close()
 }
