@@ -72,6 +72,30 @@ const evalIn = async (cdp, expression) => {
   return r.result.value
 }
 
+// Opens the composer's model menu and reports where it landed. A skin rule that takes over an
+// overlay's positioning shows up here as an off-screen box.
+const OVERLAY_PROBE = `(async () => {
+  const trigger = document.querySelector('[data-slot="conversation.input.model"] button')
+  if (!trigger) return { absent: true }
+  trigger.click()
+  await new Promise((r) => setTimeout(r, 900))
+  const menus = [...document.querySelectorAll("[class*='_menu'], [role='menu'], [role='listbox']")]
+    .filter((m) => m.getBoundingClientRect().height > 0)
+  if (!menus.length) return { noMenu: true }
+  const m = menus[menus.length - 1]
+  const cs = getComputedStyle(m)
+  const r = m.getBoundingClientRect()
+  const before = getComputedStyle(m, '::before')
+  return {
+    box: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)],
+    viewportH: window.innerHeight,
+    insideViewport: r.top >= 0 && r.bottom <= window.innerHeight && r.width > 0,
+    position: cs.position,
+    brackets: [before.content, getComputedStyle(m, '::after').content].filter((c) => c && c !== 'none').length,
+    text: (m.textContent || '').trim().slice(0, 30),
+  }
+})()`
+
 const PROBE = `(() => {
   const px = (v) => parseFloat(v) || 0
   const box = (el, which) => {
@@ -241,6 +265,23 @@ try {
   // box at all — an empty composer would otherwise be two right angles in space.
   check(out.bubble.brackets.length === 2 && out.card.brackets.length === 2,
     'the brackets survive the flat treatment')
+
+  // The overlay the skin must not reposition (regression: the model dropdown went off screen).
+  console.log('\n=== shell-positioned overlay (model dropdown) ===')
+  const overlay = await evalIn(cdp, OVERLAY_PROBE)
+  if (overlay.absent || overlay.noMenu) {
+    // Not a pass: an unchecked overlay is how this bug survived the suite once already.
+    console.log(`  [SKIP] no overlay to measure (${JSON.stringify(overlay)}) — not a pass`)
+    failures.push('the model dropdown could not be opened, so its geometry was never checked')
+  } else {
+    console.log(`  box=${JSON.stringify(overlay.box)} viewportH=${overlay.viewportH} position=${overlay.position} brackets=${overlay.brackets}`)
+    check(overlay.insideViewport,
+      `the dropdown opens inside the viewport (box ${JSON.stringify(overlay.box)} in ${overlay.viewportH}px)`)
+    check(overlay.position !== 'relative',
+      `the skin does not take over the overlay's positioning (computed ${overlay.position})`)
+    check(overlay.brackets === 2,
+      `and the overlay still carries its 2 brackets (${overlay.brackets})`)
+  }
 
   console.log(failures.length === 0
     ? '\nOK: brackets render inside both surfaces, and both are flat'

@@ -3,9 +3,11 @@
  *
  * The rules have two deliberate limits, and this checks both rather than only
  * the happy path:
- *   1. the accent lead-in and the diamond appear ONLY on the workspace names and
- *      the active session -- not on every row. An earlier revision barred all 98
- *      rows, which said nothing about which one was active.
+ *   1. the accent lead-in appears ONLY on the workspace names and the active
+ *      session -- not on every row. An earlier revision barred all 98 rows, which
+ *      said nothing about which one was active. (The active session's trailing
+ *      diamond was dropped after it collided with the shell's time label; this
+ *      check now pins that the row draws nothing at its right edge.)
  *   2. each workspace carries its own background field, so groups separate
  *      visually, and the field repeats to the active session.
  *
@@ -133,11 +135,22 @@ const PROBE = `
   out.sessionsWithBar = sessions.filter((e) => getComputedStyle(e, '::before').content !== 'none').length
   out.projectsWithBar = projects.filter((e) => getComputedStyle(e, '::before').content !== 'none').length
 
+  // The hairline has to be measured on the element that HAS a box. The slot below is a
+  // display-contents wrapper (measured: 0x0), so any border on it paints nothing -- this
+  // check passed for a while only because a rule of ours and the shell's own rule on the
+  // real header happened to declare the same width. Both the box and the border are
+  // asserted now, so "the rule exists" can no longer stand in for "a line is drawn".
   const ch = document.querySelector("[data-slot='conversation.session.header']")
-  if (ch) {
+  const realHeader = document.querySelector('header[class*=header]')
+  if (ch && realHeader) {
     const a = getComputedStyle(ch, '::after')
     out.headerRule = { content: a.content, background: (a.backgroundImage || '').slice(0, 50) }
-    out.headerBorder = getComputedStyle(ch).borderBottomWidth
+    out.headerBorder = getComputedStyle(realHeader).borderBottomWidth
+    const r = realHeader.getBoundingClientRect()
+    out.headerBox = [Math.round(r.width), Math.round(r.height)]
+    const body = document.querySelector("[class*='scrollBody']")
+    out.bodyBox = body ? [Math.round(body.getBoundingClientRect().height), Math.round(document.documentElement.clientHeight)] : null
+    out.slotWrapperBox = (() => { const w = ch.getBoundingClientRect(); return [Math.round(w.width), Math.round(w.height)] })()
   } else out.missing.push('conversation.session.header')
 
   return out
@@ -216,19 +229,38 @@ try {
   if (out.selected) {
     check(out.selected.barContent !== 'none' && px(out.selected.barWidth) === 2, `active session bar ${out.selected.barWidth}`)
     check(!!out.selected.barShadow && out.selected.barShadow !== 'none', 'active bar carries the bloom')
-    check(out.selected.diamondContent !== 'none' && px(out.selected.diamondWidth) === 5, 'active session diamond present')
+    // The trailing diamond was removed by request: it sat where the shell draws a
+    // session's time label, and the overlap read as a stray asterisk beside the
+    // timestamp. The row's own ::after has to stay empty now -- see
+    // scripts/verify-session-marker-live.mjs for the focused check.
+    check(out.selected.diamondContent === 'none' || out.selected.diamondContent === '',
+      `the active session draws no trailing marker (::after ${out.selected.diamondContent})`)
     check(out.selected.bg !== 'rgba(0, 0, 0, 0)', `active session inherits its workspace field (${out.selected.bg})`)
   }
   if (out.unselected) {
     check(out.unselected.barContent === 'none', 'inactive sessions draw no bar')
-    check(out.unselected.diamondContent === 'none', 'inactive sessions draw no diamond')
+    check(out.unselected.diamondContent === 'none', 'inactive sessions draw no trailing marker')
     check(out.unselected.bg === 'rgba(0, 0, 0, 0)', `inactive sessions stay plain (${out.unselected.bg})`)
   }
 
   console.log('\n=== conversation header no longer draws the accent rule ===')
   if (out.headerRule) {
     check(out.headerRule.content === 'none', `header ::after content is none (${out.headerRule.content})`)
-    check(px(out.headerBorder) >= 1, `header keeps its plain hairline (${out.headerBorder})`)
+    // The one-line band separates from the body by tint, not by a rule, so a border here
+    // would be a regression. What has to hold is that the row is a single line and that the
+    // body gets the height back.
+    check(px(out.headerBorder) === 0, `the band draws no rule (${out.headerBorder})`)
+    // 52px is the designed height: a 28px row + 10 top + 12 bottom padding, where the bottom
+    // padding is what drops the divider. The one-line claim is proven by the row geometry in
+    // the top-bars suite, not by this bound.
+    check(out.headerBox[1] <= 56, `the band is one row tall, plus the divider gap (${out.headerBox[1]}px)`)
+    check(out.headerBox[1] > 0, `measured on the element that HAS a box (${out.headerBox.join('x')})`)
+    check(out.slotWrapperBox[1] === 0, 'and the data-slot wrapper is still 0x0, so rules belong on the header')
+    // The freed height must land in the message area: body = viewport - header.
+    if (out.bodyBox) {
+      check(out.bodyBox[0] >= out.bodyBox[1] - out.headerBox[1] - 2,
+        `the body absorbs the freed height (body ${out.bodyBox[0]}px of viewport ${out.bodyBox[1]}px with a ${out.headerBox[1]}px band)`)
+    }
   } else console.log('  [skip] header not present')
 
   console.log(fails === 0
