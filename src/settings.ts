@@ -46,7 +46,36 @@ export const SKIN_SETTINGS_DEFAULTS = {
   cornerRadius: 0,
   /** Endfield's `//` marker on tool-block headers and section headings. */
   labelPrefix: true,
+  /**
+   * The three ambient effects, each independent and each OFF by default.
+   *
+   * They are separate switches rather than one "effects" toggle because they answer
+   * different questions and do not have to travel together: the top-bar light is a
+   * chrome treatment on the shell's own bar, the wordmark is a page mark in the
+   * transcript's right margin, and the dot block is a bounded piece of print in its
+   * lower-right corner. Any subset is a legitimate configuration, and each one is
+   * confined to its own zone so that no combination can overlap another.
+   *
+   * OFF by default on purpose: this layer paints on top of (or behind) content the
+   * shell owns, so a fresh install must look exactly like the skin without them. A
+   * user opts in per effect.
+   */
+  headerLight: false,
+  /** The vertical ENDFIELD mark in the transcript's right margin. */
+  mark: false,
+  /** The halftone block in the transcript's lower-right corner. */
+  dotBlock: false,
+  /**
+   * The mark's text. Kept as a setting rather than a constant because the mark is the
+   * one effect whose value depends on the person using it -- someone who does not want
+   * the studio's wordmark can put a project, a branch or a role call sign there
+   * instead. Normalised (upper-cased, trimmed, length-capped) before it is painted.
+   */
+  markText: 'ENDFIELD',
 }
+
+/** Longest mark accepted. A wordmark is read as a mark, not as a sentence. */
+export const MARK_TEXT_MAX = 14
 
 /**
  * A `#RRGGBB` colour. Rejecting anything else matters because the value is
@@ -90,6 +119,25 @@ export interface SkinSettings {
   bloom: number
   cornerRadius: number
   labelPrefix: boolean
+  headerLight: boolean
+  mark: boolean
+  dotBlock: boolean
+  markText: string
+}
+
+/**
+ * Coerce an arbitrary stored value into a usable mark.
+ *
+ * A page mark is set in a display face at a size measured in tens of pixels, so it is
+ * normalised the way a wordmark would be: trimmed, collapsed, upper-cased and capped.
+ * A raw string from a settings document would otherwise be able to emit newlines into a
+ * `content` value, or a paragraph's worth of characters into a strip that has room for
+ * about a word.
+ */
+export function safeMarkText(value: unknown): string {
+  if (typeof value !== 'string') return SKIN_SETTINGS_DEFAULTS.markText
+  const cleaned = value.replace(/\s+/g, ' ').trim().toUpperCase().slice(0, MARK_TEXT_MAX)
+  return cleaned.length > 0 ? cleaned : SKIN_SETTINGS_DEFAULTS.markText
 }
 
 /**
@@ -119,5 +167,18 @@ export function normalizeSkinSettings(section: unknown): SkinSettings {
     labelPrefix: raw.labelPrefix === undefined
       ? SKIN_SETTINGS_DEFAULTS.labelPrefix
       : raw.labelPrefix !== false,
+    // The three effect switches follow the labelPrefix convention: absent means the
+    // default, and only an explicit `true` turns one on. Written this way so a
+    // stored `false`, a missing key and a malformed value all resolve the same.
+    headerLight: raw.headerLight === undefined
+      ? SKIN_SETTINGS_DEFAULTS.headerLight
+      : raw.headerLight === true,
+    mark: raw.mark === undefined
+      ? SKIN_SETTINGS_DEFAULTS.mark
+      : raw.mark === true,
+    dotBlock: raw.dotBlock === undefined
+      ? SKIN_SETTINGS_DEFAULTS.dotBlock
+      : raw.dotBlock === true,
+    markText: safeMarkText(raw.markText),
   }
 }

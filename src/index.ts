@@ -51,6 +51,10 @@ export const SkinSettingsSchema = z.object({
   bloom: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.bloom),
   cornerRadius: z.number().min(0).max(24).default(SKIN_SETTINGS_DEFAULTS.cornerRadius),
   labelPrefix: z.boolean().default(SKIN_SETTINGS_DEFAULTS.labelPrefix),
+  headerLight: z.boolean().default(SKIN_SETTINGS_DEFAULTS.headerLight),
+  mark: z.boolean().default(SKIN_SETTINGS_DEFAULTS.mark),
+  dotBlock: z.boolean().default(SKIN_SETTINGS_DEFAULTS.dotBlock),
+  markText: z.string().default(SKIN_SETTINGS_DEFAULTS.markText),
 })
 
 const HERE = dirname(fileURLToPath(import.meta.url))

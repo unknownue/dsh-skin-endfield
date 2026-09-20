@@ -23,6 +23,7 @@
  *     rather than falling back.
  */
 import {
+  MARK_TEXT_MAX,
   SKIN_SETTINGS_DEFAULTS,
   normalizeSkinSettings,
   tintChannels,
@@ -91,6 +92,38 @@ export const SURFACE_CLASS = 'endfield'
 /** Read by the decor layer as the box-shadow of the composer and the bubble. */
 export const SURFACE_VAR = '--endfield-surface-shadow'
 
+/**
+ * One class per ambient effect, added to the same `<html>` element as SURFACE_CLASS.
+ *
+ * A class per effect rather than a CSS variable per effect, because these three are not
+ * values -- they are whole blocks of chrome that either exist or do not, and `decor.ts`
+ * expresses each as a `::before`/`::after` rule with its own geometry. A variable would
+ * have forced every rule to carry a `content` that toggles, which cannot be done without
+ * generating the stylesheet dynamically.
+ *
+ * The classes are added and removed INDIVIDUALLY, so the three are genuinely independent:
+ * turning one off leaves the other two exactly as they were.
+ */
+export const HEADER_LIGHT_CLASS = 'endfield-header-light'
+export const MARK_CLASS = 'endfield-mark'
+export const DOT_BLOCK_CLASS = 'endfield-dots'
+
+/**
+ * The mark's text, written as a quoted CSS string.
+ *
+ * `content` needs a quoted string, and the value is a user-editable one -- so the quotes
+ * are added here, once, and the text itself is stripped of anything that could terminate
+ * it (`"` and `\`, plus control characters). This is the same discipline the palette uses
+ * for colours: normalise at the seam, never trust the document.
+ */
+export const MARK_TEXT_VAR = '--endfield-mark-text'
+
+/** Quote and escape a value for use as a CSS `content` string. */
+export function cssContentString(text: string): string {
+  const safe = text.replace(/[\\"\u0000-\u001f]/g, '').slice(0, MARK_TEXT_MAX)
+  return `"${safe.length > 0 ? safe : SKIN_SETTINGS_DEFAULTS.markText}"`
+}
+
 /** The layer id the theme seam keys one override layer by. */
 export const TOKEN_SOURCE = 'dsh-skin-endfield'
 
@@ -136,6 +169,20 @@ export function applySkinSettings(
   // property as the `content` value, so no inner selector has to change.
   root.style.setProperty(PREFIX_VAR, settings.labelPrefix ? '"//"' : 'none')
 
+  /**
+   * The three ambient effects, each on its own class.
+   *
+   * `classList.toggle(name, force)` is deliberate: it adds when the setting is on,
+   * REMOVES when it is off, and is idempotent -- so this function stays safe to call on
+   * every settings change and cannot leave a stale class behind from a previous value.
+   * The decor sheet gates each effect on its class, which means an effect that is off
+   * contributes no rule at all rather than a rule that paints nothing.
+   */
+  root.classList.toggle(HEADER_LIGHT_CLASS, settings.headerLight)
+  root.classList.toggle(MARK_CLASS, settings.mark)
+  root.classList.toggle(DOT_BLOCK_CLASS, settings.dotBlock)
+  root.style.setProperty(MARK_TEXT_VAR, cssContentString(settings.markText))
+
   theme?.overrideTokens(TOKEN_SOURCE, endfieldTokens(settings))
 
   return settings
@@ -145,6 +192,9 @@ export function applySkinSettings(
 export function clearSkinSettings(): void {
   const root = document.documentElement
   root.classList.remove(SURFACE_CLASS)
+  root.classList.remove(HEADER_LIGHT_CLASS)
+  root.classList.remove(MARK_CLASS)
+  root.classList.remove(DOT_BLOCK_CLASS)
   root.style.removeProperty(ACCENT_VAR)
   root.style.removeProperty(ACCENT_INK_VAR)
   root.style.removeProperty(ACCENT_DEEP_VAR)
@@ -153,6 +203,7 @@ export function clearSkinSettings(): void {
   root.style.removeProperty(RADIUS_VAR)
   root.style.removeProperty(PREFIX_VAR)
   root.style.removeProperty(SURFACE_VAR)
+  root.style.removeProperty(MARK_TEXT_VAR)
 }
 
 /** The values in force when nothing has been stored. */

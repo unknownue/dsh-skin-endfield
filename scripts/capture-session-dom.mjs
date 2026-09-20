@@ -44,6 +44,18 @@ const arg = (name, fallback) => {
 }
 const SESSION = arg('session', '十一周年地图氛围实现')
 const WINDOW = Number(arg('window', '2700'))
+/**
+ * Which appearance to capture. `--theme light` exists because one of the proposal
+ * families needs the skin's LIGHT column to be judged at all: the whole point of that
+ * direction is the canvas moving from #191919 to near-white, which cannot be faked by
+ * tinting a dark screenshot. The theme is switched through the shell's own control
+ * before the session opens.
+ */
+const THEME = arg('theme', 'dark')
+const WANT_DARK = THEME !== 'light'
+const SUFFIX = WANT_DARK ? '' : '-light'
+const CAPTURE_NAME = `session-capture${SUFFIX}.json`
+const SHOT_NAME = `session-live${SUFFIX}.png`
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const child = spawn('chrome', [
@@ -91,20 +103,34 @@ const evalIn = async (cdp, expression) => {
 const openSession = () => `(async () => {
   const want = ${JSON.stringify(SESSION)}
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  // Appearance first, before the session: switching theme AFTER a transcript is mounted
+  // makes the shell re-render the whole flow, and the capture then reads a half-swapped
+  // tree (the dark canvas with light-mode text colours).
+  const wantsDark = ${WANT_DARK ? 'true' : 'false'}
+  for (let i = 0; i < 12; i++) {
+    const isDark = document.body.hasAttribute('data-ds-dark-theme')
+    if (isDark === wantsDark) break
+    const toggle = [...document.querySelectorAll('button, [role=button], [role=menuitem]')]
+      .find((el) => /theme|appearance|dark|light|主题|外观|深色|浅色/i.test(el.getAttribute('aria-label') || el.title || el.textContent || ''))
+    if (!toggle) break
+    toggle.click()
+    await sleep(900)
+  }
+  const themeNow = document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light'
   const rows = () => [...document.querySelectorAll('[role=tree] [role=treeitem]')]
   let row = rows().find((el) => (el.textContent || '').includes(want))
   if (!row) {
     for (const el of rows()) if (el.getAttribute('aria-expanded') === 'false') { el.click(); await sleep(400) }
     row = rows().find((el) => (el.textContent || '').includes(want))
   }
-  if (!row) return { ok: false, reason: 'session row not found' }
+  if (!row) return { ok: false, reason: 'session row not found', theme: themeNow }
   row.click()
   let mounted = false
   for (let i = 0; i < 60; i++) {
     await sleep(500)
     if (document.querySelector('[data-slot="conversation.view"]')) { mounted = true; break }
   }
-  if (!mounted) return { ok: false, reason: 'conversation.view never mounted' }
+  if (!mounted) return { ok: false, reason: 'conversation.view never mounted', theme: themeNow }
   await sleep(2500)
   const scroll = document.querySelector('[data-conversation-scroll]')
   const view = document.querySelector('[data-slot="conversation.view"]')
@@ -113,7 +139,7 @@ const openSession = () => `(async () => {
   const target = view && view.scrollHeight > view.clientHeight + 40 ? view : scroll
   target.scrollTop = target.scrollHeight
   await sleep(1200)
-  return { ok: true, scroller: target === view ? 'view' : 'scrollBody', top: target.scrollTop, height: target.scrollHeight, client: target.clientHeight }
+  return { ok: true, theme: themeNow, scroller: target === view ? 'view' : 'scrollBody', top: target.scrollTop, height: target.scrollHeight, client: target.clientHeight }
 })()`
 
 /**
@@ -348,6 +374,32 @@ const CAPTURE = `(() => {
     width: frameW,
     height: frameH,
   }
+  /** The page column's own box, for the preview's band stacking. */
+  /**
+   * The top bar's rectangle, in page coordinates (the app's own column), and the rows are
+   * measured from the TOP OF THE VIEWPORT, not from the column.
+   *
+   * Two measured defects lived in the previous version of this crop:
+   *
+   *   1. y: 0 with left: sr.left. The page coordinate 0 is where the DSH PAGE starts,
+   *      which is not where the app's column starts: the app is placed by the shell and its
+   *      column begins at x=280 (measured: the conversation root box is [280,0,1304,905]),
+   *      so a crop that takes x from the scroller and y from the page mixes two coordinate
+   *      spaces. The result was a band of the page's own white background sitting where the
+   *      header should be -- which is what three rounds of "顶部栏全白" were reporting.
+   *   2. height: Math.round(hr.bottom). bottom is a viewport coordinate, NOT a height.
+   *      It happens to equal the height only when the element starts at y=0. Using it as a
+   *      height is a coincidence, not a measurement.
+   *
+   * The band is now the header's own top and bottom, and the live probe confirms what those
+   * rows contain: the conversation root paints rgb(25,25,25) across the full column height,
+   * so the top bar is dark in the app and must be dark in the preview.
+   */
+  const header = document.querySelector('header[class*="_header"]')
+  const hr = header ? header.getBoundingClientRect() : null
+  const headerShotRect = hr && hr.height > 8
+    ? { x: Math.round(sr.left), y: Math.round(hr.top), width: frameW, height: Math.round(hr.height) }
+    : null
   // The two bands, in the frame's own coordinates. The transcript's clip is bounded
   // by the composer seat's top edge (measured 627 in the captured state), NOT by the
   // scroller's bottom: the seat is sticky and covers the last 131px.
@@ -443,8 +495,9 @@ const CAPTURE = `(() => {
     },
     window: { top: Math.round(top), height: windowHeight, turns: turns.length, from, scrollTop: scroll.scrollTop },
     canvas: getComputedStyle(document.body).backgroundColor,
-    shotFile: 'session-live.png',
+    shotFile: ${JSON.stringify(SHOT_NAME)},
     shotRect,
+    headerShotRect,
     body,
   }
 })()`
@@ -468,11 +521,11 @@ try {
 
   const data = await evalIn(cdp, CAPTURE)
   if (!data.ok) { console.error('capture failed:', data.reason); ws.close(); process.exit(1) }
-  writeFileSync(join(OUT, 'session-capture.json'), JSON.stringify(data, null, 1), 'utf8')
+  writeFileSync(join(OUT, CAPTURE_NAME), JSON.stringify(data, null, 1), 'utf8')
   console.log(`captured "${data.crumb}" — ${countNodes(data.body)} elements, window ${data.window.height}/${data.window.total}px, geometry ${JSON.stringify(data.geometry)}`)
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(join(OUT, 'session-live.png'), Buffer.from(shot.data, 'base64'))
-  console.log(`wrote session-capture.json + session-live.png`)
+  writeFileSync(join(OUT, SHOT_NAME), Buffer.from(shot.data, 'base64'))
+  console.log(`wrote ${CAPTURE_NAME} + ${SHOT_NAME} (theme requested: ${THEME}, actual: ${opened.theme ?? '?'})`)
   ws.close()
   process.exit(0)
 } catch (error) {

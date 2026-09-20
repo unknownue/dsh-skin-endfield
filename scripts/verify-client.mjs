@@ -103,8 +103,27 @@ const documentStub = {
  * settings -> pixel path without a real DOM.
  */
 const rootVars = new Map()
+/**
+ * The classes the skin adds to <html>, as the stub sees them.
+ *
+ * `toggle` is recorded rather than ignored because the three page effects are switched by
+ * class, not by variable: a stub without `toggle` cannot tell "the setting turned the
+ * effect on" from "the call silently did nothing", and it crashed the settings-apply path
+ * outright the first time the effects were wired in.
+ */
+const rootClasses = new Set()
 documentStub.documentElement = {
-  classList: { add() {}, remove() {}, contains() { return false } },
+  classList: {
+    add(name) { rootClasses.add(name) },
+    remove(name) { rootClasses.delete(name) },
+    contains(name) { return rootClasses.has(name) },
+    toggle(name, force) {
+      const on = force === undefined ? !rootClasses.has(name) : force === true
+      if (on) rootClasses.add(name)
+      else rootClasses.delete(name)
+      return on
+    },
+  },
   style: {
     setProperty(name, value) { rootVars.set(name, String(value)) },
     removeProperty(name) { rootVars.delete(name) },
@@ -696,7 +715,7 @@ await check('the settings page exposes every field and commits to the scope', as
   assert(byType('color').length === 2, `expected 2 colour pickers (accent + outline), got ${byType('color').length}`)
   assert(byType('range').length === 1, 'missing the bloom slider')
   assert(byType('number').length === 1, 'missing the corner-radius field')
-  assert(byType('checkbox').length === 2, `expected 2 toggles (panel fill + section marker), got ${byType('checkbox').length}`)
+  assert(byType('checkbox').length === 5, `expected 5 toggles (panel fill, section marker, and the three page effects), got ${byType('checkbox').length}`)
 
   // The accent picker must show the shipped default and commit through the scope.
   const accentPicker = byType('color')[0]
@@ -717,8 +736,10 @@ await check('the settings page exposes every field and commits to the scope', as
   assert(reset !== undefined, 'no Reset button')
   reset.props.onClick()
   const fields = writes.map(([field]) => field).sort()
-  assert(fields.join(',') === 'accent,bloom,cornerRadius,labelPrefix,surfaceFill,tint',
-    `Reset must cover every field, got ${fields.join(',')}`)
+  assert(
+    fields.join(',') === 'accent,bloom,cornerRadius,dotBlock,headerLight,labelPrefix,mark,markText,surfaceFill,tint',
+    `Reset must cover every field, got ${fields.join(',')}`,
+  )
 
   return `${inputs.length} controls, accent=${accentPicker.props.value}, reset covers ${fields.length} fields`
 })
@@ -763,7 +784,7 @@ await check('panel fill off empties the surface tokens and the elevation', async
   // its own scope, so the global has to be seeded for the duration of the call.
   const hadDocument = 'document' in globalThis
   const previousDocument = globalThis.document
-  globalThis.document = { documentElement: { classList: { add() {}, remove() {} }, style: { setProperty: (n, v) => rootVars.set(n, String(v)), removeProperty: (n) => rootVars.delete(n) } } }
+  globalThis.document = documentStub
   try {
     rootVars.clear()
     applySkinSettings({ surfaceFill: false }, undefined)
@@ -776,6 +797,76 @@ await check('panel fill off empties the surface tokens and the elevation', async
     else delete globalThis.document
   }
   return `fill off -> transparent; elevation ${ELEVATION_FLAT} -> ${ELEVATION_STRONG}`
+})
+
+/**
+ * The three page effects: each switch is INDEPENDENT, and off means an absent class.
+ *
+ * This is the check that would have caught a "one effects toggle" implementation, and it
+ * asserts the property the review asked for by name: the three are separate. Each case
+ * turns exactly one on and requires the other two to stay off, then turns them all on and
+ * requires all three, then all off and requires none.
+ */
+await check('the three page effects are independent, and each is off by default', async () => {
+  // Imported from src/, like the elevation check above: these are values the modules
+  // produce, and a bundle is the wrong place to assert them.
+  const { HEADER_LIGHT_CLASS, MARK_CLASS, DOT_BLOCK_CLASS, MARK_TEXT_VAR, applySkinSettings } =
+    await import(pathToFileURL(join(ROOT, 'src', 'client', 'settings-apply.ts')).href)
+  const apply = (section) => applySkinSettings(section, undefined)
+  const on = (cls) => rootClasses.has(cls)
+
+  // `applySkinSettings` touches `document.documentElement`, and each check runs in its own
+  // scope, so the global has to be seeded for the duration of this one.
+  const hadDocument = 'document' in globalThis
+  const previousDocument = globalThis.document
+  globalThis.document = documentStub
+  try {
+
+  // Defaults: nothing on, and the mark text still published (harmless when the mark is off).
+  rootClasses.clear()
+  apply({})
+  assert(!on(HEADER_LIGHT_CLASS) && !on(MARK_CLASS) && !on(DOT_BLOCK_CLASS),
+    `defaults must leave all three effects off, got ${JSON.stringify([...rootClasses])}`)
+  assert(rootVars.get(MARK_TEXT_VAR) === '"ENDFIELD"',
+    `the mark text must be published as a quoted CSS string, got ${rootVars.get(MARK_TEXT_VAR)}`)
+
+  for (const [name, cls] of [['headerLight', HEADER_LIGHT_CLASS], ['mark', MARK_CLASS], ['dotBlock', DOT_BLOCK_CLASS]]) {
+    rootClasses.clear()
+    apply({ [name]: true })
+    assert(on(cls), `${name} must add ${cls}`)
+    const others = [[HEADER_LIGHT_CLASS, 'headerLight'], [MARK_CLASS, 'mark'], [DOT_BLOCK_CLASS, 'dotBlock']]
+      .filter(([c]) => c !== cls)
+    for (const [otherCls, otherName] of others) {
+      assert(!on(otherCls), `turning on ${name} must not turn on ${otherName}`)
+    }
+  }
+
+  rootClasses.clear()
+  apply({ headerLight: true, mark: true, dotBlock: true })
+  assert(on(HEADER_LIGHT_CLASS) && on(MARK_CLASS) && on(DOT_BLOCK_CLASS), 'all three can be on together')
+
+  // Off must REMOVE, not merely stop adding: a stale class would keep painting.
+  apply({ headerLight: false, mark: false, dotBlock: false })
+  assert(!on(HEADER_LIGHT_CLASS) && !on(MARK_CLASS) && !on(DOT_BLOCK_CLASS),
+    `turning them off must remove the classes, got ${JSON.stringify([...rootClasses])}`)
+
+  // The mark text is normalised and escaped before it reaches `content`.
+  apply({ mark: true, markText: '  my   project  ' })
+  assert(rootVars.get(MARK_TEXT_VAR) === '"MY PROJECT"',
+    `the mark must be trimmed, collapsed and upper-cased, got ${rootVars.get(MARK_TEXT_VAR)}`)
+  apply({ markText: 'a"b\\c' })
+  const quoted = rootVars.get(MARK_TEXT_VAR)
+  assert(quoted.startsWith('"') && quoted.endsWith('"') && !/["\\]/.test(quoted.slice(1, -1)),
+    `quotes and backslashes must not survive into content, got ${quoted}`)
+  apply({ markText: 'x'.repeat(80) })
+  assert(rootVars.get(MARK_TEXT_VAR).length <= 16, `the mark text must be capped, got ${rootVars.get(MARK_TEXT_VAR).length} chars`)
+
+  } finally {
+    if (hadDocument) globalThis.document = previousDocument
+    else delete globalThis.document
+  }
+
+  return 'each switch additive and independent; off removes; mark text normalised, escaped, capped'
 })
 
 // ── report ──────────────────────────────────────────────────────────────────

@@ -72,6 +72,7 @@ if ($env:DSH_URL) {
     Step 'live: to-do dock wears the skin'         { node scripts/verify-todo-dock-live.mjs }
     Step 'live: header unit row (tabs)'            { node scripts/verify-header-tabs-live.mjs }
     Step 'live: title current-location rule'       { node scripts/verify-title-underline-live.mjs }
+    Step 'live: page effects (3 independent)'      { node scripts/verify-page-effects-live.mjs }
     Step 'live: diff colors ignore the accent'     { node scripts/verify-diff-colors-live.mjs }
 } else {
     Write-Host ""

@@ -1451,4 +1451,156 @@ body [data-testid='todo-panel'] li[data-status='in_progress'] [class*='glyph'] >
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ── 18. the three ambient effects ─────────────────────────────────────── */
+/* Three INDEPENDENT page treatments, each off by default and each enabled by a class the
+   settings path adds to <html>:
+        html.endfield-header-light   an ambient light inside the top bar
+        html.endfield-mark           the wordmark in the transcript's right margin
+        html.endfield-dots           the halftone block in its lower-right corner
+   A class per effect, not a variable: these are whole blocks of chrome that either exist
+   or not, and each needs its own pseudo-element and geometry.
+
+   THREE ZONES, NO OVERLAP. The canvas is divided so no combination of the three can
+   collide, which is the property that makes them safe to switch on in any subset:
+
+        ┌──────────────────────────────────────────┐
+        │  ambient light -- the top bar, y 0..52   │
+        ├──────────────────────────────────────────┤
+        │                                          │
+        │   transcript: NO decoration of ours      │
+        │                                       M  │
+        │                                       A  │  wordmark, vertical,
+        │                                       R  │  right margin
+        │                                       K  │
+        │                        ▓▓▓▓▓ dot block   │  halftone, lower-right
+        └──────────────────────────────────────────┘
+
+   The mark and the block share the right edge but not the space: the mark's strip runs
+   from the top of the transcript and the block is anchored to its bottom, and the block's
+   height is set so the two cannot meet at any window height (measured on the real
+   conversation column: 52 + 372 band, mark 22..~250, block from 336).
+
+   The effects are NOT part of the skin's colour system and were reviewed against the
+   reference as page treatments rather than as chrome. What they must not do is change how
+   content reads: none of them paints over a card, a code block or the composer, and the
+   light in the top bar is confined to the bar. */
+
+/* ── 18a. the top bar: an ambient light with a vertical falloff ─────────── */
+/* Measured history, because each attempt failed differently:
+     - a full-height wash across the bar read as "过于明显";
+     - a radial pool centred outside the bar read as a plain gradient;
+     - moving it onto the header hook made it verifiable at all -- the header is a SIBLING
+       of the transcript (root > header + body > scrollBody > content), so nothing painted
+       on the transcript cell can reach it and a preview of the transcript alone showed
+       nothing. The hook is [data-slot='conversation.session.header'], whose first element
+       child is the real header, so a ::before at z-index 0 sits behind the bar's own
+       controls rather than over them.
+
+   The ramp is VERTICAL and its stops are the effect: brightest ON the top edge, the canvas
+   value again by the bottom edge, so the bar reads as lit from above and shaded along its
+   underside. The horizontal reach is a MASK, kept separate on purpose -- the gradient
+   controls how the light decays down the bar, the mask controls how far along it reaches,
+   and neither has to be re-tuned when the other changes. The mask stops at 30%, so the
+   unit tabs and the corner controls are untouched. */
+html.endfield-header-light [data-slot='conversation.session.header'] {
+  position: relative;
+}
+html.endfield-header-light [data-slot='conversation.session.header']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.11) 42%,
+    rgba(255, 255, 255, 0.04) 74%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  background-repeat: no-repeat;
+  -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.55) 12%, rgba(0, 0, 0, 0) 30%);
+  mask-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.55) 12%, rgba(0, 0, 0, 0) 30%);
+}
+
+/* ── 18b. the transcript: the mark, set vertically in the right margin ──── */
+/* Positioned in the right margin because that is the one column of the conversation that
+   holds no prose: the tool cards all end well short of it. That is not a stylistic choice
+   but the fix for a measured failure -- wherever the transcript's own text runs, a light
+   mark and light body text sit on top of each other, and the mark was measured as painted
+   (571 lit pixels in one row against the baseline's 0) while remaining invisible. The
+   vertical setting does the second half of the job: it reads as a page mark rather than as
+   a word someone has to parse.
+
+   The ink is on the hairline ramp (--dsw-alias-border-l4 is too dark in the light
+   appearance; a literal white at low alpha was measured against the dark canvas as the
+   value that holds), and the text comes from --endfield-mark-text, written by the
+   settings path as an already-quoted, already-escaped CSS string. */
+html.endfield-mark [data-conversation-scroll] {
+  position: relative;
+}
+html.endfield-mark [data-conversation-scroll]::after {
+  content: var(--endfield-mark-text, "ENDFIELD");
+  position: absolute;
+  right: 30px;
+  top: 22px;
+  writing-mode: vertical-rl;
+  pointer-events: none;
+  user-select: none;
+  /* No font-family here, and the omission is deliberate. The layer's guardrail bans
+     font-family outright (an element-level override would break the shell's icon fonts),
+     and the mark does not need one: it is a pseudo-element with text content, so it
+     INHERITS the body's stack, which is the skin's own -- the same faces every heading
+     and paragraph in the transcript already uses. Declaring it would only re-state what
+     inheritance already gives. */
+  /* Sized so the strip finishes above the dot block: eight glyphs at 22px plus 0.34em of
+     tracking is roughly 300px of run, against a block that starts at about y=336. */
+  font-size: clamp(17px, 2vw, 22px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: transparent;
+  -webkit-text-stroke: 1.4px rgba(217, 217, 217, 0.34);
+}
+
+/* ── 18c. the transcript: the halftone block, lower-right corner ────────── */
+/* The screen is the recipe that was signed off as "点阵可以": a 6px pitch with the dots
+   inset in their cells, at a weight given by a brightness ramp rather than by one flat
+   value -- the tile lightens toward the corner and keeps its ink at the far end.
+
+   Two measurements shaped this block, and both are about why an earlier version was
+   present in the sheet and absent in the image:
+     - a dot below about 0.85px radius does not survive antialiasing at 1 CSS px, so the
+       screen measured as NOTHING in a screenshot while looking correct in a 2x debug crop;
+     - any mask layered over it multiplies it down. A two-ramp mask-composite: intersect
+       left ~4% of the block above half opacity. The ramp here is ONE layer with a shallow
+       slope, and the tile weights carry the gradient, so the ink is never multiplied away.
+
+   The block paints over nothing that matters: it is anchored to the transcript's own
+   lower-right corner, and below the transcript the composer keeps its opaque strip. */
+html.endfield-dots [data-conversation-content] {
+  position: relative;
+}
+html.endfield-dots [data-conversation-content]::after {
+  content: '';
+  position: absolute;
+  left: auto;
+  right: 0;
+  top: auto;
+  bottom: 0;
+  width: 30%;
+  height: 17%;
+  z-index: 3;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(217, 217, 217, 0.55) 0 0.85px, transparent 0.9px),
+    radial-gradient(circle at 50% 50%, rgba(217, 217, 217, 0.22) 0 0.85px, transparent 0.9px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: repeat, repeat;
+  -webkit-mask-image: linear-gradient(215deg, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.55) 40%, rgba(0, 0, 0, 0.22) 100%);
+  mask-image: linear-gradient(215deg, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.55) 40%, rgba(0, 0, 0, 0.22) 100%);
+}
 `

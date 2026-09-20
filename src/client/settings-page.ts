@@ -16,7 +16,7 @@
  * through the bound scope, so the effect on the skin is visible while the panel
  * is open; there is no save step to get out of step with what is painted.
  */
-import { HEX_COLOR, SKIN_SETTINGS_DEFAULTS, safeAccent, safeTint } from '../settings.ts'
+import { HEX_COLOR, MARK_TEXT_MAX, SKIN_SETTINGS_DEFAULTS, safeAccent, safeMarkText, safeTint } from '../settings.ts'
 import type { SettingsScope } from '../types.ts'
 import { accentScale } from './colors.ts'
 
@@ -42,6 +42,10 @@ interface SkinDraft {
   bloom: number
   cornerRadius: number
   labelPrefix: boolean
+  headerLight: boolean
+  mark: boolean
+  dotBlock: boolean
+  markText: string
 }
 
 export interface SkinSectionProps {
@@ -77,6 +81,10 @@ export function createSkinSection(React: ReactLike) {
       bloom: typeof value.bloom === 'number' ? value.bloom : SKIN_SETTINGS_DEFAULTS.bloom,
       cornerRadius: typeof value.cornerRadius === 'number' ? value.cornerRadius : SKIN_SETTINGS_DEFAULTS.cornerRadius,
       labelPrefix: value.labelPrefix === undefined ? SKIN_SETTINGS_DEFAULTS.labelPrefix : value.labelPrefix !== false,
+      headerLight: value.headerLight === undefined ? SKIN_SETTINGS_DEFAULTS.headerLight : value.headerLight === true,
+      mark: value.mark === undefined ? SKIN_SETTINGS_DEFAULTS.mark : value.mark === true,
+      dotBlock: value.dotBlock === undefined ? SKIN_SETTINGS_DEFAULTS.dotBlock : value.dotBlock === true,
+      markText: safeMarkText(typeof value.markText === 'string' ? value.markText : undefined),
     }
   }
 
@@ -310,6 +318,79 @@ export function createSkinSection(React: ReactLike) {
 
     const missing = scope === undefined
 
+    /**
+     * One switch, for the three ambient effects.
+     *
+     * Each effect gets its own row rather than a multi-select, because they are unrelated
+     * treatments in unrelated places: someone may want the print block and no wordmark.
+     * The hint states the ZONE for each one, since the zone is what keeps an arbitrary
+     * subset of the three from colliding.
+     */
+    const effectRow = (
+      field: 'headerLight' | 'mark' | 'dotBlock',
+      label: string,
+      hint: string,
+      boxLabel: string,
+    ) => row(label, hint, [
+      h('label', { key: 'l', style: { display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)', cursor: 'pointer' } }, [
+        h('input', {
+          key: 'cb',
+          type: 'checkbox',
+          checked: draft[field],
+          onChange: (e: { target: { checked: boolean } }) => commit(field, e.target.checked),
+          style: { accentColor: 'var(--endfield-focus)' },
+        }),
+        h('span', { key: 's' }, boxLabel),
+      ]),
+    ])
+
+    const headerLightRow = effectRow(
+      'headerLight',
+      'Top-bar light',
+      'An ambient light inside the conversation top bar only: brightest at its top edge, falling to the canvas colour by its bottom edge, reach masked to the leading third. The transcript is not touched.',
+      'Light the top bar',
+    )
+    const markRow = effectRow(
+      'mark',
+      'Page mark',
+      'A vertical wordmark in the right margin of the transcript — the one column that holds no prose. Reads as a page mark rather than as text.',
+      'Show the mark',
+    )
+    const dotRow = effectRow(
+      'dotBlock',
+      'Halftone block',
+      'A 6px halftone screen in the transcript\u2019s lower-right corner, with a brightness ramp from the corner outward. Bounded, so it never covers the transcript\u2019s text.',
+      'Show the block',
+    )
+
+    /** The mark's text, only meaningful while the mark itself is on. */
+    const markTextRow = row(
+      'Mark text',
+      `The wordmark\u2019s text, up to ${MARK_TEXT_MAX} characters; upper-cased and trimmed.`,
+      [
+        h('input', {
+          key: 'txt',
+          type: 'text',
+          maxLength: MARK_TEXT_MAX,
+          value: draft.markText,
+          disabled: !draft.mark,
+          onInput: (e: { target: { value: string } }) => commit('markText', safeMarkText(e.target.value)),
+          style: {
+            width: '200px',
+            fontFamily: 'var(--ds-font-family-code)',
+            fontSize: '12px',
+            letterSpacing: '0.12em',
+            padding: '5px 8px',
+            borderRadius: '0',
+            border: '1px solid var(--dsw-alias-border-l2)',
+            background: 'var(--dsw-alias-bg-layer-1)',
+            color: 'var(--dsw-alias-label-primary)',
+            opacity: draft.mark ? 1 : 0.5,
+          },
+        }),
+      ],
+    )
+
     return h(
       'div',
       { style: { display: 'grid', gap: '0', padding: '0 0 24px' } },
@@ -320,6 +401,9 @@ export function createSkinSection(React: ReactLike) {
             'No durable settings service is composed, so nothing here can be saved.')
         : null,
       accentRow, tintRow, surfaceRow, bloomRow, radiusRow, prefixRow,
+      h('p', { key: 'fx', style: { margin: '20px 0 0', fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } },
+        'Page effects — three independent treatments, each in its own zone. Off by default; any combination is safe.'),
+      headerLightRow, markRow, markTextRow, dotRow,
       error
         ? h('p', { style: { margin: '10px 0 0', fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, `Save failed: ${error}`)
         : null,
@@ -334,6 +418,10 @@ export function createSkinSection(React: ReactLike) {
             commit('bloom', SKIN_SETTINGS_DEFAULTS.bloom)
             commit('cornerRadius', SKIN_SETTINGS_DEFAULTS.cornerRadius)
             commit('labelPrefix', SKIN_SETTINGS_DEFAULTS.labelPrefix)
+            commit('headerLight', SKIN_SETTINGS_DEFAULTS.headerLight)
+            commit('mark', SKIN_SETTINGS_DEFAULTS.mark)
+            commit('dotBlock', SKIN_SETTINGS_DEFAULTS.dotBlock)
+            commit('markText', SKIN_SETTINGS_DEFAULTS.markText)
           },
         }),
       ),
