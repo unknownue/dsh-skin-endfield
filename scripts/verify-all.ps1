@@ -69,6 +69,7 @@ if ($env:DSH_URL) {
     Step 'live: active session marker (bar only)'  { node scripts/verify-session-marker-live.mjs }
     Step 'live: deliverable summaries (diff list)' { node scripts/verify-deliverables-live.mjs }
     Step 'live: font plugin choice not shadowed'   { node scripts/verify-font-choice-live.mjs }
+    Step 'live: to-do dock wears the skin'         { node scripts/verify-todo-dock-live.mjs }
 } else {
     Write-Host ""
     Write-Host "=== live layers skipped ===" -ForegroundColor Yellow

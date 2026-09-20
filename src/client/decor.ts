@@ -1237,4 +1237,135 @@ body [data-presented-file] > div > span > button {
   border-radius: 0;
   corner-shape: round;
 }
+/* ── 17. the to-do dock: the agent's task list above the composer ──────── */
+/* While a turn runs and the agent has recorded a task list, the shell mounts a
+   panel into the same input dock the queue strip uses. It carries
+   data-testid="todo-panel" -- a deliberate test hook rather than a generated
+   class, which is what lets this section exist under the layer's rule against
+   hashed names. The module classes inside it are not referenced; the parts are
+   reached structurally (button / ul / li), exactly as the queue dock's are.
+
+   Out of the box it is a 12px-rounded plate on --dsw-specific-tip, i.e. a raised
+   card, which is the one shape this skin does not use for a working surface.
+
+   What the reference supplies here, rather than taste:
+     - the game's progress/loading motif is a small rotating SQUARE
+       (01-visual-language.md 6.3 lists the diamond spin among the motions a skin
+       may use). That replaces the shell's spinner, so the running item animates in
+       the game's own idiom instead of with a generic ring.
+     - the task-row language in 02-ui-inventory: a row is a label plus a title
+       plus a status badge, and status is encoded TWICE -- by colour and by shape.
+       Both are kept: the glyph keeps its state colour (which already resolves to
+       this skin's accent and error red through the palette) and gains a status bar
+       whose fill differs per state.
+     - 01-visual-language.md 7 records the game's own block prefix and counter
+       forms; the header takes the prefix, the way every heading in this layer does.
+   The 6-10px row radius that same document measures is NOT applied here: this
+   layer squares its rows throughout (sidebar, queue strip, changed-files list), and
+   one rounded row family inside an otherwise square skin is the shape that reads as
+   leftover. */
+body [data-testid='todo-panel'] {
+  border: 1px solid var(--endfield-frame, var(--dsw-alias-border-l1));
+  border-radius: 0;
+  corner-shape: round;
+  /* The band tint rather than the shell's raised grey: the strip is chrome attached
+     to the composer, and a working surface in this skin sits at canvas value with a
+     hairline around it. */
+  background: var(--endfield-band, #2E2E2E);
+  box-shadow: none;
+  position: relative;
+  overflow: hidden;
+}
+/* ── the header: a section label, not a card title ─────────────────────── */
+body [data-testid='todo-panel'] > div {
+  gap: 6px;
+  padding: 6px 12px;
+}
+body [data-testid='todo-panel'] button {
+  border-radius: 0;
+  corner-shape: round;
+  gap: 8px;
+}
+/* The panel's own name, in the caption voice its siblings use (the queue strip's
+   count line, the top bar's unit row), plus the block prefix the reference's
+   section headings carry. This is the ONE place the skin injects a glyph into a
+   text node, so the reason is worth recording: the shell renders that title as a
+   bare string with no hook to style separately, and the prefix is this layer's
+   standing way of saying "section". It rides the same labelPrefix setting that
+   turns the // marker off elsewhere. */
+body [data-testid='todo-panel'] button > span:nth-child(2) {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+body [data-testid='todo-panel'] button > span:nth-child(2)::before {
+  content: var(--endfield-prefix, '//');
+  margin-inline-end: 0.45em;
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 700;
+}
+/* The counts read as a readout: tabular figures so "1 · 1 · 3" does not shift when
+   a number changes width, and a touch of tracking to separate the groups. */
+body [data-testid='todo-panel'] button > span:nth-child(3) {
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+/* ── the list: hairline rows, one status mark each ─────────────────────── */
+body [data-testid='todo-panel'] ul {
+  gap: 0;
+}
+body [data-testid='todo-panel'] li {
+  border-radius: 0;
+  corner-shape: round;
+  position: relative;
+  padding: 3px 0;
+}
+body [data-testid='todo-panel'] li + li {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  box-shadow: none;
+}
+/* The status mark: a 2px bar at the row's left edge -- the same device the sidebar
+   gives the active session and the queue strip gives a waiting message. */
+body [data-testid='todo-panel'] li::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  margin-top: -7px;
+  background: var(--dsw-alias-label-caption);
+}
+body [data-testid='todo-panel'] li[data-status='completed']::before {
+  background: var(--dsw-alias-state-success-primary);
+}
+body [data-testid='todo-panel'] li[data-status='in_progress']::before {
+  background: var(--endfield-focus);
+  box-shadow: 0 0 0.5rem var(--endfield-focus-bloom);
+}
+/* A finished row recedes, the row being worked on comes forward. This is the one
+   status distinction that survives greyscale, so the panel does not depend on the
+   glyph colours alone to be readable. */
+body [data-testid='todo-panel'] li[data-status='completed'] > span:last-child {
+  color: var(--dsw-alias-label-caption);
+}
+body [data-testid='todo-panel'] li[data-status='in_progress'] > span:last-child {
+  color: var(--dsw-alias-label-primary);
+}
+/* ── the running item's glyph: the game's rotating square ──────────────── */
+/* The shell spins this glyph with its own 1s keyframes; this override re-times it
+   (2.4s -- a quiet worker rather than a progress spinner) and changes what spins
+   from a ring to the square the reference's loading mark uses. The shorthand is
+   re-declared wholesale rather than patched, because it is what carries the timing
+   and the iteration count. */
+body [data-testid='todo-panel'] li[data-status='in_progress'] [class*='glyph'] {
+  animation: endfield-todo-mark 2.4s linear infinite;
+}
+body [data-testid='todo-panel'] li[data-status='in_progress'] [class*='glyph'] > * {
+  transform: rotate(45deg);
+}
+@keyframes endfield-todo-mark {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 `
