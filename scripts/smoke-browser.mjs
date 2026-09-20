@@ -279,10 +279,12 @@ try {
     }
   })()`)
   step('tokens resolve to Endfield values',
-    // `success` is the dark step of the accent family, which the settings drive;
-    // #00E08E is what the default mint derives to, not a hardcoded constant.
+    // `success` is the SHELL's green now, not the accent's dark step: the palette pins that
+    // family because a diff's added line reads it as meaning rather than as brand, so an
+    // accent-dyed addition stops saying "added". #4ED17E is --dsw-static-green-400, what stock
+    // DSH resolves this alias to in the dark appearance this smoke page uses.
     resolved.base === '#191919' && resolved.brand === '#FFFA00'
-      && resolved.success === '#00E08E' && resolved.tooltip === '#191919',
+      && resolved.success === '#4ED17E' && resolved.tooltip === '#191919',
     JSON.stringify(resolved))
 
   const decorApplied = await evaluate(`(() => {

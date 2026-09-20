@@ -69,7 +69,8 @@
     "inspect:top": "node scripts/inspect-conversation-top.mjs",
     "inspect:css": "node scripts/inspect-component-css.mjs",
     "inspect:bars": "node scripts/inspect-bars.mjs",
-    "verify:topbars": "node scripts/verify-top-bars-live.mjs"
+    "verify:topbars": "node scripts/verify-top-bars-live.mjs",
+    "verify:header-tabs": "node scripts/verify-header-tabs-live.mjs"
   },
   "keywords": [
     "deepseek-harness",
