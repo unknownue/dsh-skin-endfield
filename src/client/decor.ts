@@ -1032,6 +1032,14 @@ body header[class*='_header'] [role='tab'] {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* The icon column. Measured on the live row (widths Chat 78, Trajectory 123, Files 77, Tasks 82,
+     Papers 91), the gap between the mark's right edge and the first glyph of the label is ~4px:
+     the mark ends at ~35px and the ink starts at ~40px. An earlier revision tried to widen it by
+     moving the mark back into the padding, and that is recorded here because the numbers did not
+     behave: computed offsets and the painted pixels disagreed by a constant 12px (the label's
+     column and the mark's containing block anchor differently), so the "18px gap" that the change
+     was supposed to buy never appeared on screen. Reverted rather than left in on trust — the
+     spacing is tight by design and the label column is what keeps it readable. */
   padding: 6px 16px 6px 30px;
   position: relative;
   border: none;
@@ -1042,9 +1050,27 @@ body header[class*='_header'] [role='tab'] {
   letter-spacing: 0.1em;
   corner-shape: round;
 }
+/* An inactive unit needs to answer the pointer. The shell answered with its own hover tint (a
+   blue-grey plate), which the skin removed along with every other plate in the band and never
+   replaced -- so the row read as five labels, not five controls. The skin's answer is the wash
+   the game uses on list rows, in the band's own neutral: it previews the filled plate the click
+   will produce without borrowing the accent it will become. The ACTIVE unit is excluded -- it is
+   already a plate, and tinting it would dim its own ink. */
+body header[class*='_header'] [role='tab']:hover:not([aria-selected='true']),
+body header[class*='_header'] [role='tab']:focus-visible:not([aria-selected='true']) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
 /* The unit's icon: a small diamond outline, the system's node primitive (05 图形元素). Placed
    absolutely so the label keeps its position -- a tab's label is a bare text node, so an
-   in-flow icon would push it. */
+   in-flow icon would push it.
+   This is the piece that actually buys the label its gap, and it is worth reading the arithmetic:
+   an absolutely positioned box is placed from the PADDING edge, so left: 24px with 16px of
+   inline padding lands the mark 10px from the tab's border box. Keeping the label's own start
+   the same as before (16 + 24 = 40, up from 16 + 30 = 46) only trims the label a little; what
+   changed is where the mark sits relative to it -- the mark's right edge moved from x25 (or x30
+   for the widest one) to x20, so the air between the mark and the first letter goes from 4-6px
+   to 9px. */
 body header[class*='_header'] [role='tab']::after {
   content: '';
   position: absolute;

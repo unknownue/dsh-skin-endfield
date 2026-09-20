@@ -76,7 +76,7 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 
 ## 验证
 
-`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**25 步**（离线 7 + live 18）：
+`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**26 步**（离线 7 + live 19）：
 
 | 层 | 脚本 | 证明什么 |
 |----|------|---------|
@@ -103,6 +103,7 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 | live | `verify-todo-dock-live.mjs` **18** | 输入框上方的 **todo 面板**穿上皮肤：直角+发丝线+band 底（不再是外壳那块抬起的灰板）、标题进 caption 语气并带 `//` 前缀、计数用等宽数字（tabular-nums，数字变化不抖）、行直角且行间发丝线、**三种状态各有自己的左缘标记**（pending 中性 / completed 成功色 / in_progress 焦点色+泛光）、进行中的图标跑**皮肤自己的旋转方块动画**（覆盖外壳那条 1s 自旋）、完成行退后、进行行提前 |
 | live | `verify-title-underline-live.mjs` **12** | 标题下的**当前位置实线**：2px 实心浅灰、用外壳的**文字灰 token**（不是用户配的 accent，也不是焦点色）、是 overlay（不推动标题）、**离顶栏分隔线留足 12px**、两端内缩（量的是文字盒而不是整块 chip）、**跟着标题宽度变化** |
 | live | `verify-diff-colors-live.mjs` **6** | 右侧栏 diff **不受 accent 影响**：新增行永远是外壳的绿（深色 `#4ED17E` / 浅色 `#22C55E`）、删除行永远是外壳的红、两者都过**通道判据**（不只是比 hex）、**新增行色既不是用户配的 accent 也不是默认 accent**，而**品牌族（模块图标 / 发送键）仍然跟着 accent 走** |
+| live | `verify-header-tabs-live.mjs` **10** | 顶栏单位行（Chat / Trajectory / Files / Tasks / Papers）：**非激活单元会回应指针**（中性洗色 + 字色提亮，实测 `rgba(217,217,217,0.08)` / `#999999 → #F2F2F2`），而**当前单元保持自己的 plate 不被染色**；整行居中于顶栏、每个单元直角、当前 plate 的墨色与底色不同且**对比度 10:1** |
 
 **离线层读源码，live 层读运行中 GUI 的计算值。** 两者不可互相替代 —— 本轮踩过的坑几乎都来自"只用前者"：装饰层曾把生成式 CSS 交给捆包器，源码求值正确、离线全绿，而**产物里那段规则根本不存在**。改动装饰层后请 grep **bundle** 确认规则在里面。
 
@@ -385,6 +386,14 @@ body [data-phase] [data-composer-seat][class] {
 
 - `verify-client.mjs` 新增 **"the diff keeps its green/red whatever the accent is"**：断言配对绿色、并**横扫 5 个 accent**（含 `#0080FF`）确认 success 不动、而 business 族确实在动；
 - `verify-diff-colors-live.mjs`（6 项）在运行中的 GUI 上量实际计算色，并同时排除**配置的 accent（经 brand token 观测）**与**皮肤默认 accent**。这里有个坑：body 上的 `--endfield-accent` 只是皮肤默认值（`#00FFA2`），照它比会"永远通过"而用户屏幕上仍是蓝的 —— 所以断言同时用 brand token（实测 `#92C9FF`）作对照。
+
+## 顶栏单位行：Chat / Trajectory / Files / Tasks / Papers（装饰层 15d）
+
+这一行原来有一个**交互缺口**：皮肤在改造顶栏时把外壳自己的 hover 底色连同其它 plate 一起移除了，却**没有补上替代**，于是五个单元看起来像五个标签、不像五个控件。现在补的是一条中性洗色（`--dsw-alias-interactive-bg-hover` = `rgba(217,217,217,0.08)`）＋字色提亮到主字色；**当前单元排除在外** —— 它本身就是一块彩色 plate，再叠洗色只会把自己压暗。
+
+实测行数据（本轮第一次量到）：整行 472px、居中于顶栏（932 vs 932）；单元宽 82/127/81/86/95——**由各自的标签决定，不强制等宽**；每个单元直角；当前 plate `#92C9FF` 配深色墨 `#191919`，对比度 **10:1**。
+
+> **一次没有成功的"优化"，如实记下**：我原本想把图标与文字之间的间距拉开（量到约 4px，Trajectory 上读起来像撞在一起）。改了两版（`padding-left` 40px / 图标左移）后，**计算值与截图对不上，恒定差 12px** —— 标签所在的列与图标的包含块锚点不同，所以"18px 间距"从未真正出现在屏幕上。按证据回滚，没有把没有效果的改动留在仓库里；`decor.ts` 里留了注释说明这段历史。**像素级间距断言也一并删除**：在 4px 这个尺度下，对 12px 抗锯齿文字 + 旋转菱形做阈值扫描，同一行跑出过 0px/1px/4px/26px 四种结果 —— 会抖的检查不如不写，间距交给眼睛与注释，检查只保留无歧义的部分。
 
 ## 代码结构
 
