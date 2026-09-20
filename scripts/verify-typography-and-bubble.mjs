@@ -69,15 +69,23 @@ try {
   const PROBE = [
     '(() => {',
     '  const bub = [...document.querySelectorAll("div")].filter(d => /_bubble/i.test(String(d.className)));',
+    // The top bar\'s own labels are ALLOWED to be uppercase: 03.3 of the design reference\n
+    // specifies uppercase + positive tracking for small LATIN labels, and the frame-12\n
+    // redesign applies it to the tab row. What must never be uppercased is CONTENT --\n
+    // paths, code and prompt text -- which is the regression this check was written for.\n
+    '  const bar = document.querySelector("header[class*=\'_header\']");',
     '  const offenders = [];',
+    '  const barLabels = [];',
     '  for (const el of document.querySelectorAll("body *")) {',
     '    const cs = getComputedStyle(el);',
-    '    if ((cs.textTransform || "").toLowerCase() === "uppercase" && (el.textContent || "").trim()) {',
-    '      offenders.push({ tag: el.tagName, cls: String(el.className).slice(0, 50), text: (el.textContent || "").trim().slice(0, 40) });',
-    '    }',
+    '    if ((cs.textTransform || "").toLowerCase() !== "uppercase") continue;',
+    '    if (!(el.textContent || "").trim()) continue;',
+    '    const row = { tag: el.tagName, cls: String(el.className).slice(0, 50), text: (el.textContent || "").trim().slice(0, 40) };',
+    '    if (bar && bar.contains(el)) barLabels.push(row); else offenders.push(row);',
     '  }',
     '  return {',
     '    offenderCount: offenders.length, offenders: offenders.slice(0, 6),',
+    '    barLabelCount: barLabels.length, barLabels: barLabels.slice(0, 6),',
     '    bubbles: bub.length,',
     '    bubble: bub[0] ? {',
     '      cls: String(bub[0].className),',
@@ -116,7 +124,7 @@ try {
   const check = (ok, line) => { if (!ok) fails++; console.log(`  ${ok ? '[PASS]' : '[FAIL]'} ${line}`) }
 
   console.log('\n=== forced uppercase anywhere in the rendered app? ===')
-  check(v.offenderCount === 0, `elements with text-transform:uppercase = ${v.offenderCount}`)
+  check(v.offenderCount === 0, `no uppercase on content outside the top bar (${v.offenderCount})`)
   for (const o of v.offenders) console.log(`      <${o.tag}> ${o.cls} "${o.text}"`)
 
   console.log('\n=== user message bubble ===')

@@ -134,12 +134,19 @@ body :is([data-dockkit-dock-zone], [data-dockkit-drop-zones], [data-dockkit-stri
    module class name instead, verified against a real session (exactly one match,
    and its parent is the user stack).
 
-   Note this is deliberately looser than the rest of the layer, which prefers
-   documented attributes. A tooltip in the shell's own CSS is also called
-   "bubble", and matching that would round nothing but would be harmless; the
-   [class*="_bubble"] form keeps the match to module classes and skips the
-   plain one-hashed tooltip class, which lacks the underscore prefix. */
-body [class*="_bubble"] {
+   The tooltip exclusion is load-bearing, not defensive. This comment used
+   to claim the form "skips the plain one-hashed tooltip class, which lacks the
+   underscore prefix" — MEASURED FALSE, and it cost a real bug. The shell's
+   hover tooltip bubble is rendered with the bundle class _bubble_1nw3t_1, so
+   it DOES contain "_bubble" (minified CSS-module names are _<name>_<hash>_<n>,
+   prefix and all). Section 14 then gave that same element a relative position
+   and a 1px border, which stopped a fixed-position overlay from being an
+   overlay: it became a flex item of the sidebar's logo row, shrank the brand
+   button by 120px, dragged the control out from under the pointer, killed the
+   :hover that had opened the tooltip, and restarted — a 2Hz layout oscillation
+   on every control with a tooltip. scripts/verify-tooltip-stability-live.mjs
+   now asserts the tooltip stays out of flow in those rows. */
+body [class*="_bubble"]:not([role='tooltip']) {
   border-radius: 0;
   corner-shape: round;
 }
@@ -153,11 +160,21 @@ body [role="tooltip"] {
   border: 1px solid var(--dsw-alias-border-l2);
   box-shadow: none;
   letter-spacing: 0.02em;
+  /* The square silhouette this element used to get as a side effect of being
+     caught by the bubble rules. Re-declared here, on the shell's own hook, so the
+     language survives without dragging the overlay back into the bubble family:
+     geometry only, never position. */
+  border-radius: 0;
+  corner-shape: round;
 }
 
 /* ── 3. diamond markers ────────────────────────────────────────────────── */
-body :is(ul[role="list"], [role="menu"]) > li,
-body [role="menuitem"] {
+/* The containing block for the marker pseudo-elements is given only where the item is in normal
+   flow, same as the overlay rule in section 6: declaring position unconditionally is what broke the
+   composer's model menu (it overrode the shell's own positioning on a portalled surface). A menu item
+   is far less likely to position itself, but the guard is the same and costs nothing. */
+body :is(ul[role="list"], [role="menu"]) > li:where([style*="position: static"]),
+body [role="menuitem"]:where([style*="position: static"]) {
   position: relative;
 }
 body :is(ul[role="list"], [role="menu"]) > li::marker {
@@ -204,7 +221,15 @@ body :is([role="dialog"], [role="menu"], [role="listbox"])::after {
   border-right-width: 2px;
   border-bottom-width: 2px;
 }
-body :is([role="dialog"], [role="menu"], [role="listbox"]) {
+/* The brackets above are position:absolute, so the surface needs a containing block -- but NOT by
+   overriding the shell's positioning. These overlays are portalled and position themselves (the
+   composer's model menu measured 250x90 at z-index 1100); forcing position:relative dropped it into
+   the document flow and put it at y=1643 on a 905px viewport, i.e. off screen. So the containing
+   block is applied ONLY where the overlay is in normal flow already. An overlay that positions
+   itself is left untouched, and its brackets still land right because an absolutely positioned
+   pseudo-element can hang off any positioned ancestor.
+   :where() keeps the attribute check at zero specificity, so this cannot outrank shell rules. */
+body :is([role="dialog"], [role="menu"], [role="listbox"]):where([style*="position: static"]) {
   position: relative;
 }
 
@@ -322,6 +347,16 @@ html.endfield {
      with a fill it reads as a normal border, which is why it is always on rather
      than tied to the setting. */
   --endfield-frame: rgba(217, 217, 217, 0.14);
+  /* The flat plate that marks the current tab: the theme's inverted neutral, so it is white
+     in the dark appearance and near-black in the light one. */
+  --endfield-plate: var(--dsw-alias-label-primary-inverted, #FFFFFF);
+  /* The ink ON that plate. Both come from the same shell pair, so they stay mutually
+     inverted: measured, --dsw-alias-label-primary is #F2F2F2 in the dark appearance, which
+     on the white plate is light-on-light and unreadable. */
+  --endfield-plate-ink: var(--dsw-alias-label-primary-foreground, #191919);
+  /* The tinted band the unit row sits on. The frame separates its band from the canvas by
+     value alone, with no rule, so this replaces the header's border-bottom. */
+  --endfield-band: color-mix(in srgb, var(--dsw-alias-bg-base) 55%, #2E2E2E);
 }
 body :focus-visible {
   outline: 2px solid var(--endfield-focus);
@@ -506,10 +541,16 @@ body [role='tree'] [role='treeitem'][class*='projectRow'][aria-expanded='true'] 
 }
 
 /* ── 13c. the active session ───────────────────────────────────────────── */
-/* Only the session in hand gets the bar and the diamond; the rest stay quiet.
+/* Only the session in hand gets the bar; the rest stay quiet.
    An earlier revision barred every row, which read as 98 competing markers and
    said nothing about which one was active -- the user asked for it to be
-   limited to the workspace names and the active session, and that is right. */
+   limited to the workspace names and the active session, and that is right.
+   The trailing diamond that used to live here is REMOVED, by request: it sat
+   4px from the row's right edge, which is exactly where the shell puts a
+   session's time label, so the two landed on top of each other and the marker
+   read as a stray asterisk beside the timestamp rather than as a state mark.
+   The left-edge bar already says which session is in hand, and it says it
+   without competing for the row's right-hand column. */
 body [role='tree'] [role='treeitem'][class*='sessionRow'] {
   position: relative;
 }
@@ -525,26 +566,16 @@ body [role='tree'] [role='treeitem'][class*='sessionRow'][aria-selected='true']:
   background: var(--endfield-focus);
   box-shadow: 0 0 0.5rem var(--endfield-focus-bloom);
 }
-body [role='tree'] [role='treeitem'][class*='sessionRow'][aria-selected='true']::after {
-  content: '';
-  position: absolute;
-  inset-inline-end: 4px;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin-top: -2.5px;
-  background: var(--dsw-alias-brand-primary);
-  transform: rotate(45deg);
-}
+
 
 /* ── 13d. conversation header ──────────────────────────────────────────── */
-/* A plain hairline only. The accent rule that used to live here is gone on
-   request: the lead-in is reserved for the workspace names and the active
-   session, so repeating it across the header diluted it. The hairline is kept
-   because it is structure, not accent -- measured at 0px before this rule. */
-body [data-slot='conversation.session.header'] {
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
-}
+/* NO RULE HERE, deliberately -- nothing to remove.
+   The slot this block used to target, [data-slot='conversation.session.header'], is a
+   'display: contents' wrapper: measured, its own box is 0x0, so a border on it paints
+   nothing at all. The visible hairline belongs to the real <header> inside it (2px
+   min-height 76px), which the shell already draws at .5px/--dsw-alias-border-l3. The
+   rule that lived here was therefore dead CSS that read as if it were doing work; the
+   real chrome is styled in section 15, anchored on the element that has a box. */
 
 /* ── 14. corner brackets on the two elements in hand ───────────────────── */
 /* The same 10px bracket the settings dialog carries, brought to the two surfaces
@@ -584,9 +615,14 @@ body [data-slot='conversation.session.header'] {
    With the fill off, the hairline below is what keeps the surface readable at all:
    the brackets mark the corners, the hairline marks the box, and the canvas shows
    through the middle. Without it an empty composer is two right angles floating in
-   space, which reads as a rendering bug rather than as a flat style. */
+   space, which reads as a rendering bug rather than as a flat style.
+
+   Every [_bubble] selector below carries the tooltip exclusion for the reason
+   spelled out in section 1e: the shell's tooltip bubble is a _bubble_* class too,
+   and dressing it as a message surface (border, brackets, position) is what turned
+   a fixed overlay into an in-flow flex item and made hovered controls oscillate. */
 body [data-composer-card][class],
-body [class*='_bubble'][class] {
+body [class*='_bubble']:not([role='tooltip'])[class] {
   border: 1px solid var(--endfield-frame, var(--dsw-alias-border-l1));
   /* The shadow is the second half of the fill removal, and the half that is easy to
      miss: with the fill off, a soft drop shadow still makes an empty surface read as
@@ -606,8 +642,8 @@ body [class*='_bubble'][class] {
 }
 body [data-composer-card]::before,
 body [data-composer-card]::after,
-body [class*='_bubble']::before,
-body [class*='_bubble']::after {
+body [class*='_bubble']:not([role='tooltip'])::before,
+body [class*='_bubble']:not([role='tooltip'])::after {
   content: '';
   position: absolute;
   width: var(--endfield-bracket, 10px);
@@ -617,22 +653,24 @@ body [class*='_bubble']::after {
   z-index: 3;
 }
 body [data-composer-card]::before,
-body [class*='_bubble']::before {
+body [class*='_bubble']:not([role='tooltip'])::before {
   top: 2px;
   left: 2px;
   border-top-width: 2px;
   border-left-width: 2px;
 }
 body [data-composer-card]::after,
-body [class*='_bubble']::after {
+body [class*='_bubble']:not([role='tooltip'])::after {
   right: 2px;
   bottom: 2px;
   border-right-width: 2px;
   border-bottom-width: 2px;
 }
 /* The containing block for the bubble's brackets. See the note above: it is NOT a
-   no-op, the measured display is block. */
-body [class*='_bubble'] {
+   no-op, the measured display is block. And it is the single most damaging rule in
+   this layer when it reaches the wrong element -- see section 1e for the measured
+   tooltip oscillation it caused. */
+body [class*='_bubble']:not([role='tooltip']) {
   position: relative;
 }
 /* No bloom on these two, by request. A focus-time glow lived here (gated on
@@ -646,4 +684,557 @@ body [class*='_bubble'] {
    none, so nothing is left to reintroduce it by accident. Note the brackets still
    get the focus signal from section 11: the focus-visible rule there outlines the focused
    element itself, which is what a user actually needs to see. */
+
+/* ── 14b. the composer band is opaque ───────────────────────────────────── */
+/* The shell's composer SEAT (the sticky wrapper the card sits in, hooked as
+   [data-composer-seat]) paints exactly ONE thing: a 36px top fade — a
+   linear-gradient from a fully transparent color-mix of --dsw-alias-bg-base to
+   the opaque --dsw-alias-bg-base at 36px — so content scrolling up out of the
+   view area dissolves into the canvas instead of hitting a hard edge.
+
+   Measured with an active session (a scratch probe, since deleted): the seat
+   resolves to a linear-gradient at position sticky / z-index 7. The band's
+   bottom coincides with the card in the common shape (the card's top edge is the
+   seat's own top edge, so the fade is spent inside the card's upper third), and
+   in the rich shape — a workspace or progress row stacked above the card — it is
+   exactly the gap above it. Both readings are the same defect from the user's
+   side: the card is transparent by design (the surfaceFill setting is off), so
+   the text still dissolving through the band was read as the input box's own
+   upper half being see-through, rather than as a fade behind it.
+
+   With the fill off there is nothing else painting that band, so the transcript
+   shows through at full strength until the 36px stop. This rule replaces the
+   gradient with the canvas colour itself: the seat paints one opaque colour for
+   its WHOLE height, so the message list crops at the seat's own top edge and
+   nothing shows between the last message and the composer. That is the flat
+   reading this skin already uses everywhere else (its readout blocks separate by
+   a hairline, not by a shadow), and it is the only reading in which the composer
+   area is fully opaque. The price, on record: the "there is more content below"
+   affordance the fade provided is gone — the crop is a hard edge now, which is
+   what the request for full opacity asks for.
+
+   Notes on how it is allowed to win, because both traps cost a round:
+     - the shell spells its own cascade as an active-phase ancestor plus the seat's
+       module class, on BOTH the root and the embedded body, so a bare
+       "body [data-composer-seat]" loses on specificity. The declared
+       data-attribute ancestor in the selector below is what buys the precedence —
+       and it is a hook, not a hashed class.
+     - the trailing [class] follows section 14's measured reason (see the
+       box-shadow note above): the seat also carries its module class, and the
+       class is what settles order against it.
+     - the gradient is REPLACED, not overpainted: an opaque background-color alone
+       would sit UNDER the shell's gradient and change nothing. Hence a gradient
+       whose two stops are the same opaque colour — the value stays a token, so one
+       declaration still covers both appearances.
+
+   The card's own fill is NOT touched here -- that is the surfaceFill setting's
+   call, and a user who wants the card opaque too already has a switch for it. */
+body [data-phase] [data-composer-seat][class] {
+  background-image: linear-gradient(
+    var(--dsw-alias-bg-base, #191919) 0,
+    var(--dsw-alias-bg-base, #191919) 100%
+  );
+}
+
+/* ── 14c. the queue dock: the strip of messages waiting for the next turn ── */
+/* While a turn runs, anything the user sends lands in a queue and the shell paints
+   it as a docked panel directly above the composer card. Its own label is
+   "{n} queued messages" (measured in the running composition:
+   dsh-client-ui-conversation, the QueueDock module next to the composer's sheet),
+   and out of the box it is a rounded translucent plate with pill-shaped icon
+   buttons -- none of which is this skin's language.
+
+   Everything below is scoped to the dock's declared hook, [data-queue-dock]. That
+   hook is what makes this section legal under the layer's rule against hashed
+   classes: the dock wrapper's module class is build-generated, but the wrapper
+   carries the attribute. The parts INSIDE it are reached structurally on purpose --
+   role-hooked where the shell gives one, a bare element selector otherwise, and a
+   fragment like [class*='status'] only where the element has no better handle. The
+   strip is a numbered list, so its shape is more stable than any class name.
+
+   The reading: a waiting item's left edge carries the accent -- the same mark the
+   sidebar gives the active session, and the one place this skin says "this row is
+   live" -- and the count line takes the caption voice the top bar's unit row uses. */
+body [data-queue-dock] {
+  position: relative;
+}
+/* The plate: square, one hairline, no shadow. The shell rounds only its top
+   corners (its bottom edge meets the composer card), so squaring it is a one-line
+   claim rather than a redesign. The hairline is the same property the composer card
+   reads, so the two surfaces cannot drift apart. */
+body [data-queue-dock] > div {
+  border: 1px solid var(--endfield-frame, var(--dsw-alias-border-l1));
+  border-bottom: none;
+  border-radius: 0;
+  corner-shape: round;
+  box-shadow: none;
+}
+/* The count line and the chevron that expands the list. The header is a real
+   button (it toggles the list), so it is squared and its label moves into the
+   caption voice. */
+body [data-queue-dock] > div > button {
+  border-radius: 0;
+  corner-shape: round;
+  gap: 8px;
+}
+body [data-queue-dock] > div > button > span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+/* One waiting message. A hairline between rows instead of the shell's inset
+   shadow: the same device the sidebar uses between sessions.
+   The [class] on the row rules is load-bearing, not decoration. The shell
+   separates rows with a two-class rule (its row class plus the adjacent-row
+   class), which out-ranks anything this layer can write with element selectors
+   alone -- measured: the inset shadow survived a plain li + li rule and the
+   divider ended up drawn twice, once as a real border and once as that shadow. */
+body [data-queue-dock] li[class] {
+  border-radius: 0;
+  corner-shape: round;
+  position: relative;
+}
+body [data-queue-dock] li[class] + li[class] {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  box-shadow: none;
+}
+body [data-queue-dock] li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 16px;
+  margin-top: -8px;
+  background: var(--endfield-focus);
+}
+/* The row actions (steer / edit / remove) become the skin's square icon buttons,
+   and the sending status joins the caption voice above. */
+body [data-queue-dock] li button {
+  border-radius: 0;
+  corner-shape: round;
+}
+body [data-queue-dock] li [class*='status'] {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+/* The inline editor, squared and framed like the composer's own field. */
+body [data-queue-dock] input {
+  border-radius: 0;
+  corner-shape: round;
+  border-color: var(--endfield-frame, var(--dsw-alias-border-l1));
+}
+/* Attachment chips and thumbnails inside a waiting message: same square treatment
+   the composer's own attachments get. */
+body [data-queue-dock] [class*='file'],
+body [data-queue-dock] [class*='thumb'] {
+  border-radius: 0;
+  corner-shape: round;
+}
+body [data-queue-dock] [class*='fileName'],
+body [data-queue-dock] [class*='fileSize'] {
+  font-size: 11px;
+}
+
+/* ── 15. the two top bars: conversation header + right pane strip ───────── */
+/* First, a correction about how many bars there are. Measured (scripts/inspect-bars.mjs):
+   there is NO separate outer app top bar. The 76px band that spans the width right of
+   the sidebar -- brand, breadcrumbs, actions, utilities, corner, tabs -- is ONE element,
+   <header class=..._header>, and it is both the app's top bar and the conversation
+   header. The brand row above the sidebar and the table of contents below it are part
+   of the SIDEBAR, not a bar. So "the top bars" is two real surfaces:
+     1. that <header> (role-hooked as [data-slot='conversation.session.header']'s child);
+     2. the right pane's own tab strip, '[role=tablist][data-dockkit-strip]', which is a
+        second component with its own idiom (28px pills, 12px radius, no underline).
+   Everything below is anchored on 'role' / 'aria-*' / 'data-*' hooks wherever they
+   exist, and on the component's class prefix only where they do not -- the same rule
+   section 13 follows for the sidebar rows.
+
+   What comes from the reference material rather than from taste
+   (docs/design-reference/01-visual-language.md, 02-ui-inventory.md):
+     - the game's own breadcrumb is a SLASH form: the JP build reads '//A / B / C', the
+       EN build 'A > B > C', and the website 'A - B'. The shell already renders the
+       separator as a literal "/" (measured in its own markup), so the reference's slash
+       form is what this completes: a leaf crumb carries the endfield '//' marker.
+     - the in-game settings screen is the one place a tab is drawn as a SOLID square
+       rather than an underline (assets/in-game-frames/16-settings-audio.jpg: selected =
+       bright square with a dark symbol). That is what the active tab becomes below.
+     - the game's current-location marker is a short accent rule under a label
+       (02-ui-inventory '// 谷地通道'), which is what the leaf crumb gets: a rule the
+       width of its own text, not of the whole chip.
+
+   Colour discipline, and this matters because the accent is a setting the user owns:
+     - the ACTIVE TAB keeps using --dsw-alias-state-business-primary, i.e. whatever
+       accent is configured. Measured live it was rgb(146,201,255) because the configured
+       accent is blue -- hardcoding the game's yellow here would have contradicted the
+       user's own colour choice and read as a bug.
+     - the endfield flourishes -- the '//' marker, the crumb rule, the baseline hairline
+       -- use --endfield-focus, the skin's own selection family, which is what section 11
+       already reserves for exactly this. */
+
+/* 15a/15b/15c. The band, per 12-blueprint-grid.jpg, one line tall, with its divider back.
+   Measured basis, all in scripts/probe-header-flow.mjs / probe-header-widths.mjs:
+     - the header is display:block and its own flex-direction is ALREADY row, so turning it into
+       a flex row is one property;
+     - the freed height returns to the body with NO compensating rule: the header is flex:0 0 auto
+       and the conversation body is flex:1 1 0% in the same column, with scrollBody
+       (overflow-y:auto) inside it. 44px = 10px top padding + a 31px row + 3px slack;
+     - the units must be centred against the HEADER, not against the leftover space. Auto margins
+       centre between the neighbours, and the neighbours are unequal (the title column ends at 912
+       while the controls reach 928), which measured out as the units sitting ~166px right of the
+       header's centre. Centring with left:50% + translateX(-50%) is exact here because the units'
+       width comes from their own content, so the transform is stable.
+     - the divider returns, inset at both ends so it clears the sidebar column and the right edge.
+       The frame's band is otherwise a flat tint, so the divider is the band's ONLY edge. */
+body header[class*='_header'] {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  /* The divider sits 12px below the title row's baseline: the band's own padding-bottom, NOT a
+     taller min-height. Raising min-height would push the row down with it (the row sits at the top
+     of a flex column with align-items:center, held up by padding-top), whereas padding-bottom only
+     moves the line. 40 + 12 = 52px band, with an unchanged 28px content box. */
+  min-height: 40px;
+  padding-bottom: 12px;
+  border-bottom: none;
+  position: relative;
+}
+body header[class*='_header']::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 1px;
+  /* Brighter than border-l1: this was reported as hard to see. border-l3 (#424242) is the value
+     the shell itself used for this line before the skin replaced it. */
+  background: var(--dsw-alias-border-l3);
+  pointer-events: none;
+}
+/* The title column keeps the whole row and pushes the controls to the right edge, where they
+   were before the one-line change. It carries no decoration of its own: the mark reviewed out of
+   the title zone (a 3px accent bar on this row's left edge) is replaced by the slash prefix below,
+   which belongs to the title TEXT rather than to the box around it. */
+body header[class*='_header'] [class*='titleRow'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+  border-bottom: none;
+}
+/* The title's "///" prefix, built out of the markdown-heading device in section 7: the same brand
+   token and the same 700 weight, so the two read as one system.
+   Three deliberate differences, each with a reason:
+     - three slashes rather than the // marker;
+     - a LARGER font size, declared rather than inherited. Inherited it would be the crumb's own
+       14px and would read as part of the title; the mark is meant to stand out from it. Setting it
+       explicitly also means a change to the crumb's size cannot silently shrink the mark;
+     - 0.2em of gap. A single slash leans away from the text and needed only 0.1em, but three of them
+       form a dense block, so the separator space comes back -- still short of the heading's 0.4em.
+   It mounts on the crumb, not on the row: the crumb is the element that carries the session name
+   and owns the max-width + ellipsis, so the prefix sits inside the text that truncates -- exactly
+   as a markdown heading's prefix is part of its own text. */
+body header[class*='_header'] [class*='crumbCurrent']::before {
+  content: var(--endfield-title-slash, "///");
+  font-size: 18px;
+  margin-inline-end: 0.2em;
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+body header[class*='_header'] [class*='titleCluster'] {
+  min-width: 0;
+}
+
+/* The hover tooltip inside the top bar's split control must not take part in the layout.
+   Measured cause of a hover flicker: the bubble is an 88px flex sibling of the control's two buttons,
+   so showing it widens the row, which slides the button out from under the pointer, which ends the
+   hover, which hides the bubble, which slides the button back -- a loop, recorded as the wrapper
+   oscillating 52px <-> 140px across 40 frames with the button's :hover flipping with it.
+   A tooltip is an overlay, so absolute positioning is both the fix and the correct semantics; the
+   wrapper already establishes the containing block via this skin's own tooltip treatment. */
+body header[class*='_header'] [class*='_split'] [class*='bubble'] {
+  position: absolute;
+}
+
+/* 15d. the unit row, centred against the band. */
+body header[class*='_header'] [role='tablist'] {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Not a percentage: the column is 1304px with the pane closed and 591px with it open, so 60% of
+     it was 355px -- narrower than the row's natural 472px, which made the row WRAP and the tabs
+     vanish for the wrong reason. Reserving 220px per side measures the space the title and the
+     controls actually occupy. */
+  max-width: calc(100% - 440px);
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  top: 50%;
+  translate: 0 -50%;
+  background: var(--endfield-band, color-mix(in srgb, var(--dsw-alias-bg-base) 55%, #2E2E2E));
+}
+body header[class*='_header'] [role='tab'] {
+  /* 'role' repeated purely to out-rank the shell's own class rule: an attribute selector ties a
+     class, and the shell's sheet may land later in document order. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px 6px 30px;
+  position: relative;
+  border: none;
+  border-radius: 0;
+  background: none;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  corner-shape: round;
+}
+/* The unit's icon: a small diamond outline, the system's node primitive (05 图形元素). Placed
+   absolutely so the label keeps its position -- a tab's label is a bare text node, so an
+   in-flow icon would push it. */
+body header[class*='_header'] [role='tab']::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+  opacity: 0.75;
+}
+/* The inter-unit separator. A rendered one reports content "" ; the unit right after the plate
+   carries none, so the plate reads as a gap in the row. */
+body header[class*='_header'] [role='tab'] + [role='tab']::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  height: 16px;
+  width: 1px;
+  margin-top: -8px;
+  background: var(--dsw-alias-border-l2);
+}
+/* The current unit: one plate and nothing else. Accent fill (the reviewer's choice), with the
+   contrast-derived ink so a pale accent still reads. */
+body header[class*='_header'] [role='tab'][aria-selected='true'] {
+  background: var(--dsw-alias-state-business-primary);
+  color: var(--endfield-accent-ink, #191919);
+  font-weight: 600;
+}
+body header[class*='_header'] [role='tab'][aria-selected='true']::before,
+body header[class*='_header'] [role='tab'][aria-selected='true'] + [role='tab']::before {
+  content: none;
+}
+
+/* The unit icons: the two named units get their own silhouette, the rest keep the diamond. */
+body header[class*='_header'] [role='tab']:nth-of-type(1)::after {
+  /* Chat: a filled speech block, cut with clip-path -- the tail is the bottom-left corner. */
+  width: 8px;
+  height: 7px;
+  margin-top: -3.5px;
+  border: 0;
+  background: currentColor;
+  transform: none;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 34% 100%, 20% 82%, 0 82%);
+}
+body header[class*='_header'] [role='tab']:nth-of-type(2)::after {
+  /* Trajectory: three dots descending left to right -- a route. */
+  width: 9px;
+  height: 7px;
+  margin-top: -3.5px;
+  border: 0;
+  transform: none;
+  background-image: radial-gradient(circle at 50% 50%, currentColor 0 1.1px, transparent 1.2px);
+  background-size: 4.5px 3.5px;
+  background-position: 0 2px;
+  background-repeat: repeat-x;
+  opacity: 0.9;
+}
+
+/* With the right pane open, the conversation's tab row goes away: the pane brings its own strip and
+   the conversation column is squeezed to 591px, so the two rows compete for the same job.
+   The state hook: the frame element carries data-rightbar-collapsed="true" while the pane is CLOSED
+   and drops the attribute when it opens, so "open" is the ABSENCE of it. Nothing else in the tree
+   distinguishes the two states -- the pane's own node exists either way, and reports
+   visibility:visible while parked off screen (all three attempts are recorded in
+   scripts/probe-pane-attr-hunt.mjs). Keying on a declared data-* hook rather than a hashed class is
+   what keeps this standing when the shell is rebuilt. */
+body:not(:has([data-rightbar-collapsed])) header[class*='_header'] [role='tablist'] {
+  display: none;
+}
+
+/* 15e. the right pane's strip: the same mechanism at 28px -- squared units, one plate for the
+   current one. */
+body [role='tablist'][data-dockkit-strip] {
+  gap: 0;
+}
+body [role='tablist'][data-dockkit-strip] [class*='_tab_'] {
+  border-radius: 0;
+  corner-shape: round;
+}
+body [role='tablist'][data-dockkit-strip] [class*='_tabActive_'] {
+  background: var(--dsw-alias-state-business-primary);
+  color: var(--endfield-accent-ink, #191919);
+  font-weight: 600;
+}
+/* 15e. the right pane's strip: the same mechanism at 28px -- squared units, one flat plate for
+   the current one. No accent, matching the frame's discipline. */
+body [role='tablist'][data-dockkit-strip] {
+  gap: 0;
+}
+body [role='tablist'][data-dockkit-strip] [class*='_tab_'] {
+  border-radius: 0;
+  corner-shape: round;
+}
+body [role='tablist'][data-dockkit-strip] [class*='_tabActive_'] {
+  background: var(--endfield-plate, #FFFFFF);
+  color: var(--endfield-plate-ink, #191919);
+  font-weight: 600;
+}
+/* 15e. the right pane's strip: the same mechanism at 28px -- text labels, a hairline between
+   them, and a flat block for the current one. No accent, matching the reference's discipline
+   (its bar carries no accent at all). */
+body [role='tablist'][data-dockkit-strip] {
+  gap: 0;
+}
+body [role='tablist'][data-dockkit-strip] [class*='_tab_'] {
+  border-radius: 0;
+  corner-shape: round;
+}
+body [role='tablist'][data-dockkit-strip] [class*='_tabActive_'] {
+  background: var(--endfield-plate, #FFFFFF);
+  color: var(--endfield-plate-ink, #191919);
+  font-weight: 600;
+}
+
+/* ── 16. the deliverable summaries at the end of a turn ────────────────── */
+/* A turn that touched files closes with two surfaces (both from
+   dsh-client-ui-deliverables, whose data attributes are what this section hangs
+   on -- its module class names are build-generated and are not referenced):
+
+     [data-changed-files]   the "changed files" card: a header with a solid tile,
+                            a path plus added/deleted counts, up to three file
+                            rows, and a fold toggle;
+     [data-presented-file]  the grid of files the agent declared as deliverables.
+
+   Out of the box both are rounded cards on the shell's blue-grey statics
+   (--dsw-static-neutral-850/800, resolved through their own --changes-fill /
+   --deliverable-fill variables) with a 10px radius. Nothing here is wrong, but
+   none of it is this skin's language either: the skin separates surfaces with
+   hairlines rather than fills, squares its corners, and never paints a solid
+   accent tile the size of a button.
+
+   The Tile is the clearest case, so it is written out: the shell paints a 36px
+   link-blue square with a white glyph -- the only saturated block of that size in
+   the whole transcript. Here it becomes the skin's node primitive: a 9px outline
+   diamond in the accent, with the glyph itself hidden, which is how the same
+   signal (this row leads somewhere) is drawn everywhere else in this layer. The
+   glyph is hidden by SIZE, not by display or visibility, so the icon's box stays in
+   the layout and the header does not reflow. */
+body [data-changed-files] {
+  border: 1px solid var(--endfield-frame, var(--dsw-alias-border-l1));
+  border-radius: 0;
+  corner-shape: round;
+  position: relative;
+}
+body [data-changed-files] > *:first-child {
+  border-radius: 0;
+  corner-shape: round;
+  background: transparent;
+  gap: 10px;
+}
+/* The tile is a flex item of the header, so its own width/height would be
+   stretched away by the default align-items on that row: measured 44x23 for a
+   9x9 declaration. flex: none plus an explicit centre is what keeps the node
+   the size it is meant to be. The glyph inside is hidden by SIZE rather than by
+   display, so the icon's box stays in the layout and the header does not reflow. */
+body [data-changed-files] > *:first-child > span:first-child {
+  flex: none;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--endfield-focus);
+  background: none;
+  color: var(--endfield-focus);
+  width: 9px;
+  height: 9px;
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+body [data-changed-files] > *:first-child > span:first-child > * {
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+/* The stat line: the skin's caption voice, but without text-transform -- the
+   counts are already letters ("+12 / -3"), and uppercasing them would shout
+   numbers that are meant to be read, not announced. */
+body [data-changed-files] > *:first-child > span:last-child {
+  letter-spacing: 0.08em;
+}
+/* The rows: the same treatment the sidebar gives a session row -- a hairline
+   between, and an accent bar at the left edge of the one under the pointer. */
+body [data-changed-files] ul {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+body [data-changed-files] li {
+  border-radius: 0;
+  corner-shape: round;
+  position: relative;
+}
+body [data-changed-files] li + li {
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+body [data-changed-files] li:hover::before,
+body [data-changed-files] li:focus-within::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  margin-top: -7px;
+  background: var(--endfield-focus);
+}
+/* The fold toggle closes the card: it is the last child of the card, so the top
+   border belongs to whichever element ends up there. */
+body [data-changed-files] > *:last-child {
+  border-radius: 0;
+  corner-shape: round;
+}
+/* The deliverables grid. The shell's card here is 60px tall with a 40px icon
+   frame; the skin keeps the geometry (it is a comfortable target) and squares the
+   corners, but replaces the filled icon frame with the same hairline frame the
+   composer's own surfaces use. The card's own children, in the shell's order: the
+   full-size preview button, the icon frame, then the body. */
+body [data-presented-file] {
+  border-radius: 0;
+  corner-shape: round;
+  background: transparent;
+  position: relative;
+}
+body [data-presented-file] > span {
+  border-radius: 0;
+  corner-shape: round;
+  background: transparent;
+}
+body [data-presented-file] > div,
+body [data-presented-file] > div > *,
+body [data-presented-file] > div > * > * {
+  border-radius: 0;
+  corner-shape: round;
+}
+/* The little open/chevron split at the card's right edge: two square halves
+   sharing a hairline, instead of a rounded pill. */
+body [data-presented-file] > div > span {
+  border-radius: 0;
+  corner-shape: round;
+}
+body [data-presented-file] > div > span > button {
+  border-radius: 0;
+  corner-shape: round;
+}
 `

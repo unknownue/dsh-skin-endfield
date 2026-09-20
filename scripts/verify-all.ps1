@@ -12,7 +12,9 @@
 # Layer 7 needs a running `dsh web` and its token in $env:DSH_URL. It is skipped
 # with a clear note when either is missing, because "the app is not running" is
 # not a skin defect. When it does run it is the only layer that can prove a rule
-# WINS against the shell's own styling.
+# WINS against the shell's own styling — and the only one that can prove a
+# *colour*: a token value in the bundle and the painted pixel are different
+# claims (verify-error-ink-live.mjs exists because "Error" once painted magenta).
 #
 # Usage: pwsh -File scripts/verify-all.ps1
 $ErrorActionPreference = 'Continue'
@@ -59,6 +61,13 @@ if ($env:DSH_URL) {
     Step 'live: shell chrome (sidebar + header)'  { node scripts/verify-sidebar-chrome.mjs }
     Step 'live: typography + message bubble'      { node scripts/verify-typography-and-bubble.mjs }
     Step 'live: corner brackets (composer+bubble)' { node scripts/verify-brackets-live.mjs }
+    Step 'live: top bars (header + pane strip)'    { node scripts/verify-top-bars-live.mjs }
+    Step 'live: error ink (red, not magenta)'      { node scripts/verify-error-ink-live.mjs }
+    Step 'live: composer band is opaque'           { node scripts/verify-composer-opacity.mjs }
+    Step 'live: tooltips do not move the page'     { node scripts/verify-tooltip-stability-live.mjs }
+    Step 'live: queue strip wears the skin'        { node scripts/verify-queue-dock-live.mjs }
+    Step 'live: active session marker (bar only)'  { node scripts/verify-session-marker-live.mjs }
+    Step 'live: deliverable summaries (diff list)' { node scripts/verify-deliverables-live.mjs }
 } else {
     Write-Host ""
     Write-Host "=== live layers skipped ===" -ForegroundColor Yellow
