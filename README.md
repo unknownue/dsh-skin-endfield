@@ -363,3 +363,4 @@ assets/fonts/               OFL 字体（见 assets/fonts/NOTICE.md）
 - 装饰层不含优先级强制声明（`verify-client` 文本扫描拦截），所有覆盖靠选择器具体度与源码顺序。
 - `dsh-skin-endfield` 设置命名空间的**宿主侧写入**需要你在界面上点一次确认（改一项设置，看 `~/.dsh/settings.yaml` 是否出现 `dsh-skin-endfield:`）。
 - 新增 **Accent** 字段需要**重启 `dsh web`** 才生效：浏览器半边的设置订阅连同已装的 bundle 会随 HMR 更新，但命名空间的 schema 由宿主半边注册，只在启动时读一次。
+- **顶栏标题的截断是外壳行为**，截断点是外壳写死的：`ConversationRoot.module.css` 的 `.crumb` 上 `max-width: 220px` + `text-overflow: ellipsis`（实测：标题 12 字时 184px 不截断；一超过 220px 就截，且**与窗口宽度无关**，窗口 1304px 时同样在 220px 截）。皮肤只加了 `///` 前缀，它是标题元素**行内内容**的一部分，因此**占用那 220px 里的约 33px**（18px 字号 + 0.2em 间距）—— 也就是标题实际能用的宽度从 220px 降到约 179px。这是前缀的代价，不是 bug；嫌标题显示太短可以缩前缀或去掉（改一行），但"长标题会不全"本身不是皮肤造成的。
