@@ -253,6 +253,52 @@ await check('endfield anchors are present (signal yellow + dark canvas)', () => 
 })
 
 /**
+ * The error family must stay RED.
+ *
+ * It has already regressed once: the palette originally derived every semantic
+ * state from the game's own hues and handed "error" to the official magenta
+ * (`#FF1AAC`), which repainted the literal "Error" text in a transcript purple —
+ * a colour the game reserves for rare/danger *badges*, not for failure. The
+ * design docs (`02-ui-inventory.md` §7-§8) already record that the game has no
+ * error red of its own, so the skin keeps the shell's. Pinning the hex here means
+ * a future palette edit has to argue with this line on purpose.
+ */
+await check('the error family is the shell red, never the decorative magenta', () => {
+  const tokens = overrideCalls[0].tokens
+  /** Pull r/g/b out of either form the palette uses: `#RRGGBB` or `rgba(r,g,b,a)`. */
+  const rgbOf = (value) => {
+    const hex = /^#?([0-9a-f]{6})$/i.exec(value ?? '')
+    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
+    const fn = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(value ?? '')
+    return fn ? [Number(fn[1]), Number(fn[2]), Number(fn[3])] : null
+  }
+  // Red ink: the red channel dominates and the blue channel carries none of the
+  // magenta signature. #EC1313 / #F25A5A pass; #FF1AAC / #C4007A / #FF62C4 fail
+  // (they win on red too, but their blue channel is loud).
+  const isRedInk = (value) => {
+    const rgb = rgbOf(value)
+    if (rgb === null) return false
+    const [r, g, b] = rgb
+    return r >= 0xd0 && r > g * 2 && b < 0x80
+  }
+  for (const name of ['--dsw-alias-state-error-primary', '--dsw-alias-state-error-secondary']) {
+    assert(isRedInk(tokens[name]?.light), `${name} light must be an error red, got ${tokens[name]?.light}`)
+    assert(isRedInk(tokens[name]?.dark), `${name} dark must be an error red, got ${tokens[name]?.dark}`)
+  }
+  assert(tokens['--dsw-alias-state-error-primary']?.light === '#EC1313',
+    `the light error ink must be the shell's red-600, got ${tokens['--dsw-alias-state-error-primary']?.light}`)
+  assert(tokens['--dsw-alias-state-error-primary']?.dark === '#F25A5A',
+    `the dark error ink must be the shell's red-400, got ${tokens['--dsw-alias-state-error-primary']?.dark}`)
+  // The destructive-row wash is the same hue family; a magenta wash under red ink
+  // reads as two different dangers.
+  for (const mode of ['light', 'dark']) {
+    const wash = tokens['--dsw-alias-interactive-bg-hover-danger']?.[mode]
+    assert(isRedInk(wash), `the danger hover wash (${mode}) must be the same red, got ${wash}`)
+  }
+  return 'error ink + destructive wash are red in both appearances'
+})
+
+/**
  * The accent is a user-supplied colour, so the derivation has to hold for hues the
  * skin never shipped. This sweeps the CSS hue circle and asserts the properties
  * that actually matter instead of pinning hex values: the light step has to stay
@@ -306,12 +352,92 @@ await check('decor never overrides font-family on elements (icon fonts would bre
   return 'no element-level font-family'
 })
 
-await check('decor never hides or repositions shell chrome', () => {
-  const banned = [/display\s*:\s*none/i, /visibility\s*:\s*hidden/i, /position\s*:\s*fixed/i]
+await check('decor never hides or repositions shell chrome (one named exception)', () => {
+  // Still banned outright: neither of these is ever the right way to restyle the shell.
+  const banned = [/visibility\s*:\s*hidden/i, /position\s*:\s*fixed/i]
   for (const pattern of banned) {
     assert(!pattern.test(decor), `decor.css uses ${pattern}`)
   }
-  return 'no display:none / visibility:hidden / position:fixed'
+  // display:none is allowed ONLY in the rule that hides the conversation's tab row while the right
+  // pane is open -- a reviewed requirement, and the only way to take a row out of flow. Every other
+  // occurrence fails, and the message states the one legal shape.
+  const hiding = decor.match(/display\s*:\s*none/gi) ?? []
+  if (hiding.length > 0) {
+    const legal = /body:not\(:has\(\[data-rightbar-collapsed\]\)\)[^{]*\[role='tablist'\][^{]*\{\s*display\s*:\s*none/s
+    assert(legal.test(decor),
+      'decor.css uses display:none outside the pane-open tab-row rule: the only allowed hiding is '
+      + "body:not(:has([data-rightbar-collapsed])) ... [role='tablist']")
+    assert(hiding.length === 1, `expected exactly 1 display:none (the pane state), got ${hiding.length}`)
+  }
+  return `no visibility:hidden / position:fixed; display:none only for the pane-open tab row (${hiding.length})`
+})
+
+await check('decor does not take over shell positioning', () => {
+  // Positioning is NOT additive: declaring it on an element the shell positions (a portalled menu,
+  // dialog or listbox) overrides the shell's value and moves the surface. That bug shipped once -- the
+  // corner-bracket rule set position:relative on every menu/dialog/listbox to give its pseudo-elements
+  // a containing block, which dropped the composer's model dropdown into the document flow at y=1643
+  // on a 905px viewport, i.e. off screen.
+  // A rule MAY still position such an element when the declaration is conditional on the element not
+  // already being positioned, which is what the bracket rule now does with
+  // :where([style*="position: static"]). So this rejects an unconditional position on an overlay
+  // surface, and accepts the scoped form.
+  // Checked against the BUILT stylesheet, rule by rule, rather than by pattern-matching the raw
+  // template literal: earlier attempts with a regex over the source ran across rule boundaries and
+  // blamed the wrong rule. The built sheet gives real selectors and real declarations.
+  const offenders = []
+  // Comments are stripped first: a comment may contain a brace, and without this the match starts
+  // inside one and reports a selector that does not exist.
+  const sheet = styles.map((s) => s.textContent ?? '').join('\n').replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const m of sheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = m[1].trim()
+    const body = m[2]
+    if (!/(dialog|menu|listbox|popover|tooltip)/i.test(selector)) continue
+    // Pseudo-elements are excluded: they draw, they do not occupy layout, so they cannot displace a
+    // surface. This check is about the SKIN MOVING shell UI, which is the failure that shipped.
+    if (/::?(before|after|marker|placeholder|backdrop)/.test(selector)) continue
+    const pos = /position\s*:\s*([a-z]+)/i.exec(body)
+    if (!pos || pos[1] === 'static') continue
+    // Allowed only when the selector is conditional on the element not already being positioned,
+    // OR when it explicitly excludes the shell's hover tooltip -- the overlay this layer must never
+    // touch, because the tooltip IS the one that has to stay out of flow. That exclusion is the fix
+    // for the flicker bug, so the guardrail has to accept it rather than forbid the bubble rules.
+    if (/\[style\*=["']?position:\s*static/.test(selector)) continue
+    if (/:not\(\[role=["']?tooltip/.test(selector)) continue
+    offenders.push(`${selector.replace(/\s+/g, ' ')} { position: ${pos[1]} }`)
+  }
+  assert(offenders.length === 0,
+    `decor.css positions an overlay surface unconditionally: ${offenders.join(' | ')}`)
+  return 'no unconditional positioning on overlay surfaces'
+})
+
+/**
+ * Every bubble-family rule must exclude the tooltip.
+ *
+ * This is the bug the skin shipped: the shell's hover tooltip bubble carries the
+ * minified CSS-module class `_bubble_1nw3t_1`, so `[class*='_bubble']` matched it.
+ * Section 14 gave it `position: relative` (plus a border), which stopped `position:
+ * fixed` from being an overlay: the tooltip became a flex item of the sidebar's
+ * logo row, shrank the brand button by 120px, dragged the hovered control out from
+ * under the pointer, ended the `:hover`, hid the tooltip, restored the layout -- a
+ * ~2Hz oscillation on every control with a tooltip. The five rules below are the
+ * only ones that may address a `_bubble` class; each must carry the exclusion.
+ */
+await check('every bubble rule excludes the shell tooltip', () => {
+  const sheet = styles.map((s) => s.textContent ?? '').join('\n').replace(/\/\*[\s\S]*?\*\//g, '')
+  const bubbleRules = []
+  for (const m of sheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = m[1].replace(/\s+/g, ' ').trim()
+    if (!/_bubble/.test(selector)) continue
+    bubbleRules.push(selector)
+    for (const part of selector.split(',')) {
+      if (!/_bubble/.test(part)) continue
+      assert(/:not\(\[role=["']?tooltip/.test(part),
+        `a bubble rule can match the shell tooltip: ${part.trim()}`)
+    }
+  }
+  assert(bubbleRules.length > 0, 'no bubble rules found — did the selectors change spelling?')
+  return `${bubbleRules.length} bubble rule(s), each excluding role="tooltip"`
 })
 
 await check('decor does not fight the theme with !important', () => {

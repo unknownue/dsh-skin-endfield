@@ -31,7 +31,22 @@ import { accentScale, hexToRgb, rgbTriple, toLuminance } from './colors.ts'
 
 const SIGNAL_YELLOW = '#FFFA00'
 const SIGNAL_YELLOW_DEEP = '#E6E000'
-const MAGENTA = '#FF1AAC'
+
+/**
+ * The shell's own error red, kept as it ships: `--dsw-static-red-600` (#ec1313)
+ * for the light column and `--dsw-static-red-400` (#f25a5a) for the dark one —
+ * the exact values the base theme resolves `--dsw-alias-state-error-primary` to.
+ * Pinned here (rather than left un-overridden) so the semantic states are owned
+ * by this palette, and pinned to RED because an error has to read as one:
+ * `docs/design-reference/02-ui-inventory.md` §7-§8 already retired the earlier
+ * inference that magenta could carry this role — the game has no error red of
+ * its own, its "not enough" numbers are a warm red, and `#FF1AAC` is a web
+ * accent that "皮肤里不要把它当错误色". Everything else the skin paints stays
+ * black / yellow / mint; this red is the one hue outside that system, and it is
+ * borrowed precisely because a failure state must not look like decoration.
+ */
+const ERROR_RED = '#EC1313'
+const ERROR_RED_DARK = '#F25A5A'
 
 /**
  * A surface that the flat/panel setting owns: transparent when off, the given
@@ -119,7 +134,10 @@ export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
     '--dsw-alias-link': { light: accentLinkLight, dark: accent.dark },
 
     // ── states (the game has no dedicated semantic palette: yellow *is* the
-    //    warning colour, mint is success, magenta is the only rare/danger hue) ──
+    //    warning colour and mint is success. It has no error hue at all — magenta
+    //    is a *rare/danger badge* accent, never a failure ink — so the error
+    //    family is the one place the skin keeps the shell's own red. See the
+    //    ERROR_RED note above for the evidence and why it must not go magenta.) ──
     '--dsw-alias-state-success-primary': { light: accent.light, dark: accent.dark },
     '--dsw-alias-state-success-secondary': { light: accent.lightHover, dark: accent.darkHover },
     '--dsw-alias-state-success-tertiary': {
@@ -130,8 +148,12 @@ export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
     '--dsw-alias-state-warn-secondary': { light: '#8C8400', dark: '#FFF000' },
     '--dsw-alias-state-warn-tertiary': { light: 'rgba(255,250,0,0.22)', dark: 'rgba(255,250,0,0.16)' },
     '--dsw-alias-state-warn-label': { light: '#6B6500', dark: SIGNAL_YELLOW },
-    '--dsw-alias-state-error-primary': { light: '#C4007A', dark: MAGENTA },
-    '--dsw-alias-state-error-secondary': { light: MAGENTA, dark: '#FF62C4' },
+    '--dsw-alias-state-error-primary': { light: ERROR_RED, dark: ERROR_RED_DARK },
+    // The soft step stays red too. Stock DSH paints it red-400 *in both* columns,
+    // i.e. on white it is the lighter red — which is the role this alias has
+    // (primitives use it for tints/hover fills). Repeating the primary on both
+    // would flatten every error surface into the one loud value.
+    '--dsw-alias-state-error-secondary': { light: ERROR_RED_DARK, dark: ERROR_RED_DARK },
     // The shell's own "brand" alias — stock DSH paints it the same colour as
     // state-business-primary, so it follows the accent for the same reason.
     '--dsw-alias-state-business-primary': { light: accent.light, dark: accent.dark },
@@ -169,7 +191,11 @@ export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
       light: `rgba(${accent.triple}, 0.20)`,
       dark: `rgba(${accent.triple}, 0.12)`,
     },
-    '--dsw-alias-interactive-bg-hover-danger': { light: 'rgba(255,26,172,0.14)', dark: 'rgba(255,26,172,0.18)' },
+    // The wash under a destructive row (the menu's `danger` item paints its text
+    // with state-error-primary), so it has to be the same red — a magenta wash
+    // under red ink read as two different kinds of "danger". Alpha matches how
+    // the stock theme spent these two: one step stronger on the dark canvas.
+    '--dsw-alias-interactive-bg-hover-danger': { light: 'rgba(236,19,19,0.09)', dark: 'rgba(242,90,90,0.18)' },
     '--dsw-alias-interactive-bg-hover-solid': { light: '#EDEDED', dark: '#2E2E2E' },
     '--dsw-alias-interactive-bg-active': { light: 'rgba(25,25,25,0.10)', dark: 'rgba(217,217,217,0.12)' },
 
