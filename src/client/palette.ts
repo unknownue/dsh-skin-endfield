@@ -49,6 +49,18 @@ const ERROR_RED = '#EC1313'
 const ERROR_RED_DARK = '#F25A5A'
 
 /**
+ * The shell's own success green, for the one alias that carries meaning rather than
+ * brand — a diff's added line. Values are `--dsw-static-green-500` (light column) and
+ * `--dsw-static-green-400` (dark column) / `-400` for the soft step, i.e. exactly what
+ * stock DSH resolves `--dsw-alias-state-success-*` to.
+ *
+ * Pinned rather than left to the accent for the same reason the error family is: an
+ * accent-dyed "added" line stops reading as an addition. See the states note below.
+ */
+const SHELL_GREEN = '#22C55E'
+const SHELL_GREEN_DARK = '#4ED17E'
+
+/**
  * A surface that the flat/panel setting owns: transparent when off, the given
  * surface when on.
  *
@@ -138,11 +150,30 @@ export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
     //    is a *rare/danger badge* accent, never a failure ink — so the error
     //    family is the one place the skin keeps the shell's own red. See the
     //    ERROR_RED note above for the evidence and why it must not go magenta.) ──
-    '--dsw-alias-state-success-primary': { light: accent.light, dark: accent.dark },
-    '--dsw-alias-state-success-secondary': { light: accent.lightHover, dark: accent.darkHover },
+    // SUCCESS IS GREEN AGAIN, and that reverses a decision made earlier in this
+    // file's life. The accent remap exists so a user can re-point the shell's
+    // brand/status family; routing `state-success-*` through it looked consistent
+    // and was wrong for the one consumer that reads this token as INFORMATION:
+    // DiffBlock draws an added line with `--dsw-alias-state-success-primary` and a
+    // removed line with `--dsw-alias-state-error-primary`. With a blue accent the
+    // right pane's diffs came out blue-and-red — a colour pair that no longer says
+    // "added / removed", which is the whole point of a diff. Green/red here is
+    // semantic, not brand, so it is pinned to the shell's own greys-free green
+    // (--dsw-static-green-500 #22c55e light, -400 #4ed17e dark), which is exactly
+    // what stock DSH paints.
+    //
+    // The accent family that IS brand — the module icon, the send button, the
+    // Preview badge, links — moves on state-business-primary/-tertiary and
+    // --dsw-alias-link, which keep following the accent setting. So the setting
+    // still does its job; it just no longer repaints success.
+    '--dsw-alias-state-success-primary': { light: SHELL_GREEN, dark: SHELL_GREEN_DARK },
+    // The soft step repeats the SHELL's own pair (green-400 in both appearances), the
+    // same shape the error family below uses: this alias is a tint/soft-ink role, so it
+    // takes the lighter green rather than a second invented step.
+    '--dsw-alias-state-success-secondary': { light: SHELL_GREEN_DARK, dark: SHELL_GREEN_DARK },
     '--dsw-alias-state-success-tertiary': {
-      light: `rgba(${accent.triple}, 0.16)`,
-      dark: `rgba(${accent.triple}, 0.16)`,
+      light: `rgba(${rgbTriple(hexToRgb(SHELL_GREEN))}, 0.16)`,
+      dark: `rgba(${rgbTriple(hexToRgb(SHELL_GREEN_DARK))}, 0.16)`,
     },
     '--dsw-alias-state-warn-primary': { light: '#B3A800', dark: SIGNAL_YELLOW },
     '--dsw-alias-state-warn-secondary': { light: '#8C8400', dark: '#FFF000' },
