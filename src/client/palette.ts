@@ -272,17 +272,60 @@ export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
  * The `local()` source comes first on purpose: a machine that happens to have
  * the (commercially licensed) game faces installed gets them, everyone else
  * gets the open-source stand-ins.
+ *
+ * ── why the two font variables are scoped declarations ──────────────────────
+ * `dsh-font` (a third-party plugin this profile ships) restyles the GUI by
+ * re-declaring these SAME two variables:
+ *
+ *     :root, body { --dsw-font-family: <picked>; }
+ *
+ * that is literally its documented mechanism. Both layers therefore write the
+ * same custom properties onto the same elements with the same specificity, so
+ * document order decides — and the skin's stylesheet lands after the plugin's
+ * (measured: dsh-font-style at head position 14, the skin's globals.css at 22).
+ * The result was a silently dead setting: choosing a font changed the plugin's
+ * own preview (it sets `fontFamily` inline, so its preview never reads the
+ * variable) while every transcript paragraph kept the skin's stack. `--ds-font-
+ * family-code` survived only because the skin happened not to declare it.
+ *
+ * The fix is a CASCADE LAYER, and the first attempt is worth recording because
+ * it looked right and measured wrong. The tempting value is:
+ *
+ *     --dsw-font-family: var(--dsw-font-family, var(--endfield-font-family))
+ *
+ * i.e. "the plugin's choice if it has one, else ours". That is a self-reference:
+ * the skin declares `--dsw-font-family` and also reads it, so the substitution
+ * graph closes on itself and CSS resolves the whole chain to the
+ * guaranteed-invalid value. Measured: the variable computed to EMPTY and the
+ * transcript fell back to the shell's own stack -- it dropped the plugin's
+ * choice AND the skin's stack. A second hop name does not help either, because
+ * the cycle survives any number of intermediate names.
+ *
+ * `@layer` gets the same outcome without a cycle, and without depending on order:
+ * a declaration in an unlayered rule always beats a layered one, whatever the
+ * document position of the sheets. So the skin's typography stays the default
+ * (nothing else declares these variables) while any plugin that re-declares them
+ * the way `dsh-font` does wins automatically — no coordination, no specificity
+ * bet, and no `!important` on a user's font choice. That the winning declaration
+ * does not have to sit later is the point: measured order is dsh-font's tag at
+ * head position 14 and this sheet at 22, and the fix does not rest on it.
  */
 export const endfieldGlobals = `
+/* The layer name is the skin's own: a layer is global state, so it must not be a
+   name a shell package might also use for its tokens. */
+@layer endfield-skin {
+  :root, body {
+    --dsw-font-family:
+      "HarmonyOS Sans SC", "HarmonyOS Sans",
+      Jost, "Nunito Sans", Poppins, Montserrat,
+      system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --ds-font-family-code:
+      "JetBrains Mono", "IBM Plex Mono", "SF Mono", "Fira Code",
+      Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  }
+}
 :root, body {
-  --dsw-font-family:
-    "HarmonyOS Sans SC", "HarmonyOS Sans",
-    Jost, "Nunito Sans", Poppins, Montserrat,
-    system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --ds-font-family-code:
-    "JetBrains Mono", "IBM Plex Mono", "SF Mono", "Fira Code",
-    Consolas, "Liberation Mono", Menlo, Courier, monospace;
   /* Endfield is a right-angle system; the shell's default corner shape is a
      superellipse. Text inputs and tags opt back in below. */
   --dsw-corner-shape: initial;
