@@ -17,8 +17,9 @@
  *
  * What it asserts (11 checks):
  *   1. the rule exists on the current crumb (a real 2px box, not "none");
- *   2. it is the skin's focus colour — the same family as the /// marker and the
- *      sidebar bar — and not the brand yellow or the user's accent;
+ *   2. it is a LIGHT NEUTRAL — the shell's text-grey token — and not the focus accent
+ *      or the user's accent; a rule under a label is text-like work, and the bar
+ *      already carries one accent (the /// marker) a few pixels to its right;
  *   3. it is an overlay (absolute), so it cannot move the title;
  *   4. it sits clear of the band divider;
  *   5. it is inset from the crumb's edges, so it spans the text box rather than the
@@ -93,6 +94,8 @@ const MEASURE = `(() => {
     divider: { height: parseFloat(headerAfter.height) || 0, bottom: parseFloat(headerAfter.bottom) || 0, background: headerAfter.backgroundColor },
     dividerY: Math.round(headerRect.bottom - (parseFloat(headerAfter.height) || 0)),
     focusToken: getComputedStyle(document.body).getPropertyValue('--endfield-focus').trim(),
+    neutralToken: getComputedStyle(document.body).getPropertyValue('--dsw-alias-label-tertiary').trim(),
+    crumbColor: getComputedStyle(crumb).color,
     accentToken: getComputedStyle(document.body).getPropertyValue('--endfield-accent').trim(),
     brandToken: getComputedStyle(document.body).getPropertyValue('--dsw-alias-brand-primary').trim(),
     crumbOverflow: cs.overflow,
@@ -145,12 +148,24 @@ try {
 
     check(a.ruleContent !== 'none' && a.ruleHeight >= 2, `the rule is a real box (${a.ruleContent} ${a.ruleWidth}x${a.ruleHeight})`)
     const ruleRgb = rgb(a.ruleBackground)
+    const neutralRgb = hexToRgb(out.neutralToken)
+    const isGrey = ruleRgb !== null && Math.max(...ruleRgb) - Math.min(...ruleRgb) <= 2
+    check(isGrey, `the rule is a neutral grey (${a.ruleBackground})`)
+    const matchesNeutral = ruleRgb && neutralRgb && ruleRgb.join(',') === neutralRgb.join(',')
+    check(matchesNeutral,
+      `it uses the shell's text-grey token (${a.ruleBackground} vs --dsw-alias-label-tertiary ${out.neutralToken})`)
     const focusRgb = hexToRgb(out.focusToken)
-    const matchesFocus = ruleRgb && focusRgb && ruleRgb.join(',') === focusRgb.join(',')
-    check(matchesFocus, `it uses the skin's focus colour (${a.ruleBackground} vs --endfield-focus ${out.focusToken})`)
+    const isFocus = ruleRgb && focusRgb && ruleRgb.join(',') === focusRgb.join(',')
+    check(!isFocus,
+      `it no longer carries the focus accent (--endfield-focus is ${out.focusToken}) — the grey is deliberate: one accent, not two`)
     const accentRgb = hexToRgb(out.accentToken)
     const isAccent = ruleRgb && accentRgb && ruleRgb.join(',') === accentRgb.join(',')
     check(!isAccent, `it is NOT the user's accent colour (accent is ${out.accentToken})`)
+    const textRgb = rgb(out.crumbColor)
+    const ruleSum = ruleRgb ? ruleRgb.reduce((total, v) => total + v, 0) : Infinity
+    const textSum = textRgb ? textRgb.reduce((total, v) => total + v, 0) : -Infinity
+    check(ruleSum <= textSum,
+      `and it does not out-ink the title it sits under (rule ${a.ruleBackground} vs text ${out.crumbColor})`)
     check(a.rulePosition === 'absolute', `it is an overlay, so the title cannot move because of it (${a.rulePosition})`)
     check(a.rulePointerEvents === 'none', `it is transparent to the pointer (${a.rulePointerEvents})`)
 
