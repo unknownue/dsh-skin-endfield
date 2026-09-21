@@ -733,9 +733,29 @@ await check('the settings page exposes every field and commits to the scope', as
   const inputs = flat.filter((n) => n.type === 'input')
   const byType = (t) => inputs.filter((n) => n.props.type === t)
   assert(byType('color').length === 2, `expected 2 colour pickers (accent + outline), got ${byType('color').length}`)
-  assert(byType('range').length === 1, 'missing the bloom slider')
+  // Three sliders since the decal shipped: bloom, the plate's opacity and its scale. The
+  // count is asserted rather than the labels because a dropped control is the failure this
+  // check exists for -- and a new one has to be added here deliberately.
+  assert(byType('range').length === 3, `expected 3 sliders (bloom, decal opacity, decal scale), got ${byType('range').length}`)
   assert(byType('number').length === 1, 'missing the corner-radius field')
   assert(byType('checkbox').length === 5, `expected 5 toggles (panel fill, section marker, and the three page effects), got ${byType('checkbox').length}`)
+
+  // The mark's style is a CHOICE, not a switch: both renderings occupy the same corner, so
+  // there is no configuration in which both are on. One select, two options.
+  const styleSelect = flat.find((n) => n.type === 'select')
+  assert(styleSelect !== undefined, 'no mark-style select')
+  const styleOptions = flat.filter((n) => n.type === 'option').map((o) => o.props?.value)
+  assert(styleOptions.join(',') === 'decal,text', `mark style must offer both renderings, got ${styleOptions.join(',')}`)
+  assert(styleSelect.props.value === 'decal', `the plate is the shipped default, got ${styleSelect.props.value}`)
+  writes.length = 0
+  styleSelect.props.onChange({ target: { value: 'text' } })
+  assert(writes.length === 1 && writes[0][0] === 'markStyle' && writes[0][1] === 'text',
+    `mark style must commit through the scope, got ${JSON.stringify(writes)}`)
+  // An unknown style must fall back rather than reach the stylesheet as a third class.
+  styleSelect.props.onChange({ target: { value: 'sideways' } })
+  assert(writes[1][1] === 'decal', `an unknown style must fall back to the plate, got ${writes[1][1]}`)
+  // Leave the recorder clean for the assertions below, which count their own writes.
+  writes.length = 0
 
   // The accent picker must show the shipped default and commit through the scope.
   const accentPicker = byType('color')[0]
@@ -757,9 +777,22 @@ await check('the settings page exposes every field and commits to the scope', as
   reset.props.onClick()
   const fields = writes.map(([field]) => field).sort()
   assert(
-    fields.join(',') === 'accent,bloom,cornerRadius,dotBlock,headerLight,labelPrefix,mark,markText,surfaceFill,tint',
+    fields.join(',') === 'accent,bloom,cornerRadius,decalOpacity,decalScale,dotBlock,headerLight,labelPrefix,mark,markStyle,markText,surfaceFill,tint',
     `Reset must cover every field, got ${fields.join(',')}`,
   )
+
+  // The decal's two numbers must round-trip through their guards: a stored value outside the
+  // range (a hand-edited settings document) must land inside it rather than in the stylesheet.
+  const opacitySlider = byType('range').find((n) => n.props.value === 0.12)
+  assert(opacitySlider !== undefined, 'no decal opacity slider showing the shipped 0.12')
+  writes.length = 0
+  opacitySlider.props.onInput({ target: { value: '9' } })
+  assert(writes[0][0] === 'decalOpacity' && writes[0][1] === 1, `opacity guard failed: ${JSON.stringify(writes)}`)
+  const scaleSlider = byType('range').find((n) => n.props.value === 1)
+  assert(scaleSlider !== undefined, 'no decal scale slider showing the shipped 1')
+  writes.length = 0
+  scaleSlider.props.onInput({ target: { value: '0' } })
+  assert(writes[0][0] === 'decalScale' && writes[0][1] === 0.4, `scale guard failed: ${JSON.stringify(writes)}`)
 
   return `${inputs.length} controls, accent=${accentPicker.props.value}, reset covers ${fields.length} fields`
 })

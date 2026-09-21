@@ -39,12 +39,29 @@ declare module '@deepseek-ai/schemastery' {
   interface BooleanBuilder {
     (): SchemaNode<boolean>
   }
+  /**
+   * `z.const` / `z.union`, for the settings whose value is one of a fixed set.
+   *
+   * Declared here for the same reason as the rest of this file: the package ships no types, and
+   * the narrow surface is what makes a builder that the real Host does not have fail the
+   * typecheck instead of reaching a live settings document. Both builders exist in the installed
+   * `schemastery` (`lib/types/index.d.ts`, lines 45 and 79) and are what the Host validates the
+   * stored `markStyle` against — a plain `string()` would persist any value a client sent.
+   */
+  interface ConstBuilder {
+    <T>(value: T): SchemaNode<T>
+  }
+  interface UnionBuilder {
+    <T>(list: readonly SchemaNode<T>[]): SchemaNode<T>
+  }
 
   interface Schemastery {
     object: ObjectBuilder
     string: StringBuilder
     number: NumberBuilder
     boolean: BooleanBuilder
+    const: ConstBuilder
+    union: UnionBuilder
   }
 
   const z: Schemastery

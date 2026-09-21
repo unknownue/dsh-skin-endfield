@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="140" viewBox="0 0 720 140">
+  <!--
+    The Endfield-style page decal: an ORIGINAL mark drawn in the game's design language
+    (industrial signage + engineering drawing), not a copy of Hypergryph's artwork.
+
+    Rules this file obeys, because the shipped asset is generated from it:
+      * every colour is a pure grey (R = G = B) -- the decal is a monochrome printing plate,
+        and scripts/make-decal.mjs fails the build if a rendered pixel is tinted;
+      * type is set in the vendored open-source faces (Michroma / JetBrains Mono, OFL), so the
+        rasterised PNG carries no dependency on a commercial logotype;
+      * the emblem is constructed here from primitives (an inverted triangle, a 45 degree
+        hatch, a nested triangle, a diamond) -- the same vocabulary the skin's chrome uses.
+
+    Rendered by: node scripts/make-decal.mjs   (writes assets/logo/endfield-decal.png)
+  -->
+  <defs>
+    <!-- The skin's hatch motif, as a reusable 45 degree stripe pattern. -->
+    <pattern id="hatch-45" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#FFFFFF" stroke-width="1.4" />
+    </pattern>
+    <!-- The hatch fades towards the apex so the badge keeps its weight at the top edge. -->
+    <linearGradient id="hatch-fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95" />
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.5" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.1" />
+    </linearGradient>
+    <mask id="hatch-mask">
+      <rect x="0" y="0" width="124" height="140" fill="url(#hatch-fade)" />
+    </mask>
+    <clipPath id="badge-clip">
+      <polygon points="4,16 116,16 60,120" />
+    </clipPath>
+    <clipPath id="badge-clip-inner">
+      <polygon points="22,26 98,26 60,92" />
+    </clipPath>
+  </defs>
+
+  <!-- ── emblem ─────────────────────────────────────────────────────────── -->
+  <g clip-path="url(#badge-clip)" mask="url(#hatch-mask)">
+    <rect x="0" y="0" width="124" height="140" fill="url(#hatch-45)" />
+  </g>
+  <!-- second, coarser hatch pass inside the nested triangle: the badge reads as printed twice -->
+  <g clip-path="url(#badge-clip-inner)" opacity="0.45">
+    <rect x="0" y="0" width="124" height="140" fill="url(#hatch-45)" />
+  </g>
+  <polygon points="4,16 116,16 60,120" fill="none" stroke="#D9D9D9" stroke-width="3" />
+  <polygon points="22,26 98,26 60,92" fill="none" stroke="#D9D9D9" stroke-width="1.4" opacity="0.6" />
+  <rect x="54" y="42" width="12" height="12" transform="rotate(45 60 48)" fill="#D9D9D9" />
+
+  <!-- ── wordmark ───────────────────────────────────────────────────────── -->
+  <text x="150" y="74" font-family="Michroma" font-size="58" letter-spacing="9" fill="#E4E4E4">ENDFIELD</text>
+  <rect x="152" y="92" width="470" height="1.5" fill="#8C8C8C" opacity="0.55" />
+  <text x="152" y="118" font-family="JetBrains Mono" font-size="15" letter-spacing="5" fill="#A6A6A6">// ENDFIELD INDUSTRIES</text>
+</svg>

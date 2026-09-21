@@ -32,22 +32,28 @@
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser } from './cdp-pipe.mjs'
+import { DECAL_URL } from '../src/settings.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DSH_URL = process.env.DSH_URL
 if (!DSH_URL) { console.error('set DSH_URL (the URL printed by dsh web)'); process.exit(2) }
 
 /**
- * Each effect's class, and the ZONE it is supposed to paint in.
+ * Each effect's classes, and the ZONE it is supposed to paint in.
  *
  * Zone and class are paired explicitly rather than by index or by a shared key: the mark
  * and the dot block both live in the transcript's right half, so "which zone does this class
  * own" is a fact about the design, not something derivable from the names.
+ *
+ * The mark needs TWO classes to be armed, because it has two renderings: the switch
+ * (`endfield-mark`) and the style (`endfield-mark-text` / `endfield-mark-decal`). The generic
+ * assertions below use the wordmark, which is the smaller of the two and therefore the harder
+ * one to detect; the decal gets its own section further down.
  */
 const EFFECTS = [
-  { name: 'headerLight', cls: 'endfield-header-light', zone: 'header' },
-  { name: 'mark', cls: 'endfield-mark', zone: 'mark' },
-  { name: 'dotBlock', cls: 'endfield-dots', zone: 'dotBlock' },
+  { name: 'headerLight', classes: ['endfield-header-light'], zone: 'header' },
+  { name: 'mark', classes: ['endfield-mark', 'endfield-mark-text'], zone: 'mark' },
+  { name: 'dotBlock', classes: ['endfield-dots'], zone: 'dotBlock' },
 ]
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -282,6 +288,27 @@ try {
 
   const withClass = async (cls, on) => evalIn(cdp,
     `(() => { document.documentElement.classList.toggle(${JSON.stringify(cls)}, ${on}); return true })()`)
+  /** The mark's two style classes. Naming them here means a third rendering has to be added. */
+  const MARK_STYLE_CLASSES = ['endfield-mark-text', 'endfield-mark-decal']
+  /** Arm exactly one mark rendering, with the switch, or disarm the mark entirely. */
+  const armMark = async (style, on) => {
+    for (const cls of MARK_STYLE_CLASSES) await withClass(cls, on && cls === style)
+    await withClass('endfield-mark', on)
+  }
+  /**
+   * Arm or disarm one effect.
+   *
+   * The mark needs the extra care of naming a STYLE, because it has two renderings and they
+   * share one pseudo-element: an app whose stored settings already armed the other one would
+   * have both rules matching, and the later rule would silently answer for the earlier. That is
+   * not hypothetical — it is what this check reported the first time the decal shipped, with the
+   * live app on `endfield-mark-decal` and the check toggling only the classes it knew about. So
+   * arming the mark always names the rendering it wants and clears the other.
+   */
+  const armEffect = async (effect, on) => {
+    if (effect.name === 'mark') { await armMark('endfield-mark-text', on); return }
+    for (const cls of effect.classes) await withClass(cls, on)
+  }
   const readZones = () => evalIn(cdp, `(() => { ${ZONE_READER} })()`)
 
   // The zone boxes are read ONCE, with all three effects on, and reused for every state below.
@@ -289,14 +316,14 @@ try {
   // `content: none` and therefore a 0x0 box (reading the mark's zone at rest gave a zero-width
   // window, and the check then reported a healthy mark as "paints nothing"), and re-reading them
   // per state made the comparison depend on which boxes happened to exist at that moment.
-  for (const e of EFFECTS) await withClass(e.cls, true)
+  for (const e of EFFECTS) await armEffect(e, true)
   await sleep(450)
   const zones = await readZones()
   const rects = {}
   for (const zone of Object.keys(ZONES)) rects[zone] = ZONES[zone](zones)
 
   // Baseline screenshot: all three off, whatever the document says.
-  for (const e of EFFECTS) await withClass(e.cls, false)
+  for (const e of EFFECTS) await armEffect(e, false)
   await sleep(400)
   const baseShot = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
   check('a fresh app paints none of the three effects',
@@ -314,8 +341,8 @@ try {
   // Each effect, one at a time: it must repaint part of its own zone, and outside the corner it
   // shares with another effect it must repaint nothing at all.
   for (const effect of EFFECTS) {
-    for (const e of EFFECTS) await withClass(e.cls, false)
-    await withClass(effect.cls, true)
+    for (const e of EFFECTS) await armEffect(e, false)
+    await armEffect(effect, true)
     await sleep(450)
     const onShot = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
     const own = await changedShare(rects[effect.zone], baseShot, onShot)
@@ -354,12 +381,12 @@ try {
    */
   const scrolledTo = (expression) => evalIn(cdp,
     `(() => { const s = document.querySelector('[data-conversation-scroll]'); s.scrollTop = ${expression}; return Math.round(s.scrollTop) })()`)
-  const markInkAt = async (expression) => {
-    await withClass('endfield-mark', false)
+  const markInkAt = async (expression, style = 'endfield-mark-text') => {
+    await armMark(style, false)
     const applied = await scrolledTo(expression)
     await sleep(450)
     const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    await withClass('endfield-mark', true)
+    await armMark(style, true)
     await sleep(450)
     const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
     return { applied, ...(await changedShare(rects.mark, off, on)) }
@@ -380,6 +407,72 @@ try {
     `scrolled ${atTop.applied} -> ${atTail.applied}: ${inkWhere(atTop)} then ${inkWhere(atTail)} (a carried mark would move by the scroll delta)`)
   await scrolledTo('s.scrollHeight')
 
+  /**
+   * The decal: the mark's second rendering, and the one that needs the host half.
+   *
+   * Two claims are checked here and they fail differently. The BOX is a CSS claim — the wordmark
+   * is a tall thin strip, the plate is a wide one — and it holds with nothing but the bundle. The
+   * PAINT is an end-to-end claim: it also needs the plate to be served, and the host half is
+   * loaded once per `dsh web` start, so a stale host half answers 404 and the plate is simply
+   * absent. That state is reported as a NOTE and the paint assertion is skipped: "the app has not
+   * been restarted since the route shipped" is a deployment fact, and the alternative — calling
+   * it a pass — is how a broken asset URL survives a green suite.
+   */
+  const markBoxNow = () => evalIn(cdp, `(() => {
+    const panel = document.querySelector('[data-conversation-content]')
+    const cs = getComputedStyle(panel, '::before')
+    const b = panel.getBoundingClientRect()
+    const right = parseFloat(cs.right) || 0, top = parseFloat(cs.top) || 0
+    const w = parseFloat(cs.width) || 0, h = parseFloat(cs.height) || 0
+    return {
+      width: w, height: h, content: cs.content,
+      background: cs.backgroundImage.startsWith('url("data:') ? 'data: URI' : cs.backgroundImage.slice(0, 70),
+      zone: [Math.round(b.right - right - w), Math.round(b.top + top), Math.round(w), Math.round(h)],
+    }
+  })()`)
+  const served = await evalIn(cdp, `(async () => {
+    try {
+      const r = await fetch(${JSON.stringify(DECAL_URL)}, { cache: 'no-store' })
+      return { status: r.status, type: r.headers.get('content-type'), bytes: (await r.arrayBuffer()).byteLength }
+    } catch (error) { return { status: 0, error: String(error) } }
+  })()`)
+
+  await armMark('endfield-mark-text', true)
+  await sleep(350)
+  const textBox = await markBoxNow()
+  await armMark('endfield-mark-decal', true)
+  await sleep(450)
+  const decalBox = await markBoxNow()
+  check('mark: the wordmark and the plate are two different renderings',
+    textBox.height > textBox.width * 3 && decalBox.width > decalBox.height * 3,
+    `wordmark ${Math.round(textBox.width)}x${Math.round(textBox.height)} px (a vertical strip), `
+    + `plate ${Math.round(decalBox.width)}x${Math.round(decalBox.height)} px (a horizontal one); plate background ${decalBox.background}`)
+
+  if (served.status !== 200) {
+    console.log(`\n[NOTE] the plate is not served by the running host half yet: GET ${DECAL_URL} -> ${served.status}.`)
+    console.log('       The route ships in src/index.ts, and the host half is loaded once per "dsh web" start,')
+    console.log('       so it takes a restart to appear. The decal PAINT assertion did not run (not a pass).')
+  } else {
+    check('the plate is served by the host half as an image',
+      served.type === 'image/png' && served.bytes > 4000,
+      `GET ${DECAL_URL} -> ${served.status} ${served.type}, ${served.bytes} bytes`)
+    await armMark('endfield-mark-decal', false)
+    await scrolledTo('s.scrollHeight')
+    await sleep(400)
+    const decalOff = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    await armMark('endfield-mark-decal', true)
+    await sleep(450)
+    const decalOn = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    const decal = await changedShare(decalBox.zone, decalOff, decalOn)
+    check('mark (decal): the plate prints on the panel, at the tail',
+      decal.share > 0.005,
+      `${decal.changed}/${decal.n} px changed (${(decal.share * 100).toFixed(2)}%) in x ${decalBox.zone[0]}..${decalBox.zone[0] + decalBox.zone[2]}, `
+      + `y ${decalBox.zone[1]}..${decalBox.zone[1] + decalBox.zone[3]}, peak delta ${decal.maxDelta}`)
+  }
+  // Leave the app with neither rendering armed; the classes were never stored.
+  await armMark('endfield-mark-decal', false)
+  await scrolledTo('s.scrollHeight')
+
   // The mark's own variable drives its content, and it is published even when the mark is off.
   //
   // It is NOT compared against the default: `markText` is a user setting by design (someone
@@ -396,7 +489,7 @@ try {
 
   // All three together must be allowed, since each keeps to its own zone — and each zone must
   // still show its OWN effect's change against the all-off baseline.
-  for (const e of EFFECTS) await withClass(e.cls, true)
+  for (const e of EFFECTS) await armEffect(e, true)
   await sleep(450)
   const allShot = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
   const all = {}
@@ -406,7 +499,7 @@ try {
     `changed-pixel share per zone: ${EFFECTS.map((e) => `${e.name} ${(all[e.zone].share * 100).toFixed(2)}%`).join(', ')}`)
 
   // Leave the app as it was found: the classes were toggled on the live root, not stored.
-  for (const e of EFFECTS) await withClass(e.cls, false)
+  for (const e of EFFECTS) await armEffect(e, false)
   await sleep(200)
 
   if (knownBroken.size > 0) {

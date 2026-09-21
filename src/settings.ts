@@ -66,12 +66,34 @@ export const SKIN_SETTINGS_DEFAULTS = {
   /** The halftone block in the transcript's upper-right corner. */
   dotBlock: false,
   /**
+   * How the page mark is set: the vertical wordmark, or the printed logo plate.
+   *
+   * Two renderings of one idea, not two effects -- they occupy the same corner, and a page has
+   * room for one mark in it. The plate is the default because a decal reads as printing on the
+   * page at any size, while the wordmark only works as a small vertical strip (it is outline
+   * text: set large it competes with the transcript, set small it stops being legible).
+   * Both ship because the choice is taste, and the earlier round's lettering is not something
+   * a later round gets to delete on the user's behalf.
+   */
+  markStyle: 'decal' as 'decal' | 'text',
+  /**
    * The mark's text. Kept as a setting rather than a constant because the mark is the
    * one effect whose value depends on the person using it -- someone who does not want
    * the studio's wordmark can put a project, a branch or a role call sign there
    * instead. Normalised (upper-cased, trimmed, length-capped) before it is painted.
    */
   markText: 'ENDFIELD',
+  /**
+   * How strongly the printed plate reads, and how large it is set.
+   *
+   * The decal is drawn UNDER the transcript on purpose -- it is a print on the page, not a
+   * sticker on the glass -- so its opacity is what decides whether it is a watermark or a
+   * stain, and 0.12 is the value that reads on the dark canvas without touching legibility.
+   * Measured, not guessed: `scripts/probe-decal-live.mjs` prints the ink it contributes.
+   */
+  decalOpacity: 0.12,
+  /** Multiplier on the plate's width. 1 puts it at 46% of the panel, which is about 600px. */
+  decalScale: 1,
 }
 
 /** Longest mark accepted. A wordmark is read as a mark, not as a sentence. */
@@ -122,7 +144,49 @@ export interface SkinSettings {
   headerLight: boolean
   mark: boolean
   dotBlock: boolean
+  markStyle: 'decal' | 'text'
   markText: string
+  decalOpacity: number
+  decalScale: number
+}
+
+/** The two renderings of the page mark. */
+export const MARK_STYLES = ['decal', 'text'] as const
+
+/** Coerce an arbitrary stored value into a known mark style. */
+export function safeMarkStyle(value: unknown): 'decal' | 'text' {
+  return value === 'text' ? 'text' : SKIN_SETTINGS_DEFAULTS.markStyle
+}
+
+/** How wide the plate is set, as a share of the panel, at scale 1. */
+export const DECAL_WIDTH_SHARE = 0.46
+
+/**
+ * The plate's own address and proportions, named once for both halves.
+ *
+ * The URL is spelled here rather than in each place it is used because three unrelated files
+ * need it to agree: the host half serves it, the decor sheet paints it, and the settings page
+ * previews it. A route rename that reaches two of the three is a blank decal that no type check
+ * would catch.
+ */
+export const DECAL_ROUTE = '/skin-endfield/logo'
+export const DECAL_FILE = 'endfield-decal.png'
+export const DECAL_URL = `${DECAL_ROUTE}/${DECAL_FILE}`
+/** The asset's own aspect ratio, as CSS spells it (`aspect-ratio: 624 / 113`). */
+export const DECAL_ASPECT_CSS = '624 / 113'
+
+/** Coerce a stored decal opacity into 0..1. */
+export function safeDecalOpacity(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(1, Math.max(0, value))
+    : SKIN_SETTINGS_DEFAULTS.decalOpacity
+}
+
+/** Coerce a stored decal scale into 0.4..1.8. Below that the lockup stops being readable. */
+export function safeDecalScale(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(1.8, Math.max(0.4, value))
+    : SKIN_SETTINGS_DEFAULTS.decalScale
 }
 
 /**
@@ -179,6 +243,9 @@ export function normalizeSkinSettings(section: unknown): SkinSettings {
     dotBlock: raw.dotBlock === undefined
       ? SKIN_SETTINGS_DEFAULTS.dotBlock
       : raw.dotBlock === true,
+    markStyle: safeMarkStyle(raw.markStyle),
     markText: safeMarkText(raw.markText),
+    decalOpacity: safeDecalOpacity(raw.decalOpacity),
+    decalScale: safeDecalScale(raw.decalScale),
   }
 }

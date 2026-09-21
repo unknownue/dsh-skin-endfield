@@ -16,7 +16,18 @@
  * through the bound scope, so the effect on the skin is visible while the panel
  * is open; there is no save step to get out of step with what is painted.
  */
-import { HEX_COLOR, MARK_TEXT_MAX, SKIN_SETTINGS_DEFAULTS, safeAccent, safeMarkText, safeTint } from '../settings.ts'
+import {
+  DECAL_URL,
+  HEX_COLOR,
+  MARK_TEXT_MAX,
+  SKIN_SETTINGS_DEFAULTS,
+  safeAccent,
+  safeDecalOpacity,
+  safeDecalScale,
+  safeMarkStyle,
+  safeMarkText,
+  safeTint,
+} from '../settings.ts'
 import type { SettingsScope } from '../types.ts'
 import { accentScale } from './colors.ts'
 
@@ -45,7 +56,10 @@ interface SkinDraft {
   headerLight: boolean
   mark: boolean
   dotBlock: boolean
+  markStyle: 'decal' | 'text'
   markText: string
+  decalOpacity: number
+  decalScale: number
 }
 
 export interface SkinSectionProps {
@@ -84,7 +98,10 @@ export function createSkinSection(React: ReactLike) {
       headerLight: value.headerLight === undefined ? SKIN_SETTINGS_DEFAULTS.headerLight : value.headerLight === true,
       mark: value.mark === undefined ? SKIN_SETTINGS_DEFAULTS.mark : value.mark === true,
       dotBlock: value.dotBlock === undefined ? SKIN_SETTINGS_DEFAULTS.dotBlock : value.dotBlock === true,
+      markStyle: safeMarkStyle(value.markStyle),
       markText: safeMarkText(typeof value.markText === 'string' ? value.markText : undefined),
+      decalOpacity: safeDecalOpacity(value.decalOpacity),
+      decalScale: safeDecalScale(value.decalScale),
     }
   }
 
@@ -353,8 +370,105 @@ export function createSkinSection(React: ReactLike) {
     const markRow = effectRow(
       'mark',
       'Page mark',
-      'A vertical wordmark in the right margin of the transcript — the one column that holds no prose. Reads as a page mark rather than as text.',
+      'One mark, in the right margin of the transcript — the column that holds no prose. It is set either as a wordmark or as the printed logo plate; pick which below.',
       'Show the mark',
+    )
+
+    /**
+     * Which of the two renderings the mark uses.
+     *
+     * A select rather than two switches, because the two would then be able to disagree: they
+     * occupy the same corner, and "both on" is not a configuration — it is an overlap. The
+     * hint says what each one is for, since the choice is really "do I want lettering or a
+     * print on the page".
+     */
+    const markStyleRow = row(
+      'Mark style',
+      'Wordmark: the vertical outline lettering. Logo decal: the grey plate, printed under the transcript like a water-transfer decal.',
+      [
+        h('select', {
+          key: 'sel',
+          value: draft.markStyle,
+          disabled: !draft.mark,
+          onChange: (e: { target: { value: string } }) => commit('markStyle', safeMarkStyle(e.target.value)),
+          style: {
+            width: '220px',
+            fontFamily: 'var(--ds-font-family-code)',
+            fontSize: '12px',
+            letterSpacing: '0.06em',
+            padding: '5px 8px',
+            borderRadius: '0',
+            border: '1px solid var(--dsw-alias-border-l2)',
+            background: 'var(--dsw-alias-bg-layer-1)',
+            color: 'var(--dsw-alias-label-primary)',
+            opacity: draft.mark ? 1 : 0.5,
+          },
+        }, [
+          h('option', { key: 'decal', value: 'decal' }, 'Logo decal (plate)'),
+          h('option', { key: 'text', value: 'text' }, 'Vertical wordmark'),
+        ]),
+        /**
+         * The plate itself, at the opacity in force, on the canvas colour.
+         *
+         * Painted as a background rather than an <img> on purpose: the asset comes from the
+         * plugin's own route, and a route the running host half has not loaded yet answers 404.
+         * A background that fails to load paints nothing; an <img> that fails to load shows a
+         * broken-image glyph, which reads as "the page is broken" instead of "the host half
+         * needs a restart".
+         */
+        h('span', {
+          key: 'preview',
+          style: {
+            display: 'inline-block',
+            width: '180px',
+            height: '44px',
+            padding: '4px 8px',
+            boxSizing: 'content-box',
+            background: 'var(--dsw-specific-canvas, #191919)',
+            border: '1px solid var(--dsw-alias-border-l1)',
+            opacity: draft.markStyle === 'decal' ? Math.max(draft.decalOpacity, 0.2) : 1,
+            backgroundImage: `url("${DECAL_URL}")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'left center',
+            backgroundSize: 'contain',
+            backgroundColor: 'var(--dsw-specific-canvas, #191919)',
+          },
+        }),
+      ],
+    )
+
+    const decalOpacityRow = row(
+      'Decal opacity',
+      'How strongly the plate prints. It is drawn under the transcript, so this is the knob between "watermark" and "stain".',
+      [
+        h('input', {
+          key: 'range',
+          type: 'range',
+          min: 0, max: 0.6, step: 0.01,
+          value: draft.decalOpacity,
+          disabled: !draft.mark || draft.markStyle !== 'decal',
+          onInput: (e: { target: { value: string } }) => commit('decalOpacity', safeDecalOpacity(Number(e.target.value))),
+          style: { width: '180px', accentColor: 'var(--endfield-focus)', opacity: draft.mark && draft.markStyle === 'decal' ? 1 : 0.5 },
+        }),
+        h('span', { key: 'val', style: { fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, draft.decalOpacity.toFixed(2)),
+      ],
+    )
+
+    const decalScaleRow = row(
+      'Decal scale',
+      'The plate is set to 46% of the panel\'s width at 1. It sits below the halftone block and above the composer, which is the space the transcript leaves free.',
+      [
+        h('input', {
+          key: 'range',
+          type: 'range',
+          min: 0.4, max: 1.8, step: 0.05,
+          value: draft.decalScale,
+          disabled: !draft.mark || draft.markStyle !== 'decal',
+          onInput: (e: { target: { value: string } }) => commit('decalScale', safeDecalScale(Number(e.target.value))),
+          style: { width: '180px', accentColor: 'var(--endfield-focus)', opacity: draft.mark && draft.markStyle === 'decal' ? 1 : 0.5 },
+        }),
+        h('span', { key: 'val', style: { fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, `${draft.decalScale.toFixed(2)}x`),
+      ],
     )
     const dotRow = effectRow(
       'dotBlock',
@@ -363,17 +477,17 @@ export function createSkinSection(React: ReactLike) {
       'Show the block',
     )
 
-    /** The mark's text, only meaningful while the mark itself is on. */
+    /** The wordmark's text, only meaningful while the mark is on AND set to the wordmark. */
     const markTextRow = row(
       'Mark text',
-      `The wordmark\u2019s text, up to ${MARK_TEXT_MAX} characters; upper-cased and trimmed.`,
+      `The wordmark\u2019s text, up to ${MARK_TEXT_MAX} characters; upper-cased and trimmed. The logo decal carries its own lettering, so this row only applies to the vertical wordmark.`,
       [
         h('input', {
           key: 'txt',
           type: 'text',
           maxLength: MARK_TEXT_MAX,
           value: draft.markText,
-          disabled: !draft.mark,
+          disabled: !draft.mark || draft.markStyle !== 'text',
           onInput: (e: { target: { value: string } }) => commit('markText', safeMarkText(e.target.value)),
           style: {
             width: '200px',
@@ -385,7 +499,7 @@ export function createSkinSection(React: ReactLike) {
             border: '1px solid var(--dsw-alias-border-l2)',
             background: 'var(--dsw-alias-bg-layer-1)',
             color: 'var(--dsw-alias-label-primary)',
-            opacity: draft.mark ? 1 : 0.5,
+            opacity: draft.mark && draft.markStyle === 'text' ? 1 : 0.5,
           },
         }),
       ],
@@ -403,7 +517,7 @@ export function createSkinSection(React: ReactLike) {
       accentRow, tintRow, surfaceRow, bloomRow, radiusRow, prefixRow,
       h('p', { key: 'fx', style: { margin: '20px 0 0', fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } },
         'Page effects — three independent treatments, each in its own zone. Off by default; any combination is safe.'),
-      headerLightRow, markRow, markTextRow, dotRow,
+      headerLightRow, markRow, markStyleRow, markTextRow, decalOpacityRow, decalScaleRow, dotRow,
       error
         ? h('p', { style: { margin: '10px 0 0', fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, `Save failed: ${error}`)
         : null,
@@ -421,7 +535,10 @@ export function createSkinSection(React: ReactLike) {
             commit('headerLight', SKIN_SETTINGS_DEFAULTS.headerLight)
             commit('mark', SKIN_SETTINGS_DEFAULTS.mark)
             commit('dotBlock', SKIN_SETTINGS_DEFAULTS.dotBlock)
+            commit('markStyle', SKIN_SETTINGS_DEFAULTS.markStyle)
             commit('markText', SKIN_SETTINGS_DEFAULTS.markText)
+            commit('decalOpacity', SKIN_SETTINGS_DEFAULTS.decalOpacity)
+            commit('decalScale', SKIN_SETTINGS_DEFAULTS.decalScale)
           },
         }),
       ),

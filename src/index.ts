@@ -4,8 +4,9 @@
  * The host row exists for three reasons:
  *   1. it makes this package a loader entry, which is what makes the harness
  *      pick up the `dsh.client` browser bundle at all;
- *   2. it serves the vendored open-source font faces from `/skin-endfield/fonts/`
- *      so the browser half never needs a data: URI or an external CDN;
+ *   2. it serves two read-only directories the browser half cannot embed: the
+ *      vendored open-source font faces at `/skin-endfield/fonts/`, and the decal
+ *      plate at `/skin-endfield/logo/`, so neither needs a data: URI or a CDN;
  *   3. it registers the durable settings namespace behind the Skin settings
  *      page, so the accent tint survives a reload instead of living in memory.
  *
@@ -54,31 +55,47 @@ export const SkinSettingsSchema = z.object({
   headerLight: z.boolean().default(SKIN_SETTINGS_DEFAULTS.headerLight),
   mark: z.boolean().default(SKIN_SETTINGS_DEFAULTS.mark),
   dotBlock: z.boolean().default(SKIN_SETTINGS_DEFAULTS.dotBlock),
+  markStyle: z.union([z.const('decal'), z.const('text')]).default(SKIN_SETTINGS_DEFAULTS.markStyle),
   markText: z.string().default(SKIN_SETTINGS_DEFAULTS.markText),
+  decalOpacity: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.decalOpacity),
+  decalScale: z.number().min(0.4).max(1.8).default(SKIN_SETTINGS_DEFAULTS.decalScale),
 })
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-/** `lib/` -> package root; fonts are shipped in `assets/fonts`. */
+/** `lib/` -> package root; fonts and the decal plate are shipped under `assets/`. */
 const FONT_DIR = join(HERE, '..', 'assets', 'fonts')
+/**
+ * The decal plate lives in its own directory rather than under a general `assets` route.
+ *
+ * `assets/screenshots`, `assets/in-game-frames` and `assets/ui-primitives` are design
+ * REFERENCES: they exist so this skin's chrome could be measured against the game, and they are
+ * explicitly not part of what the skin ships. A route that served `assets/` wholesale would put
+ * them one URL away from every browser that loads the skin, so only the plate's own directory
+ * is exposed — the compliance line in the README is worth exactly as much as this constant.
+ */
+const LOGO_DIR = join(HERE, '..', 'assets', 'logo')
 export const FONT_ROUTE = '/skin-endfield/fonts'
+export const LOGO_ROUTE = '/skin-endfield/logo'
 
 const MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
   '.ttf': 'font/ttf',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
   '.txt': 'text/plain; charset=utf-8',
 }
 
 /**
- * Serve `assets/fonts` read-only. `path` is normalised and then checked against
- * the font directory, so `..` cannot escape it.
+ * Serve one directory read-only. `path` is normalised and then checked against that directory,
+ * so `..` cannot escape it.
  */
-function handleFontRequest(rawUrl: string | undefined, res: ServerResponse): void {
+function serveFrom(dir: string, route: string, rawUrl: string | undefined, res: ServerResponse): void {
   const pathOnly = (rawUrl ?? '').split('?')[0] ?? ''
-  const relative = decodeURIComponent(pathOnly.slice(FONT_ROUTE.length)).replace(/^\/+/, '')
-  const target = normalize(join(FONT_DIR, relative))
+  const relative = decodeURIComponent(pathOnly.slice(route.length)).replace(/^\/+/, '')
+  const target = normalize(join(dir, relative))
 
-  if (!target.startsWith(FONT_DIR + sep)) {
+  if (!target.startsWith(dir + sep)) {
     res.statusCode = 403
     res.end('forbidden')
     return
@@ -99,7 +116,7 @@ function handleFontRequest(rawUrl: string | undefined, res: ServerResponse): voi
   const ext = dot >= 0 ? target.slice(dot).toLowerCase() : ''
   res.setHeader('content-type', MIME[ext] ?? 'application/octet-stream')
   res.setHeader('content-length', String(size))
-  // Vendored faces are immutable per release; keep them cacheable.
+  // Vendored faces and the generated plate are immutable per release; keep them cacheable.
   res.setHeader('cache-control', 'public, max-age=86400')
   createReadStream(target).pipe(res)
 }
@@ -149,9 +166,17 @@ export function apply(ctx: HostContext): void {
     kind: 'prefix',
     path: FONT_ROUTE,
     handler: (req, res) => {
-      handleFontRequest(req.url, res)
+      serveFrom(FONT_DIR, FONT_ROUTE, req.url, res)
     },
   }), 'dsh-skin-endfield: font route')
 
-  ctx.logger?.info?.(`dsh-skin-endfield: serving fonts at ${FONT_ROUTE}`)
+  ctx.effect?.(() => ctx.webServer?.register({
+    kind: 'prefix',
+    path: LOGO_ROUTE,
+    handler: (req, res) => {
+      serveFrom(LOGO_DIR, LOGO_ROUTE, req.url, res)
+    },
+  }), 'dsh-skin-endfield: logo route')
+
+  ctx.logger?.info?.(`dsh-skin-endfield: serving fonts at ${FONT_ROUTE} and the decal at ${LOGO_ROUTE}`)
 }

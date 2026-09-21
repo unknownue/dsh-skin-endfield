@@ -314,7 +314,15 @@ try {
   console.log(`session mounted: ${opened.mounted}`)
   // Read the geometry with the effect ON: a pseudo-element whose class is off resolves to
   // `content: none` and a 0x0 box, which is a reading of "switched off", not of the rules.
-  const withClass = (on) => evalIn(cdp, `(() => { document.documentElement.classList.toggle('endfield-mark', ${on}); return true })()`)
+  // Both classes are needed since the mark grew a style: the switch says a mark exists, the
+  // style says which one, and this probe is about the WORDMARK rendering.
+  const withClass = (on) => evalIn(cdp, `(() => {
+    const root = document.documentElement
+    root.classList.toggle('endfield-mark', ${on})
+    root.classList.toggle('endfield-mark-text', ${on})
+    root.classList.remove('endfield-mark-decal')
+    return [...root.classList].filter((c) => c.startsWith('endfield-mark')).join(' ')
+  })()`)
   console.log(`--- the app as found (before this probe touched it) ---`)
   const asFound = await evalIn(cdp, `(() => ({
     classes: [...document.documentElement.classList].join(' '),

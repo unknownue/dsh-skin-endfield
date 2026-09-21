@@ -109,6 +109,25 @@ export const MARK_CLASS = 'endfield-mark'
 export const DOT_BLOCK_CLASS = 'endfield-dots'
 
 /**
+ * The two renderings of the page mark, one class each.
+ *
+ * The switch (`endfield-mark`) says a mark exists; the style class says which mark. Both are
+ * needed, and they are separate because the style is also the thing that decides which
+ * pseudo-element contract the sheet owes: the wordmark is outline text with `writing-mode`,
+ * the plate is a background image with a box, and a single rule trying to be both would have
+ * to switch `content`, `writing-mode`, `background-image` and the geometry at once.
+ *
+ * Exactly one style class is on at a time (see `applySkinSettings`), so the switch never has
+ * two marks fighting for the same corner.
+ */
+export const MARK_DECAL_CLASS = 'endfield-mark-decal'
+export const MARK_TEXT_CLASS = 'endfield-mark-text'
+
+/** The plate's own knobs: how strongly it prints, how large it is set. */
+export const DECAL_OPACITY_VAR = '--endfield-decal-opacity'
+export const DECAL_SCALE_VAR = '--endfield-decal-scale'
+
+/**
  * The mark's text, written as a quoted CSS string.
  *
  * `content` needs a quoted string, and the value is a user-editable one -- so the quotes
@@ -181,7 +200,13 @@ export function applySkinSettings(
   root.classList.toggle(HEADER_LIGHT_CLASS, settings.headerLight)
   root.classList.toggle(MARK_CLASS, settings.mark)
   root.classList.toggle(DOT_BLOCK_CLASS, settings.dotBlock)
+  // The style classes follow the switch, so turning the mark off leaves neither rendering
+  // half-armed, and switching style is one idempotent call rather than a remove-then-add.
+  root.classList.toggle(MARK_DECAL_CLASS, settings.mark && settings.markStyle === 'decal')
+  root.classList.toggle(MARK_TEXT_CLASS, settings.mark && settings.markStyle === 'text')
   root.style.setProperty(MARK_TEXT_VAR, cssContentString(settings.markText))
+  root.style.setProperty(DECAL_OPACITY_VAR, String(settings.decalOpacity))
+  root.style.setProperty(DECAL_SCALE_VAR, String(settings.decalScale))
 
   theme?.overrideTokens(TOKEN_SOURCE, endfieldTokens(settings))
 
@@ -194,6 +219,8 @@ export function clearSkinSettings(): void {
   root.classList.remove(SURFACE_CLASS)
   root.classList.remove(HEADER_LIGHT_CLASS)
   root.classList.remove(MARK_CLASS)
+  root.classList.remove(MARK_DECAL_CLASS)
+  root.classList.remove(MARK_TEXT_CLASS)
   root.classList.remove(DOT_BLOCK_CLASS)
   root.style.removeProperty(ACCENT_VAR)
   root.style.removeProperty(ACCENT_INK_VAR)
@@ -204,6 +231,8 @@ export function clearSkinSettings(): void {
   root.style.removeProperty(PREFIX_VAR)
   root.style.removeProperty(SURFACE_VAR)
   root.style.removeProperty(MARK_TEXT_VAR)
+  root.style.removeProperty(DECAL_OPACITY_VAR)
+  root.style.removeProperty(DECAL_SCALE_VAR)
 }
 
 /** The values in force when nothing has been stored. */

@@ -31,6 +31,11 @@
 | **Bloom** | 描边外发光强度，`0` 只留描边不留光 | `0.28` |
 | **Corner radius** | `0` 保持直角；正数可把被压平的表面重新圆回来 | `0` |
 | **Section marker** | 是否显示 `//` 前缀标记 | 开 |
+| **Page mark** | 正文右缘的"页标"总开关（关着时两个渲染都不画） | 关 |
+| **Mark style** | 页标用哪种渲染：**Logo decal**（灰色印版水贴）/ **Vertical wordmark**（竖排描边文字） | Logo decal |
+| **Mark text** | 竖排 wordmark 的文字（只对该渲染生效） | `ENDFIELD` |
+| **Decal opacity** | 印版浓淡（0–0.6） | `0.12` |
+| **Decal scale** | 印版大小（0.4–1.8×，1× = 面板宽的 46%） | `1` |
 
 ### Panel fill 关掉时，关掉的到底是什么
 
@@ -76,13 +81,14 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 
 ## 验证
 
-`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**26 步**（离线 7 + live 19）：
+`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**27 步**（离线 8 + live 19）：
 
 | 层 | 脚本 | 证明什么 |
 |----|------|---------|
-| 离线 | `verify-client.mjs` **27** | bundle 契约、89 令牌、装饰层护栏、卸载对称性、**改 Accent 会重铺令牌层**、**跨色相推导都够对比度**、**设置页控件与提交路径**、**错误色是红不是品红**、**每条 `_bubble` 规则都必须排除 tooltip**、**横幅 `//` 前缀不落在运行行上** |
-| 离线 | `verify-host.mjs` **11** | 字体路由、路径穿越防护、设置命名空间的两侧行为 |
-| 离线 | `verify-settings-parity.mjs` **4** | schema 默认值与浏览器回退值一致 |
+| 离线 | `verify-client.mjs` **27** | bundle 契约、89 令牌、装饰层护栏、卸载对称性、**改 Accent 会重铺令牌层**、**跨色相推导都够对比度**、**设置页控件与提交路径**（含页标样式选择与两个印版数值的守卫）、**错误色是红不是品红**、**每条 `_bubble` 规则都必须排除 tooltip**、**横幅 `//` 前缀不落在运行行上** |
+| 离线 | `verify-host.mjs` **13** | 字体路由 + **印版路由**、路径穿越防护（含**不能跨目录读到研究素材**）、设置命名空间的两侧行为 |
+| 离线 | `verify-settings-parity.mjs` **4** | schema 默认值与浏览器回退值一致（13 个字段） |
+| 离线 | `make-decal.mjs --check` | 发货印版**每个上色像素 R=G=B**、有 alpha、体积合理 —— "纯灰"是被断言的，不是被假设的 |
 | 离线 | `verify-install.ps1` | profile 能否装载这个包 |
 | 离线 | `smoke-browser.mjs` | 真浏览器里 apply/dispose + 截图 |
 | live | `verify-composition.mjs` | 运行中的组合确实发出了本插件 |
@@ -104,7 +110,7 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 | live | `verify-title-underline-live.mjs` **12** | 标题下的**当前位置实线**：2px 实心浅灰、用外壳的**文字灰 token**（不是用户配的 accent，也不是焦点色）、是 overlay（不推动标题）、**离顶栏分隔线留足 12px**、两端内缩（量的是文字盒而不是整块 chip）、**跟着标题宽度变化** |
 | live | `verify-diff-colors-live.mjs` **6** | 右侧栏 diff **不受 accent 影响**：新增行永远是外壳的绿（深色 `#4ED17E` / 浅色 `#22C55E`）、删除行永远是外壳的红、两者都过**通道判据**（不只是比 hex）、**新增行色既不是用户配的 accent 也不是默认 accent**，而**品牌族（模块图标 / 发送键）仍然跟着 accent 走** |
 | live | `verify-header-tabs-live.mjs` **12** | 顶栏单位行（Chat / Trajectory / Files / Tasks / Papers）：**非激活单元会回应指针**，而且**用的就是点击后那块 plate 的颜色**（实测 hover `rgb(146,201,255)` 与当前 plate **完全相同**，比 band 强 **155 级平均通道**），墨色在该填充上**对比度 10.06:1**；**当前单元保持自己的 plate 不被染色**；整行居中于顶栏、每个单元直角 |
-| live | `verify-page-effects-live.mjs` **14** | 三个页面特效（顶栏光 / 竖排 wordmark / 点阵块）**各自独立**、开关只管自己那一区；**mark 在正文的两个滚动端都作画、且两次的墨迹盒一致（±3px）** —— 也就是"钉在面板上的页标"，而不是随正文滚走的内容（这条断言就是本轮修掉的那个缺陷）。`KNOWN_BROKEN` 现在为空 |
+| live | `verify-page-effects-live.mjs` **15** | 三个页面特效（顶栏光 / 页标 / 点阵块）**各自独立**、开关只管自己那一区；**mark 在正文的两个滚动端都作画、且两次的墨迹盒一致（±3px）** —— 也就是"钉在面板上的页标"，而不是随正文滚走的内容（这条断言就是本轮修掉的那个缺陷）；**两种渲染确实是两种**（竖排 22×206 的细条 vs 印版 600×109 的横条）；印版是否由宿主半边送达（404 时**明确打印 NOTE 并跳过**，绝不记成通过） |
 
 **离线层读源码，live 层读运行中 GUI 的计算值。** 两者不可互相替代 —— 本轮踩过的坑几乎都来自"只用前者"：装饰层曾把生成式 CSS 交给捆包器，源码求值正确、离线全绿，而**产物里那段规则根本不存在**。改动装饰层后请 grep **bundle** 确认规则在里面。
 
@@ -127,6 +133,8 @@ live 层需要 `DSH_URL`：脚本会自己从 `~/.dsh-web.out.log` 捞 token，�
 `pnpm inspect:composer` 是第三个：在给输入框/气泡加装饰之前跑它，报每个候选元素的**伪元素占用情况、定位上下文、display、overflow**。角括号要在同一个元素上占掉 `::before` 和 `::after`，而输入框和气泡恰好都是"已经拿伪元素干别的事"的那类表面，所以这一步是必需的——它当场发现气泡是 `display: block` 而非 inline-block（从而需要一个显式的 `position: relative`，见下）。
 
 `pnpm probe:mark`（`scripts/probe-mark-visibility.mjs`）是给"某个装饰**画了但看不见**"这类问题准备的：它一次报出（1）正文里到底是**哪个元素在滚**（从内容格向外、向里各走一遍，带 `overflow`/`scrollTop`）、（2）mark 伪元素被浏览器解析成什么（`content`/盒子/偏移/描边，以及这些偏移把它放到**哪个绝对坐标**）、（3）那个坐标落进的**裁剪矩形**、（4）**三种滚动位置上的像素差分** —— 于是"墨水不存在"与"墨水不在视野里"变成两个可分辨的读数。同一个脚本还会把候选锚点**注入**到运行中的页面里逐个量（`::before` / `::after` / 父级，以及 `z-index` 0/2/4），所以"换哪个钩子"是量出来的而不是争论出来的；注入的东西当场移除、不写设置。
+
+`pnpm probe:decal`（`scripts/probe-decal-live.mjs`）是它的姊妹，专治图像类装饰"看不见"的三种原因，而且**依次**排除：印版有没有被宿主送达（先 `fetch` 那条路由，404 时明确说明"宿主半边还没重启"）、规则有没有被武装（它自己加 `endfield-mark` + 样式类）、墨到底有没有落在画面上（像素差分 + 变化像素的包围盒）。它把盘上的 PNG 以 `--endfield-decal-image` 注入，所以**宿主没重启也能量**；随后按 `z-index` / `opacity` / `top` / `scale` 走一遍网格并逐档截图，于是"0.12 在这个位置"可以和它的邻居用眼睛比，而不是靠猜。
 
 ## 顶栏：先纠正"有几条"
 
@@ -458,6 +466,61 @@ body [data-phase] [data-composer-seat][class] {
 
 > **它是面板的属性，所以在空会话页上也会画。** `New Session` 页同样有这块面板（实测同一盒子 280,52,1304×853），mark 在那里照样出现在右上角（同一列区实测约 1455 设备像素变化）—— 和点阵块的行为一致：两者都是"正文面板"的页面处理，不是某条消息的装饰。
 
+## Logo 水贴：印版资产与它的管线（装饰层 18b-ii）
+
+竖排描边文字的表现被指出不满意之后，页标多了第二种渲染：**把 Endfield 风格的锁定组合做成一张纯灰印版，像水贴一样印在正文面板上**。设置页里 `Page mark` 是总开关，`Mark style` 在两种渲染之间选一个。
+
+### 它不是官方图稿，是同语言的清稿
+
+`docs/design-reference/06-logo-notes.md` 记录了检索到的事实与来源（倒三角企业徽标、与罗德岛正三角的刻意对照、`ENDFIELD` + `INDUSTRIES` 的配对、横排 ≈6:1、官方字标为定制字且无公开规格……），以及合规边界：**官方 logo 不随皮肤分发**。所以印版由本仓库自己的构件生成：
+
+| 构件 | 来源 |
+|------|------|
+| 倒三角 + 45° 网纹 + 内层三角 + 菱形 | 皮肤已有的母题（网纹出自官方 CSS 的 hatch，菱形是节点标记） |
+| `ENDFIELD` 字标 | 用 **Michroma** 重新排字，不是复刻定制字标 |
+| `// ENDFIELD INDUSTRIES` | 设定内机构名，替代官方标语（标语属可识别口号，不用） |
+| 纯灰 | 印版只有一种墨（`#D9D9D9`），浓淡由皮肤用 `opacity` 决定 |
+
+### 为什么是 PNG，以及那条管线
+
+字标要真字型，而 **CSS `background-image` 里的 SVG 不能加载 webfont** —— 所以印版在真浏览器里渲染成 PNG：
+
+```sh
+pnpm decal:render     # assets/logo/endfield-decal.svg -> endfield-decal.png（2x，纯灰 + 透明）
+pnpm decal:check      # 断言发货的 PNG 每个上色像素 R=G=B、有 alpha、体积合理
+```
+
+渲染走的是"**黑底出白稿 → 亮度转 alpha → 换印版灰**"这一条路：不依赖 `omitBackground`（那是浏览器版本一换就可能静默出白底的细节），而是让黑底自然消失。同一条路也用来"处理别人的图"：
+
+```sh
+node scripts/make-decal.mjs --source your-logo.png --out tmp/my-decal.png              # 亮底上的图
+node scripts/make-decal.mjs --source your-logo.png --polarity dark --out tmp/x.png     # 暗字亮底
+```
+
+它把任意图**亮度→alpha、颜色→印版灰**，于是"深底上的一张美术稿"直接变成能落在画布上的水贴。实测（拿仓库里那张官方标识对照页当例子，输出进 gitignore 的 `tmp/`）：1200×150、纯灰、alpha 1..255、59.5 kB。
+
+> **换成自己的印版**：`--out assets/logo/endfield-decal.png` 覆盖发货资产再 `pnpm build`；或者运行时把 CSS 变量指过去 —— `document.documentElement.style.setProperty('--endfield-decal-image', 'url(...)')`。live 探针用的就是后者，所以**宿主半边还没重启**时它照样能量。
+
+### 它印在哪儿，以及为什么不是"在文字下面"
+
+印版挂在正文面板的 `::before`（与竖排 wordmark 同一个钩子，同一时刻只武装一个）：`top: 214px; right: 40px`，宽 = 面板宽 × 46% × scale。
+
+第一版把它放在**内容下面**（`z-index: -1`）——"印在纸上"听起来就该是这样——实测**改变 0 个像素**：正文在面板里画的是**不透明画布**（`#191919`），负 z-index 的伪元素被它整个盖住。于是改成 `z-index: 0`：
+
+| z-index / opacity | 实测（面板范围，开↔关差分） |
+|---|---|
+| `-1` @ 0.12 | **0 px** |
+| `0` @ 0.04 | 6 682 px（峰值 Δ7） |
+| `0` @ 0.08 | 8 735 px（峰值 Δ13） |
+| **`0` @ 0.12（发货默认）** | **10 560 px（峰值 Δ21）** |
+| `0` @ 0.20 | 11 344 px（峰值 Δ34） |
+
+代价写在明处：`z-index: 0` 意味着它**会浅浅地压过它穿过的正文**（0.12 的灰）。所以默认值是这个数，而且它有自己的开关 —— "水贴压在一张密集表格上"是口味选择，不该替用户做掉。它仍然**不碰**点阵块（3）与输入区那条不透明带（7，sticky）。
+
+### 宿主半边要重启一次
+
+印版由宿主半边送达：`/skin-endfield/logo/endfield-decal.png`。只路由 `assets/logo/` 一个目录，**不**路由整个 `assets/` —— `screenshots/`、`in-game-frames/`、`ui-primitives/` 是研究引用，不该因为多一条路由就变得能被任何页面取走。宿主半边**每次 `dsh web` 启动只加载一次**，所以这条路由要重启才存在；在此之前 live 检查会打印 NOTE 并**跳过**那条绘制断言（跳过，不是通过）。
+
 ## 点阵块：正文右上角、贴住右边界（装饰层 18c）
 
 按需求从**右下角**移到正文**右上角**，并且**贴住右边界**。此前为避开竖排 wordmark 让出了 52px，那段空白被指出与预设不符。
@@ -486,16 +549,21 @@ src/client/settings-apply.ts 设置值 → 重铺令牌层 + 写 CSS 变量
 src/client/settings-page.ts  设置页（react 作为参数传入，便于测试）
 scripts/harvest/            资料抓取（01–07）
 scripts/verify-*.mjs        验证层
+scripts/make-decal.mjs      印版管线：字符标 SVG → 纯灰 PNG；也把任意图转成纯灰水贴
+scripts/probe-mark-visibility.mjs  探针：页标"画了但看不见"的几何 + 逐滚动位置像素
+scripts/probe-decal-live.mjs       探针：印版的送达/武装/落墨三问 + 浓淡与位置的网格量测
 scripts/inspect-shell-dom.mjs  探查 shell DOM（结构）
 scripts/probe-green.mjs        探查运行中页面的绿色元素（颜色）
 assets/fonts/               OFL 字体（见 assets/fonts/NOTICE.md）
+assets/logo/                皮肤自己的印版（SVG 源 + 生成的纯灰 PNG）
 ```
 
 ## 授权与合规
 
 - 代码：MIT。
 - **不附带**任何官方字体、游戏素材、官方图集。`assets/fonts/` 是三个 OFL 开源字体（Jost / Michroma / JetBrains Mono），作为商业字体的**角色替代**。
-- `docs/design-reference/` 与 `assets/screenshots|ui-primitives|in-game-frames/` 是**设计研究引用**，版权归鹰角网络所有，不得随皮肤分发。
+- `assets/logo/` 是**本仓库自己画的清稿**（几何构件 + OFL 字体排版），不是官方图稿的临摹；它依据的公开事实与来源记在 `docs/design-reference/06-logo-notes.md`，其中包括"官方字标是定制字、无公开规格"与"官方分发的是单色平面矢量"两条。`scripts/make-decal.mjs --source ...` 可以把**你自己有权使用**的图转成同规格的纯灰印版；那样产出的文件请放在 gitignore 的 `tmp/`（或自己决定），**不要提交**。
+- `docs/design-reference/` 与 `assets/screenshots|ui-primitives|in-game-frames/` 是**设计研究引用**，版权归鹰角网络所有，不得随皮肤分发（宿主半边只路由 `assets/fonts/` 与 `assets/logo/`，就是为了让这条不只是写在文档里）。
 - 每个 `@font-face` 先声明 `local(...)`：装了原版字体就用原版，否则静默回落到开源替代 —— 两种情况都不再分发受版权保护的字体。
 - 与本项目与鹰角网络、DeepSeek 均无关联。
 
@@ -510,4 +578,5 @@ assets/fonts/               OFL 字体（见 assets/fonts/NOTICE.md）
 - 装饰层不含优先级强制声明（`verify-client` 文本扫描拦截），所有覆盖靠选择器具体度与源码顺序。
 - `dsh-skin-endfield` 设置命名空间的**宿主侧写入**需要你在界面上点一次确认（改一项设置，看 `~/.dsh/settings.yaml` 是否出现 `dsh-skin-endfield:`）。
 - 新增 **Accent** 字段需要**重启 `dsh web`** 才生效：浏览器半边的设置订阅连同已装的 bundle 会随 HMR 更新，但命名空间的 schema 由宿主半边注册，只在启动时读一次。
+- **Logo 水贴的印版也走宿主路由**（`/skin-endfield/logo/endfield-decal.png`），所以同一条限制：宿主半边只在 `dsh web` 启动时加载一次，**没重启前这条路由不存在** —— 设置页里那格预览会是空的、画面上也不会印出来（live 检查此时打印 NOTE 并跳过绘制断言）。重启一次即可。
 - **顶栏标题的截断是外壳行为**，截断点是外壳写死的：`ConversationRoot.module.css` 的 `.crumb` 上 `max-width: 220px` + `text-overflow: ellipsis`（实测：标题 12 字时 184px 不截断；一超过 220px 就截，且**与窗口宽度无关**，窗口 1304px 时同样在 220px 截）。皮肤只加了 `///` 前缀，它是标题元素**行内内容**的一部分，因此**占用那 220px 里的约 33px**（18px 字号 + 0.2em 间距）—— 也就是标题实际能用的宽度从 220px 降到约 179px。这是前缀的代价，不是 bug；嫌标题显示太短可以缩前缀或去掉（改一行），但"长标题会不全"本身不是皮肤造成的。

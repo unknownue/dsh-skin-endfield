@@ -50,6 +50,7 @@ Step 'build'            { pnpm run build }
 Step 'verify: client'   { node scripts/verify-client.mjs }
 Step 'verify: host'     { node scripts/verify-host.mjs }
 Step 'verify: settings' { node scripts/verify-settings-parity.mjs }
+Step 'verify: decal'    { node scripts/make-decal.mjs --check }
 Step 'verify: install'  { pwsh -NoProfile -File scripts/verify-install.ps1 }
 Step 'smoke: browser'   { node scripts/smoke-browser.mjs }
 

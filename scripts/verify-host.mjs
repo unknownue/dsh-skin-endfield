@@ -90,18 +90,25 @@ await check('host exports apply() and injects webServer', () => {
   return `inject=${JSON.stringify(module.inject)}`
 })
 
-await check('apply() registers exactly one prefix route', () => {
+await check('apply() registers exactly two prefix routes', () => {
   module.apply(host)
-  assert(routes.length === 1, `expected 1 route, got ${routes.length}`)
-  const route = routes[0]
-  assert(route.kind === 'prefix', `expected a prefix route, got "${route.kind}"`)
-  assert(route.path === '/skin-endfield/fonts', `unexpected path: ${route.path}`)
-  return `${route.kind} ${route.path}`
+  assert(routes.length === 2, `expected 2 routes, got ${routes.length}`)
+  const paths = routes.map((route) => route.path).sort()
+  assert(paths.join(',') === '/skin-endfield/fonts,/skin-endfield/logo', `unexpected paths: ${paths.join(',')}`)
+  for (const route of routes) assert(route.kind === 'prefix', `expected a prefix route, got "${route.kind}"`)
+  return paths.join(' + ')
 })
+
+/** The route for one prefix, so the checks below cannot silently test the wrong one. */
+const routeFor = (path) => {
+  const route = routes.find((r) => r.path === path)
+  assert(route !== undefined, `no route registered for ${path}`)
+  return route
+}
 
 await check('route serves a vendored font with the woff2 content type', async () => {
   const res = new StubResponse()
-  routes[0].handler({ url: '/skin-endfield/fonts/jost-latin.woff2' }, res)
+  routeFor('/skin-endfield/fonts').handler({ url: '/skin-endfield/fonts/jost-latin.woff2' }, res)
   assert(res.statusCode === 200, `expected 200, got ${res.statusCode}`)
   assert(res.headers['content-type'] === 'font/woff2', `unexpected content-type: ${res.headers['content-type']}`)
   const size = Number(res.headers['content-length'])
@@ -109,20 +116,47 @@ await check('route serves a vendored font with the woff2 content type', async ()
   return `${size} bytes, ${res.headers['content-type']}`
 })
 
+/**
+ * The decal plate is the one asset the browser half cannot inline, so the route is what makes
+ * the feature exist at all: assert the bytes, the type, AND that the file is the generated
+ * plate rather than an empty stand-in.
+ */
+await check('route serves the decal plate as an image', async () => {
+  const res = new StubResponse()
+  routeFor('/skin-endfield/logo').handler({ url: '/skin-endfield/logo/endfield-decal.png' }, res)
+  assert(res.statusCode === 200, `expected 200, got ${res.statusCode}`)
+  assert(res.headers['content-type'] === 'image/png', `unexpected content-type: ${res.headers['content-type']}`)
+  const size = Number(res.headers['content-length'])
+  assert(size > 4000, `the plate is only ${size} bytes — has assets/logo/endfield-decal.png been generated?`)
+  return `${size} bytes, ${res.headers['content-type']}`
+})
+
+await check('the logo route does not expose the design-reference directories', () => {
+  // assets/screenshots, assets/in-game-frames and assets/ui-primitives are research material
+  // that must stay out of what the skin serves; only assets/logo is routed.
+  for (const url of ['/skin-endfield/logo/../screenshots/01-official-cn-home.png', '/skin-endfield/logo/../fonts/jost-latin.woff2']) {
+    const res = new StubResponse()
+    routeFor('/skin-endfield/logo').handler({ url }, res)
+    assert(res.statusCode === 403 || res.statusCode === 404, `${url} returned ${res.statusCode}`)
+  }
+  return 'cross-directory reads blocked'
+})
+
 await check('route ignores a query string', () => {
   const res = new StubResponse()
-  routes[0].handler({ url: '/skin-endfield/fonts/michroma-latin.woff2?v=2' }, res)
+  routeFor('/skin-endfield/fonts').handler({ url: '/skin-endfield/fonts/michroma-latin.woff2?v=2' }, res)
   assert(res.statusCode === 200, `expected 200, got ${res.statusCode}`)
   return 'query stripped before resolution'
 })
 
 await check('route rejects directory traversal', () => {
-  for (const url of [
-    '/skin-endfield/fonts/../../../package.json',
-    '/skin-endfield/fonts/..%2f..%2fpackage.json',
+  for (const [path, url] of [
+    ['/skin-endfield/fonts', '/skin-endfield/fonts/../../../package.json'],
+    ['/skin-endfield/fonts', '/skin-endfield/fonts/..%2f..%2fpackage.json'],
+    ['/skin-endfield/logo', '/skin-endfield/logo/../../../package.json'],
   ]) {
     const res = new StubResponse()
-    routes[0].handler({ url }, res)
+    routeFor(path).handler({ url }, res)
     assert(res.statusCode === 403 || res.statusCode === 404, `${url} returned ${res.statusCode}`)
   }
   return 'traversal attempts blocked'
@@ -130,7 +164,7 @@ await check('route rejects directory traversal', () => {
 
 await check('route answers 404 for an unknown font', () => {
   const res = new StubResponse()
-  routes[0].handler({ url: '/skin-endfield/fonts/nope.woff2' }, res)
+  routeFor('/skin-endfield/fonts').handler({ url: '/skin-endfield/fonts/nope.woff2' }, res)
   assert(res.statusCode === 404, `expected 404, got ${res.statusCode}`)
   return '404 for missing file'
 })

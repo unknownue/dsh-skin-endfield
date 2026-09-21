@@ -21,6 +21,7 @@
  * renders glyph icons with icon fonts / ligatures, so an element-wide
  * `font-family` override breaks them). Text faces are set via `--dsw-font-family`.
  */
+import { DECAL_ASPECT_CSS, DECAL_URL, DECAL_WIDTH_SHARE } from '../settings.ts'
 
 export const endfieldDecor = `
 /* ── 1. right angles ───────────────────────────────────────────────────── */
@@ -1536,8 +1537,14 @@ html.endfield-header-light [data-slot='conversation.session.header']::before {
   mask-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.55) 12%, rgba(0, 0, 0, 0) 30%);
 }
 
-/* ── 18b. the transcript: the mark, set vertically in the right margin ──── */
-/* Positioned in the right margin because that is the one column of the conversation that
+/* ── 18b. the transcript: the page mark, in the right margin ────────────── */
+/* TWO RENDERINGS, ONE IDEA, ONE CORNER. The mark is set either as a vertical wordmark of
+   outline text (18b-i) or as the printed logo plate, a grey decal under the transcript
+   (18b-ii). Both hang off the same hook, and the settings path guarantees exactly one of them
+   is armed at a time -- the corner has room for one mark in it, and the block in 18c already
+   lives there too.
+
+   Positioned in the right margin because that is the one column of the conversation that
    holds no prose: the tool cards all end well short of it. That is not a stylistic choice
    but the fix for a measured failure -- wherever the transcript's own text runs, a light
    mark and light body text sit on top of each other, and the mark was measured as painted
@@ -1586,7 +1593,8 @@ html.endfield-header-light [data-slot='conversation.session.header']::before {
 html.endfield-mark [data-conversation-content] {
   position: relative;
 }
-html.endfield-mark [data-conversation-content]::before {
+/* 18b-i. the wordmark: outline text, set vertically in the right margin. */
+html.endfield-mark-text [data-conversation-content]::before {
   content: var(--endfield-mark-text, "ENDFIELD");
   position: absolute;
   right: 30px;
@@ -1611,6 +1619,52 @@ html.endfield-mark [data-conversation-content]::before {
   white-space: nowrap;
   color: transparent;
   -webkit-text-stroke: 1.4px rgba(217, 217, 217, 0.34);
+}
+
+/* 18b-ii. the plate: the printed decal, a page mark that is an IMAGE. */
+/* A decal is a print on the page, and the honest version of that here is: it paints OVER the
+   transcript's own canvas, because there is nothing else it can paint on. The first attempt
+   put it UNDER the content (z-index -1), which is what "a print on the page" sounds like, and
+   it contributed exactly 0 pixels: the transcript paints an OPAQUE canvas (#191919) inside the
+   panel, and a negative-z-index pseudo-element is covered by it -- measured both ways in
+   scripts/probe-decal-live.mjs (z -1 -> 0 px changed, z 0 -> 8735 px at opacity 0.08 and
+   10560 px at 0.12). So the plate sits at z-index 0: above the canvas and the in-flow prose,
+   still below the halftone block (3) and the composer's opaque band (7, sticky) -- the two
+   surfaces the effects are not allowed to touch. What it does touch is the prose it crosses,
+   which is why the default opacity is 0.12 and why this effect has its own switch: a watermark
+   over a dense table is a taste call, not a default anyone should be stuck with.
+
+   The plate is a raster asset (assets/logo/endfield-decal.png, generated from the SVG source
+   by scripts/make-decal.mjs) because it sets type in Michroma: an SVG used as a CSS
+   background-image cannot load a webfont, so the letterforms have to be baked in. It is pure
+   grey with alpha -- the generator fails the build if a rendered pixel is tinted -- so the skin,
+   not the asset, decides how it reads. The --endfield-decal-image custom property is published
+   as an overridable name for exactly that reason: a user who has converted their own artwork
+   with "node scripts/make-decal.mjs --source ..." can point the skin at it without a rebuild,
+   and the probe uses the same seam to measure the plate before the host half has been restarted.
+
+   Where it sits: the right margin below the dot block. The block owns y 52..197 of the corner,
+   the composer owns the bottom band from y 774, and between them the transcript's right margin
+   is empty for 570px -- which is where a page mark can sit at a size worth printing (measured
+   600x109 at scale 1, x 944..1544 / y 266..375) without covering the block, the composer or
+   the panel's own edges. right: 40px keeps its edge clear of the panel's edge, and the box is
+   sized from the asset's aspect ratio so a swapped plate keeps its proportions
+   (--endfield-decal-ratio is the override). */
+html.endfield-mark-decal [data-conversation-content]::before {
+  content: '';
+  position: absolute;
+  right: 40px;
+  top: 214px;
+  z-index: 0;
+  width: calc(${DECAL_WIDTH_SHARE * 100}% * var(--endfield-decal-scale, 1));
+  aspect-ratio: var(--endfield-decal-ratio, ${DECAL_ASPECT_CSS});
+  background-image: var(--endfield-decal-image, url('${DECAL_URL}'));
+  background-repeat: no-repeat;
+  background-position: right top;
+  background-size: contain;
+  opacity: var(--endfield-decal-opacity, 0.12);
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ── 18c. the transcript: the halftone block, upper-right corner ──────────── */
