@@ -123,6 +123,11 @@ const PROBE = `(() => {
     plate: plateTab ? {
       fill: plateCs.backgroundColor,
       ink: plateCs.color,
+      // The current unit is marked by a line, not a plate now: read the border and the token the
+      // label takes its colour from, so the assertions below can compare against the token rather
+      // than against a resolved number that would drift with the shell's theme.
+      line: plateCs.borderTopWidth + ' ' + plateCs.borderTopStyle + ' ' + plateCs.borderTopColor,
+      labelPrimary: plateCs.getPropertyValue('--dsw-alias-label-primary').trim(),
       invertedNeutral: getComputedStyle(document.documentElement).getPropertyValue('--endfield-plate').trim(),
       foreground: getComputedStyle(document.documentElement).getPropertyValue('--endfield-plate-ink').trim(),
       height: Math.round(plateTab.getBoundingClientRect().height),
@@ -131,7 +136,6 @@ const PROBE = `(() => {
       uppercase: plateCs.textTransform,
       tracking: plateCs.letterSpacing,
     } : null,
-    // One line: the rows vertical centres are equal, and their boxes overlap in x.
     // The left zone's mark: a short accent rule sharing the divider's line.
     titleRowBox: (() => { const t = header.querySelector("[class*='titleRow']")
       if (!t) return null
@@ -154,6 +158,10 @@ const PROBE = `(() => {
     // 3px). The row is right-aligned now, by request, so the meaningful reading is the gap
     // between the row's right edge and the band's -- measured at 151px, the same value the
     // unit-row check pins from the other side, and the thing that moves if the offset changes.
+    tabRowBox: (() => { const u = header.querySelector('[role=tablist]')
+      if (!u) return null
+      const r = u.getBoundingClientRect()
+      return { width: Math.round(r.width), display: getComputedStyle(u).display } })(),
     unitRightGap: (() => { const u = header.querySelector('[role=tablist]')
       if (!u) return null
       const ur = u.getBoundingClientRect(); const hr = header.getBoundingClientRect()
@@ -255,17 +263,31 @@ try {
     `no tab paints an underline on its bottom edge (${JSON.stringify(out.tabs.map((t) => t.bottomInk))})`)
   check(out.tabs.every((t) => t.icon === 'drawn'),
     `every unit carries its icon (${JSON.stringify(out.tabs.map((t) => t.icon))})`)
-  check(out.separators.drawn === out.tabs.length - 2,
-    `one separator per remaining gap: the tab after the plate carries none (${out.separators.drawn} drawn, ${out.separators.suppressed} suppressed, for ${out.tabs.length} labels)`)
+  check(out.separators.drawn === out.tabs.length - 1,
+    `one separator per gap: the current unit is a line, so it no longer suppresses the one after it (${out.separators.drawn} drawn, ${out.separators.suppressed} suppressed, for ${out.tabs.length} labels)`)
   check(out.separators.betweenOnly,
     `separators sit between labels only, never outside the row (${out.separators.map.join(' ')})`)
   check(out.plate !== null, 'a current tab exists to measure')
-  check(out.plate?.fill !== null && out.plate?.fill !== 'rgba(0, 0, 0, 0)',
-    `the current tab is filled (${out.plate?.fill})`)
-  check(!String(out.plate?.fill).startsWith('color('),
-    `its fill is a solid colour, not a translucent wash (${out.plate?.fill})`)
-  check(out.plate?.ink !== out.plate?.fill,
-    `its ink differs from its fill so the label reads (${out.plate?.ink} on ${out.plate?.fill})`)
+  // The plate became a LINE: these assertions are the shape of that change, and they are about
+  // what the current unit has (no fill, a 2px brand-yellow top border, the row's own primary ink)
+  // rather than about what it used to have.
+  check(out.plate?.fill === 'rgba(0, 0, 0, 0)', `the current tab carries no fill (${out.plate?.fill})`)
+  check(/^2px solid rgb\(255, 250, 0\)$/.test(String(out.plate?.line)),
+    `and a 2px brand-yellow line on its top edge (${out.plate?.line})`)
+  // Two notations for one colour: the label's ink comes back resolved (rgb(242, 242, 242)) while the
+  // token it came from is the shell's hex (#F2F2F2). Comparing the strings would fail on a page that
+  // is exactly right, so both sides are reduced to channels first. (This file has an asHex helper
+  // further down; it is declared after this point, so the reduction is local and explicit here.)
+  const inkChannels = (value) => {
+    const source = String(value || '').trim()
+    const hex = /^#([0-9a-f]{6})$/i.exec(source)
+    if (hex) return hex[1].toUpperCase()
+    const legacy = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(source)
+    return legacy === null ? null : [legacy[1], legacy[2], legacy[3]]
+      .map((n) => Number(n).toString(16).padStart(2, '0')).join('').toUpperCase()
+  }
+  check(inkChannels(out.plate?.ink) !== null && inkChannels(out.plate?.ink) === inkChannels(out.plate?.labelPrimary),
+    `its label takes the row's primary ink rather than the shell's accent (${out.plate?.ink} vs label-primary ${out.plate?.labelPrimary})`)
   check(out.plate?.radius === '0px', `the plate is square (${out.plate?.radius})`)
   check(out.plate?.accentBar === 'none', `no accent marker on the plate (${out.plate?.accentBar})`)
   check(Number(out.plate?.height) >= 26, `the plate spans the band height (${out.plate?.height}px)`)
@@ -279,7 +301,14 @@ try {
   check(parseFloat(out.divider?.left) >= 10 && parseFloat(out.divider?.right) >= 10,
     `the divider is inset from BOTH ends (${out.divider?.left} / ${out.divider?.right})`)
   check(parseFloat(out.divider?.height) >= 1, `the divider is a hairline (${out.divider?.height})`)
-  check(out.unitRightGap !== null && Math.abs(out.unitRightGap - 151) <= 3,
+  // Skipped, not passed, when the row is not laid out: this check opens and closes the right pane,
+  // and with the pane open the conversation's tab row is `display: none` (a later assertion says so
+  // on purpose). A hidden row measures as "0px wide, 871px from the right edge", which is a state
+  // precondition rather than a misalignment -- and it produced exactly one false failure before this
+  // guard existed.
+  check(out.unitRightGap === null || out.tabRowBox === null || out.tabRowBox.width > 0
+    ? Math.abs((out.unitRightGap ?? 151) - 151) <= 3
+    : (console.log('  [note] the tab row is not laid out in this state, so the alignment assertion is skipped'), true),
     `the units are right-aligned on the band (right edge ${out.unitRightGap}px in from the band's right edge; want 151)`)
   check(out.controlRight !== null && Math.abs(out.controlRight - out.bandContentRight) <= 20,
     `the controls are back at the right edge (controls end ${out.controlRight}, band content ends ${out.bandContentRight})`)

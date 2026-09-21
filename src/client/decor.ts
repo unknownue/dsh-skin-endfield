@@ -1090,21 +1090,18 @@ body header[class*='_header'] [role='tab'] {
   letter-spacing: 0.1em;
   corner-shape: round;
 }
-/* An inactive unit answers the pointer with the colour the click will produce: the deepest
-   step of the accent family, which is exactly what the ACTIVE unit's plate is drawn from
-   (state-business-primary, derived from the same step — see ACCENT_DEEP_VAR in
-   settings-apply.ts). So hovering previews the result rather than approximating it. The
-   ACTIVE unit is excluded from the rule: it is already that plate.
-   Two earlier values are on record because each was reported in turn: the shell's
-   --dsw-alias-interactive-bg-hover (0.08 white) composited to #2C2C2C over the #222222 band —
-   ten steps of mean channel, invisible on a dark canvas — and a 0.22 white wash reached 38.
-   The accent itself replaces both: it is ~180 steps from the band, and it is the same colour
-   the plate uses, so the ink derived for that plate (--endfield-accent-ink) reads on the
-   hovered unit as well as on the selected one. */
+/* An inactive unit answers the pointer by previewing the line it will get: the same brand yellow at
+   55%, one pixel instead of two. The ACTIVE unit is excluded -- it already carries the full line.
+   Three earlier values are on record because each was reported in turn, all of them fills this one
+   replaces: the shell's --dsw-alias-interactive-bg-hover (0.08 white) composited to #2C2C2C over
+   the #222222 band, ten steps of mean channel and invisible on a dark canvas; a 0.22 white wash,
+   38 steps; and finally the accent plate itself, which previewed the click exactly but made a
+   hover louder than the selection once the selection became a line. The invariant survives the
+   change of form: what the pointer shows is what the click produces, at a lighter weight. */
 body header[class*='_header'] [role='tab']:hover:not([aria-selected='true']),
 body header[class*='_header'] [role='tab']:focus-visible:not([aria-selected='true']) {
-  background: var(--endfield-accent-deep, var(--dsw-alias-state-business-primary));
-  color: var(--endfield-accent-ink, #191919);
+  border-top: 1px solid color-mix(in srgb, var(--dsw-alias-brand-primary, #FFFA00) 55%, transparent);
+  padding-top: 5px;
 }
 /* The unit's icon: a small diamond outline, the system's node primitive (05 图形元素). Placed
    absolutely so the label keeps its position -- a tab's label is a bare text node, so an
@@ -1140,16 +1137,41 @@ body header[class*='_header'] [role='tab'] + [role='tab']::before {
   margin-top: -8px;
   background: var(--dsw-alias-border-l2);
 }
-/* The current unit: one plate and nothing else. Accent fill (the reviewer's choice), with the
-   contrast-derived ink so a pale accent still reads. */
+/* The current unit: a yellow line along its top edge, and no fill.
+   THIS REPLACES A PLATE, by request. What was here: background: state-business-primary (the
+   user's accent, measured rgb(146,201,255)) with the contrast-derived ink on the label, so the
+   selected unit read as a filled button. The ask was a yellow top line instead, so the fill and
+   the ink swap are gone -- and the ink swap is the part that had to go with it: #191919 on the
+   band would have been unreadable, and the label now simply keeps the row's own colour.
+
+   It is a BORDER rather than a pseudo-element line, and that is a layout decision worth stating:
+   the tab's ::after is its icon, and its ::before is the inter-unit hairline for every unit after
+   the first, so a pseudo-element line would have to fight the separator or delete it. A top border
+   belongs to the box, spans it exactly, and costs nothing to keep aligned. The 2px are paid for out
+   of the padding (6 -> 4), so the unit keeps its 28px height and the row does not shift by a pixel.
+
+   The colour is the BRAND yellow the rest of this skin already marks things with (the /// title
+   prefix uses the same token, measured #FFFA00), not the user's accent. That is a deliberate
+   reversal of the old comment's rule -- "the active tab keeps using whatever accent is
+   configured" -- because the request named the colour: a line the user cannot choose is the point
+   here, and the accent still owns the plates and the focus ring. */
 body header[class*='_header'] [role='tab'][aria-selected='true'] {
-  background: var(--dsw-alias-state-business-primary);
-  color: var(--endfield-accent-ink, #191919);
-  font-weight: 600;
+  border-top: 2px solid var(--dsw-alias-brand-primary, #FFFA00);
+  padding-top: 4px;
+  /* The shell colours the current unit's label with the user's accent (measured rgb(146,201,255)).
+     With the plate gone that left the unit carrying TWO accents -- a yellow line above a blue
+     label -- so the label goes back to the row's own text ramp and the line is the only mark.
+     It is label-primary rather than the inactive units' label-secondary, which is what keeps the
+     current unit readable as current once the fill is no longer doing that job. */
+  color: var(--dsw-alias-label-primary);
 }
-body header[class*='_header'] [role='tab'][aria-selected='true']::before,
-body header[class*='_header'] [role='tab'][aria-selected='true'] + [role='tab']::before {
-  content: none;
+/* Hovering an inactive unit PREVIEWS the line: the same colour, half the weight, at 55% -- a
+   preview rather than an approximation, which is the invariant the earlier plate shared with this
+   one (hover and click used to be the same fill; they are now the same line, thinner). */
+body header[class*='_header'] [role='tab']:hover:not([aria-selected='true']),
+body header[class*='_header'] [role='tab']:focus-visible:not([aria-selected='true']) {
+  border-top: 1px solid color-mix(in srgb, var(--dsw-alias-brand-primary, #FFFA00) 55%, transparent);
+  padding-top: 5px;
 }
 
 /* The unit icons: the two named units get their own silhouette, the rest keep the diamond. */

@@ -4,20 +4,25 @@
  *
  * What it asserts, and why each one earned its place:
  *
- *   1. AN INACTIVE UNIT ANSWERS THE POINTER, AND THE ACTIVE ONE DOES NOT. This is the
- *      defect this check exists for: the skin had removed the shell's own hover tint along
- *      with every other plate in the band and never replaced it, so the row read as five
- *      labels rather than five controls. The active unit must not take the wash — it is
- *      already a plate, and tinting it would dim its own ink.
- *   2. The row is RIGHT-ALIGNED in the header -- clear of the right cluster, and measurably right of\n *      the header's centre -- square, and sized by its own labels. It used to be centred;\n *      the centred reading and the right-aligned one fail in different places, so both numbers\n *      (offset from the bar's right edge, clearance to the controls) are printed.
-
- *   3. The current plate's ink differs from its fill and is legible on it (the ink is
- *      derived by colors.ts accentInk(), so a pale accent has to land on dark ink).
+ *   1. AN INACTIVE UNIT ANSWERS THE POINTER, AND THE ACTIVE ONE DOES NOT. This is the defect this
+ *      check exists for: the skin had removed the shell's own hover tint along with every other
+ *      plate in the band and never replaced it, so the row read as five labels rather than five
+ *      controls. Both ends of that reply have since changed form -- the active unit was a filled
+ *      accent plate and the hover an identical fill, and both are now a yellow line along the
+ *      unit's TOP edge (2px when current, 1px at 55% of the brand yellow when hovered). The
+ *      invariant survived the change of form: the hovered unit shows the same colour the click
+ *      produces, and the current unit does not react to the pointer at all.
+ *   2. The row is RIGHT-ALIGNED in the header -- clear of the right cluster, and measurably right
+ *      of the header's centre -- square, and sized by its own labels. It used to be centred; the
+ *      two readings fail in different places, so both numbers (the offset from the bar's right
+ *      edge and the clearance to the controls) are printed.
+ *   3. The current unit is marked by that line and by nothing else: no fill, a label that is
+ *      legible on the BAND rather than on a plate, and no change in the unit's own height.
  *
- * A gap assertion between each mark and its label was attempted and REMOVED — the measured
- * gap is ~4px here and no thresholding of anti-aliased 12px text against a rotated diamond
- * made it stable (0px, 1px, 4px, 26px for the same row across runs). See decor.ts for the
- * note that replaced it.
+ * A gap assertion between each mark and its label was attempted and REMOVED -- the measured gap
+ * is ~4px here and no thresholding of anti-aliased 12px text against a rotated diamond made it
+ * stable (0px, 1px, 4px, 26px for the same row across runs). See decor.ts for the note that
+ * replaced it.
  *
  * Run: $env:DSH_URL = '...token=...'; node scripts/verify-header-tabs-live.mjs
  */
@@ -57,6 +62,7 @@ const GEOMETRY = `(() => {
         active: tab.getAttribute('aria-selected') === 'true',
         left: r.left, top: r.top, width: r.width, height: r.height,
         color: cs.color, background: cs.backgroundColor, radius: cs.borderTopLeftRadius,
+        borderTopWidth: cs.borderTopWidth, borderTopStyle: cs.borderTopStyle, borderTopColor: cs.borderTopColor,
         markLeft: getComputedStyle(tab, '::after').left,
         markWidth: getComputedStyle(tab, '::after').width,
       }
@@ -90,9 +96,23 @@ const CENTER_OF = (selector) => `(() => {
 
 let fails = 0
 const check = (ok, line) => { if (!ok) fails++; console.log(`  ${ok ? '[PASS]' : '[FAIL]'} ${line}`) }
+/**
+ * A computed colour to `[r, g, b]`, in either of the two forms Chrome reports.
+ *
+ * The legacy `rgb()/rgba()` form is what most of these values come back as, but a colour that went
+ * through a `color-mix()` -- which is how the hover line is built, the brand yellow at 55% -- comes
+ * back as `color(srgb 1 0.980392 0 / 0.55)`. Reading only the legacy form made two assertions fail
+ * on a correct page ("not the colour the click produces", "-46 steps of mean channel"), because the
+ * parser returned null and the comparison then ran against a placeholder.
+ */
 const rgb = (value) => {
-  const m = /rgba?\(([^)]+)\)/.exec(value || '')
-  return m ? m[1].split(',').slice(0, 3).map((v) => parseFloat(v)) : null
+  const legacy = /rgba?\(([^)]+)\)/.exec(value || '')
+  if (legacy) {
+    const parts = legacy[1].split(/[\s,/]+/).filter(Boolean).slice(0, 3).map((v) => parseFloat(v))
+    return parts.length === 3 && parts.every((v) => Number.isFinite(v)) ? parts.map((v) => Math.round(v)) : null
+  }
+  const modern = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(value || '')
+  return modern ? [modern[1], modern[2], modern[3]].map((v) => Math.round(parseFloat(v) * 255)) : null
 }
 
 try {
@@ -145,19 +165,36 @@ try {
     // 4px and 26px for the same row across runs, and the computed-offset route disagreed with
     // the pixels by a constant 12px. A check that flaps teaches nothing, so the mark's spacing
     // is left to the eye plus the note in decor.ts, and this check holds what is unambiguous:
-    // the geometry of the row, the plate's legibility, and the hover behaviour below.
+    // the geometry of the row, the current unit's LINE, and the hover behaviour below.
+    //
+    // WHAT CHANGED HERE, and why these assertions look different from the ones this file used to
+    // make: the current unit was a filled plate (accent background + contrast-derived ink) and is
+    // now a yellow line along its top edge. So the fill assertions are gone and what replaces them
+    // is what the effect now claims: no fill, a 2px brand-yellow top border, a label that is
+    // legible on the BAND rather than on a plate, and no change to the unit's own height (the 2px
+    // is paid out of the padding).
+    const lum = (c) => {
+      const [r, g, b] = c.map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const contrastOf = (a, b) => (a && b ? (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05) : 0)
+    const band = rgb(geometry.rowFill) ?? [46, 46, 46]
+    const BRAND_YELLOW = [255, 250, 0]
     const active = geometry.tabs.find((t) => t.active)
     if (active) {
-      const fill = rgb(active.background)
+      check(active.background === 'rgba(0, 0, 0, 0)' || active.background === 'transparent',
+        `the current unit has no fill (${active.background})`)
+      const line = rgb(active.borderTopColor)
+      check(active.borderTopStyle === 'solid' && Math.round(parseFloat(active.borderTopWidth)) === 2 && line !== null && line.join(',') === BRAND_YELLOW.join(','),
+        `it carries a 2px yellow line on its top edge (${active.borderTopWidth} ${active.borderTopStyle} ${active.borderTopColor}, brand token is rgb(${BRAND_YELLOW.join(',')}))`)
       const ink = rgb(active.color)
-      const lum = (c) => {
-        const [r, g, b] = c.map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
-      }
-      const contrast = fill && ink ? (Math.max(lum(fill), lum(ink)) + 0.05) / (Math.min(lum(fill), lum(ink)) + 0.05) : 0
-      check(fill !== null && ink !== null && fill.join(',') !== ink.join(','),
-        `the current unit's ink differs from its plate (${active.color} on ${active.background})`)
-      check(contrast >= 4.5, `and that pair is legible (contrast ${contrast.toFixed(2)}:1)`)
+      check(contrastOf(ink, band) >= 4.5,
+        `and its label is legible on the band (${active.color} on ${geometry.rowFill} = ${contrastOf(ink, band).toFixed(2)}:1)`)
+      const inactive = geometry.tabs.find((t) => !t.active)
+      check(inactive !== undefined && active.color !== inactive.color,
+        `and it is set apart from the resting units (${active.color} vs ${inactive ? inactive.color : 'n/a'})`)
+      check(Math.round(active.height) === Math.round(inactive === undefined ? active.height : inactive.height),
+        `and the line costs no height: the current unit is ${Math.round(active.height)}px like the rest (the 2px comes out of its padding)`)
     }
 
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -168,35 +205,29 @@ try {
       const hovered = await cdp.evalIn(GEOMETRY)
       const tab = hovered.tabs.find((t) => !t.active)
       const resting = geometry.tabs.find((t) => !t.active)
-      if (tab && resting && tab.background !== resting.background) {
-        check(tab.background !== 'rgba(0, 0, 0, 0)', `an inactive unit answers the pointer with a fill (${resting.background} -> ${tab.background})`)
-        check(tab.color !== resting.color, `and its label brightens (${resting.color} -> ${tab.color})`)
-        // The hover fill must be the SAME colour the click produces, not an approximation of
-        // it: the active plate is drawn from state-business-primary, and the hovered unit from
-        // the deepest accent step those tokens come from. Two earlier values are on record —
-        // the shell's 0.08 white wash (10 steps of mean channel over the band, invisible) and a
-        // 0.22 wash (38 steps) — and both were only ever an approximation of the plate. This
-        // asserts the identity instead, which is the property that makes the preview honest.
-        const hoverRgb = rgb(tab.background)
-        const activeRgb = active ? rgb(active.background) : null
-        check(hoverRgb !== null && activeRgb !== null && hoverRgb.join(',') === activeRgb.join(','),
-          `and it is the very colour the click produces (hover ${tab.background} vs the active plate ${active ? active.background : 'n/a'})`)
-        // The ink has to read on that fill, since the hovered unit now carries the same colour
-        // the selected one does — including for a pale accent, where the ink flips to dark.
-        const inkRgb = rgb(tab.color)
-        const lum = (c) => {
-          const [r, g, b] = c.map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-          return 0.2126 * r + 0.7152 * g + 0.0722 * b
-        }
-        const inkContrast = hoverRgb && inkRgb ? (Math.max(lum(hoverRgb), lum(inkRgb)) + 0.05) / (Math.min(lum(hoverRgb), lum(inkRgb)) + 0.05) : 0
-        check(inkContrast >= 4.5,
-          `and its label is legible on that fill (${tab.color} on ${tab.background} = ${inkContrast.toFixed(2)}:1)`)
-        // And it has to clear the band by a wide margin, so "too light" cannot come back.
-        const band = rgb(geometry.rowFill) ?? [25, 25, 25]
-        const mean = (c) => (c ? (c[0] + c[1] + c[2]) / 3 : null)
-        const delta = mean(hoverRgb) !== null ? Math.round(mean(hoverRgb) - mean(band)) : null
-        check(delta !== null && Math.abs(delta) >= 60,
-          `and it is far stronger than the band it sits on (${delta === null ? 'not comparable' : `${delta} steps of mean channel`} over ${geometry.rowFill})`)
+      if (tab && resting && tab.borderTopStyle === 'solid' && tab.borderTopColor !== resting.borderTopColor) {
+        check(resting.borderTopStyle === 'none',
+          `an inactive unit answers the pointer with the line it will get (${resting.borderTopStyle} -> ${tab.borderTopWidth} ${tab.borderTopStyle} ${tab.borderTopColor})`)
+        check(Math.round(parseFloat(tab.borderTopWidth)) === 1,
+          `at a lighter weight than the current unit's (${tab.borderTopWidth} against ${active ? active.borderTopWidth : 'n/a'})`)
+        // The preview has to be the SAME colour the click produces, not a lookalike: the hover line
+        // is the brand yellow at 55% alpha, so its rgb channels must equal the current unit's line
+        // exactly. (The identical assertion used to be made about the fill, for the same reason.)
+        const hoverLine = rgb(tab.borderTopColor)
+        const activeLine = active ? rgb(active.borderTopColor) : null
+        check(hoverLine !== null && activeLine !== null && hoverLine.join(',') === activeLine.join(','),
+          `and it is the very colour the click produces (hover ${tab.borderTopColor} vs the current unit's line ${active ? active.borderTopColor : 'n/a'})`)
+        // Hover no longer touches the label: the line is the whole preview, so the label must stay
+        // where it was rather than brightening the way it did under the old fill.
+        check(tab.color === resting.color,
+          `and the label itself is untouched (${resting.color} -> ${tab.color})`)
+        // It also has to clear the band the way the current unit's line does, so "too faint to
+        // see" cannot come back by way of the preview.
+        const hoverLineRgb = rgb(tab.borderTopColor) ?? [0, 0, 0]
+        const mean = (c) => (c[0] + c[1] + c[2]) / 3
+        const delta = Math.round(mean(hoverLineRgb) - mean(band))
+        check(Math.abs(delta) >= 60,
+          `and it is far stronger than the band it sits on (${delta} steps of mean channel over ${geometry.rowFill})`)
         break
       }
       await sleep(300)
@@ -209,8 +240,8 @@ try {
       const hovered = await cdp.evalIn(GEOMETRY)
       const tab = hovered.tabs.find((t) => t.active)
       const resting = geometry.tabs.find((t) => t.active)
-      check(tab && resting && tab.background === resting.background && tab.color === resting.color,
-        `the current unit keeps its plate while hovered (${tab ? tab.background : 'n/a'}, ${tab ? tab.color : 'n/a'})`)
+      check(tab && resting && tab.borderTopColor === resting.borderTopColor && tab.background === resting.background && tab.color === resting.color,
+        `the current unit keeps its line while hovered (${tab ? tab.borderTopWidth : 'n/a'} ${tab ? tab.borderTopColor : ''}, no fill)`)
     }
     await cdp.mouse('mouseMoved', 5, 400)
 
