@@ -20,7 +20,7 @@ import type { ServerResponse } from 'node:http'
 import { dirname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import z from '@deepseek-ai/schemastery'
-import { SKIN_SETTINGS_DEFAULTS, SKIN_SETTINGS_NAMESPACE } from './settings.ts'
+import { DECAL_PLATES, DECAL_ROUTE, SKIN_SETTINGS_DEFAULTS, SKIN_SETTINGS_NAMESPACE } from './settings.ts'
 import type { HostContext } from './types.ts'
 
 export const name = 'dsh-skin-endfield'
@@ -59,6 +59,7 @@ export const SkinSettingsSchema = z.object({
   markText: z.string().default(SKIN_SETTINGS_DEFAULTS.markText),
   decalOpacity: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.decalOpacity),
   decalScale: z.number().min(0.4).max(1.8).default(SKIN_SETTINGS_DEFAULTS.decalScale),
+  decalPlate: z.union(DECAL_PLATES.map((plate) => z.const(plate))).default(SKIN_SETTINGS_DEFAULTS.decalPlate),
 })
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -75,7 +76,12 @@ const FONT_DIR = join(HERE, '..', 'assets', 'fonts')
  */
 const LOGO_DIR = join(HERE, '..', 'assets', 'logo')
 export const FONT_ROUTE = '/skin-endfield/fonts'
-export const LOGO_ROUTE = '/skin-endfield/logo'
+/**
+ * The plate route is spelled in `settings.ts` and re-exported here, because three files have to
+ * agree on it: this handler, the decor sheet that paints the plate, and the settings page that
+ * previews it. A rename that reaches two of the three is a blank decal no type check would catch.
+ */
+export const LOGO_ROUTE = DECAL_ROUTE
 
 const MIME: Record<string, string> = {
   '.woff2': 'font/woff2',

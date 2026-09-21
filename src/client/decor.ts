@@ -21,7 +21,15 @@
  * renders glyph icons with icon fonts / ligatures, so an element-wide
  * `font-family` override breaks them). Text faces are set via `--dsw-font-family`.
  */
-import { DECAL_ASPECT_CSS, DECAL_URL, DECAL_WIDTH_SHARE } from '../settings.ts'
+import {
+  DECAL_ASPECT_CSS,
+  DECAL_ROUTE,
+  DECAL_URL,
+  DECAL_WIDTH_SHARE,
+  LOCAL_PLATE_DIR,
+  LOCAL_WORDMARK_FILE,
+  OFFICIAL_PLATES,
+} from '../settings.ts'
 
 export const endfieldDecor = `
 /* ── 1. right angles ───────────────────────────────────────────────────── */
@@ -1666,6 +1674,42 @@ html.endfield-mark-decal [data-conversation-content]::before {
   pointer-events: none;
   user-select: none;
 }
+
+/* ── 18b-iii. the official plates, as local files ───────────────────────── */
+/* Same plate, three other sources: conversions of official artwork the USER supplied, built by
+   scripts/make-official-plates.mjs into the gitignored assets/logo/local/. They are options
+   rather than the default because a fresh clone cannot have them -- and because shipping
+   Hypergryph's artwork with a skin is not this repository's call to make (README, 授权与合规).
+
+   Geometry follows the source: the official wordmark is 1143x200 (a wide band, so it prints
+   where the shipped plate does), the badge is 347x300 and near-square (a stamp, so it is set
+   smaller and lower), and the "lockup" is the two composed as two background layers -- badge
+   left, wordmark right -- which is how the game's own lockup is arranged without any raster
+   editing. A missing file simply paints nothing: an empty decal, not a broken page. */
+html.endfield-plate-official-wordmark [data-conversation-content]::before {
+  background-image: url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${LOCAL_WORDMARK_FILE}');
+  aspect-ratio: 1143 / 200;
+}
+
+html.endfield-plate-official-badge [data-conversation-content]::before {
+  background-image: url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${OFFICIAL_PLATES['official-badge'].file}');
+  aspect-ratio: 347 / 300;
+  width: calc(19% * var(--endfield-decal-scale, 1));
+  right: 56px;
+  top: 268px;
+}
+
+html.endfield-plate-official-lockup [data-conversation-content]::before {
+  background-image:
+    url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${OFFICIAL_PLATES['official-badge'].file}'),
+    url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${LOCAL_WORDMARK_FILE}');
+  background-size: auto 84%, auto 46%;
+  background-position: left center, right center;
+  background-repeat: no-repeat, no-repeat;
+  aspect-ratio: 4 / 1;
+}
+
+/* The end of 18b. Section 18c picks the corner back up. */
 
 /* ── 18c. the transcript: the halftone block, upper-right corner ──────────── */
 /* The screen is the recipe that was signed off as "点阵可以": a 6px pitch with the dots

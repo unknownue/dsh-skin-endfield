@@ -32,7 +32,10 @@
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser } from './cdp-pipe.mjs'
-import { DECAL_URL } from '../src/settings.ts'
+import { DECAL_PLATES, DECAL_URL, decalPlateClass, localPlateUrl } from '../src/settings.ts'
+
+/** Every plate class, so a case can clear the others before arming its own. */
+const PLATE_CLASSES = DECAL_PLATES.map((plate) => decalPlateClass(plate))
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DSH_URL = process.env.DSH_URL
@@ -430,9 +433,26 @@ try {
       zone: [Math.round(b.right - right - w), Math.round(b.top + top), Math.round(w), Math.round(h)],
     }
   })()`)
-  const served = await evalIn(cdp, `(async () => {
+  /**
+   * Every plate, measured where it prints.
+   *
+   * The shipped plate is the one a fresh install uses and its absence is a failure. The official
+   * plates are LOCAL files the user builds from artwork they supply (`make-official-plates.mjs`
+   * writes them into the gitignored `assets/logo/local/`), so "not installed here" is reported as
+   * a NOTE and skipped — but when they ARE installed, they are measured like anything else,
+   * because "the plate the setting selects is the plate that prints" is the whole feature.
+   */
+  const PLATE_CASES = [
+    { plate: 'skin', cls: 'endfield-plate-skin', url: DECAL_URL, required: true },
+    { plate: 'official-wordmark', cls: 'endfield-plate-official-wordmark', url: localPlateUrl('official-wordmark'), required: false },
+    { plate: 'official-lockup', cls: 'endfield-plate-official-lockup', url: localPlateUrl('official-lockup'), required: false },
+  ]
+  const armPlate = async (cls) => {
+    for (const c of PLATE_CLASSES) await withClass(c, c === cls)
+  }
+  const fetchStatus = (url) => evalIn(cdp, `(async () => {
     try {
-      const r = await fetch(${JSON.stringify(DECAL_URL)}, { cache: 'no-store' })
+      const r = await fetch(${JSON.stringify(url)}, { cache: 'no-store' })
       return { status: r.status, type: r.headers.get('content-type'), bytes: (await r.arrayBuffer()).byteLength }
     } catch (error) { return { status: 0, error: String(error) } }
   })()`)
@@ -448,29 +468,45 @@ try {
     `wordmark ${Math.round(textBox.width)}x${Math.round(textBox.height)} px (a vertical strip), `
     + `plate ${Math.round(decalBox.width)}x${Math.round(decalBox.height)} px (a horizontal one); plate background ${decalBox.background}`)
 
-  if (served.status !== 200) {
-    console.log(`\n[NOTE] the plate is not served by the running host half yet: GET ${DECAL_URL} -> ${served.status}.`)
-    console.log('       The route ships in src/index.ts, and the host half is loaded once per "dsh web" start,')
-    console.log('       so it takes a restart to appear. The decal PAINT assertion did not run (not a pass).')
-  } else {
-    check('the plate is served by the host half as an image',
-      served.type === 'image/png' && served.bytes > 4000,
-      `GET ${DECAL_URL} -> ${served.status} ${served.type}, ${served.bytes} bytes`)
-    await armMark('endfield-mark-decal', false)
+  for (const plate of PLATE_CASES) {
+    await armMark('endfield-mark-decal', true)
+    await armPlate(plate.cls)
     await scrolledTo('s.scrollHeight')
+    await sleep(450)
+    const box = await markBoxNow()
+    const served = await fetchStatus(plate.url)
+    if (served.status !== 200) {
+      const how = plate.required
+        ? 'FAIL — the shipped plate must be served by the host half'
+        : 'skipped, not installed'
+      console.log(`\n[${plate.required ? 'FAIL' : 'NOTE'}] plate "${plate.plate}": GET ${plate.url} -> ${served.status} (${how})`)
+      if (plate.required) {
+        console.log('       The route ships in src/index.ts and the host half loads once per "dsh web"')
+        console.log('       start, so a route added since the last start 404s until it is restarted.')
+      } else {
+        console.log('       Build the local plates with: node scripts/make-official-plates.mjs')
+      }
+      if (plate.required) check(`plate ${plate.plate}: served by the host half`, false, `GET ${plate.url} -> ${served.status}`)
+      continue
+    }
+    check(`plate ${plate.plate}: served by the host half as an image`,
+      served.type === 'image/png' && served.bytes > 4000,
+      `GET ${plate.url} -> ${served.status} ${served.type}, ${served.bytes} bytes`)
+    await armMark('endfield-mark-decal', false)
     await sleep(400)
-    const decalOff = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
     await armMark('endfield-mark-decal', true)
     await sleep(450)
-    const decalOn = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    const decal = await changedShare(decalBox.zone, decalOff, decalOn)
-    check('mark (decal): the plate prints on the panel, at the tail',
-      decal.share > 0.005,
-      `${decal.changed}/${decal.n} px changed (${(decal.share * 100).toFixed(2)}%) in x ${decalBox.zone[0]}..${decalBox.zone[0] + decalBox.zone[2]}, `
-      + `y ${decalBox.zone[1]}..${decalBox.zone[1] + decalBox.zone[3]}, peak delta ${decal.maxDelta}`)
+    const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    const ink = await changedShare(box.zone, off, on)
+    check(`plate ${plate.plate}: prints on the panel, at the tail`,
+      ink.share > 0.005,
+      `${ink.changed}/${ink.n} px changed (${(ink.share * 100).toFixed(2)}%) in x ${box.zone[0]}..${box.zone[0] + box.zone[2]}, `
+      + `y ${box.zone[1]}..${box.zone[1] + box.zone[3]} (${Math.round(box.width)}x${Math.round(box.height)} px box), peak delta ${ink.maxDelta}`)
   }
   // Leave the app with neither rendering armed; the classes were never stored.
   await armMark('endfield-mark-decal', false)
+  await armPlate(null)
   await scrolledTo('s.scrollHeight')
 
   // The mark's own variable drives its content, and it is published even when the mark is off.

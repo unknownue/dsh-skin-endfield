@@ -17,17 +17,23 @@
  * is open; there is no save step to get out of step with what is painted.
  */
 import {
+  DECAL_ROUTE,
   DECAL_URL,
   HEX_COLOR,
+  LOCAL_PLATE_DIR,
+  LOCAL_WORDMARK_FILE,
   MARK_TEXT_MAX,
+  OFFICIAL_PLATES,
   SKIN_SETTINGS_DEFAULTS,
   safeAccent,
   safeDecalOpacity,
+  safeDecalPlate,
   safeDecalScale,
   safeMarkStyle,
   safeMarkText,
   safeTint,
 } from '../settings.ts'
+import type { DecalPlate } from '../settings.ts'
 import type { SettingsScope } from '../types.ts'
 import { accentScale } from './colors.ts'
 
@@ -60,6 +66,7 @@ interface SkinDraft {
   markText: string
   decalOpacity: number
   decalScale: number
+  decalPlate: DecalPlate
 }
 
 export interface SkinSectionProps {
@@ -102,6 +109,7 @@ export function createSkinSection(React: ReactLike) {
       markText: safeMarkText(typeof value.markText === 'string' ? value.markText : undefined),
       decalOpacity: safeDecalOpacity(value.decalOpacity),
       decalScale: safeDecalScale(value.decalScale),
+      decalPlate: safeDecalPlate(value.decalPlate),
     }
   }
 
@@ -470,6 +478,79 @@ export function createSkinSection(React: ReactLike) {
         h('span', { key: 'val', style: { fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, `${draft.decalScale.toFixed(2)}x`),
       ],
     )
+
+    /**
+     * The plate box, wherever a preview of it is wanted.
+     *
+     * It paints the SAME background the rule does — including the lockup's two composed layers —
+     * so the row is a real reading of what will print, not an icon standing in for it. A plate
+     * whose file is missing paints nothing, which is exactly the feedback the user needs before
+     * wondering why the decal vanished.
+     */
+    const platePreview = (plate: DecalPlate, opacity: number) => {
+      const badge = `${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${OFFICIAL_PLATES['official-badge'].file}`
+      const wordmark = `${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${LOCAL_WORDMARK_FILE}`
+      const layers = plate === 'official-lockup'
+        ? { backgroundImage: `url("${badge}"), url("${wordmark}")`, backgroundSize: 'auto 84%, auto 46%', backgroundPosition: 'left center, right center', backgroundRepeat: 'no-repeat, no-repeat' }
+        : {
+            backgroundImage: `url("${plate === 'skin' ? DECAL_URL : plate === 'official-badge' ? badge : wordmark}")`,
+            backgroundSize: 'contain',
+            backgroundPosition: 'left center',
+            backgroundRepeat: 'no-repeat',
+          }
+      return h('span', {
+        key: `preview-${plate}`,
+        style: {
+          display: 'inline-block',
+          width: '196px',
+          height: '52px',
+          padding: '4px 8px',
+          boxSizing: 'content-box',
+          backgroundColor: 'var(--dsw-specific-canvas, #191919)',
+          border: '1px solid var(--dsw-alias-border-l1)',
+          opacity: Math.max(opacity, 0.25),
+          ...layers,
+        },
+      })
+    }
+
+    /**
+     * Which plate prints, and where the non-shipped ones come from.
+     *
+     * `skin` is the only plate in the repository; the official ones are conversions of artwork
+     * the user supplies, built by `scripts/make-official-plates.mjs` into the gitignored
+     * `assets/logo/local/`. The hint says so, because "the option is there but nothing prints"
+     * has exactly one cause and it is worth naming before the user finds it.
+     */
+    const decalPlateRow = row(
+      'Plate',
+      'The decal\u2019s artwork. Only the skin\u2019s own mark ships with this repository; the official plates are conversions of files you supply (see docs/design-reference/06-logo-notes.md), built into assets/logo/local/ and kept out of git. An uninstalled plate prints nothing.',
+      [
+        h('select', {
+          key: 'sel',
+          value: draft.decalPlate,
+          disabled: !draft.mark || draft.markStyle !== 'decal',
+          onChange: (e: { target: { value: string } }) => commit('decalPlate', safeDecalPlate(e.target.value)),
+          style: {
+            width: '240px',
+            fontFamily: 'var(--ds-font-family-code)',
+            fontSize: '12px',
+            letterSpacing: '0.06em',
+            padding: '5px 8px',
+            borderRadius: '0',
+            border: '1px solid var(--dsw-alias-border-l2)',
+            background: 'var(--dsw-alias-bg-layer-1)',
+            color: 'var(--dsw-alias-label-primary)',
+            opacity: draft.mark && draft.markStyle === 'decal' ? 1 : 0.5,
+          },
+        }, [
+          h('option', { key: 'skin', value: 'skin' }, 'Skin\u2019s own mark (ships)'),
+          ...Object.entries(OFFICIAL_PLATES).map(([value, entry]) =>
+            h('option', { key: value, value }, `${entry.label} — local`)),
+        ]),
+        platePreview(draft.decalPlate, draft.decalOpacity),
+      ],
+    )
     const dotRow = effectRow(
       'dotBlock',
       'Halftone block',
@@ -517,7 +598,7 @@ export function createSkinSection(React: ReactLike) {
       accentRow, tintRow, surfaceRow, bloomRow, radiusRow, prefixRow,
       h('p', { key: 'fx', style: { margin: '20px 0 0', fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } },
         'Page effects — three independent treatments, each in its own zone. Off by default; any combination is safe.'),
-      headerLightRow, markRow, markStyleRow, markTextRow, decalOpacityRow, decalScaleRow, dotRow,
+      headerLightRow, markRow, markStyleRow, markTextRow, decalOpacityRow, decalScaleRow, decalPlateRow, dotRow,
       error
         ? h('p', { style: { margin: '10px 0 0', fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, `Save failed: ${error}`)
         : null,
@@ -539,6 +620,7 @@ export function createSkinSection(React: ReactLike) {
             commit('markText', SKIN_SETTINGS_DEFAULTS.markText)
             commit('decalOpacity', SKIN_SETTINGS_DEFAULTS.decalOpacity)
             commit('decalScale', SKIN_SETTINGS_DEFAULTS.decalScale)
+            commit('decalPlate', SKIN_SETTINGS_DEFAULTS.decalPlate)
           },
         }),
       ),

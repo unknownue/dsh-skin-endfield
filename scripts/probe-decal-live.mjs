@@ -28,6 +28,7 @@ import { launchBrowser } from './cdp-pipe.mjs'
 import { DECAL_FILE, DECAL_ROUTE, DECAL_URL } from '../src/settings.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const LOGO_DIR = join(ROOT, 'assets', 'logo')
 const OUT = join(ROOT, 'tests', 'out')
 const DSH_URL = process.env.DSH_URL
 if (!DSH_URL) { console.error('set DSH_URL (the URL printed by dsh web)'); process.exit(2) }
@@ -251,11 +252,73 @@ try {
     if (wanted) console.log(`      screenshot: ${await shoot(cdp, wanted.name, panelClip)}`)
   }
 
-  // 3. The two renderings side by side, so "decal vs wordmark" is a picture and not a claim.
-  await setVars({ z: 0, opacity: 0.08, top: 214, scale: 1 })
-  await withClass(true)
+  // 3. The plates side by side, so "which artwork" is a picture and not a promise.
+  //
+  // The official plates are LOCAL files (gitignored `assets/logo/local/`, built from artwork the
+  // user supplies) and they are served by the same host route as the shipped one — so before the
+  // host half has been restarted they are missing too. The probe injects them from disk as data
+  // URIs, which is the same seam `--endfield-decal-image` uses, and reports for each plate whether
+  // the route is actually delivering the file.
+  await evalIn(cdp, `(() => {
+    const badge = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'local', 'official-badge.png')).toString('base64'))}
+    const wordmark = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'local', 'official-wordmark.png')).toString('base64'))}
+    const style = document.createElement('style')
+    style.id = 'decal-probe-plates'
+    style.textContent = [
+      'html.endfield-plate-official-wordmark [data-conversation-content]::before { background-image: url("data:image/png;base64,' + wordmark + '") !important; }',
+      'html.endfield-plate-official-badge [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '") !important; }',
+      'html.endfield-plate-official-lockup [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '"), url("data:image/png;base64,' + wordmark + '") !important; }',
+    ].join('\\n')
+    document.head.appendChild(style)
+    return true
+  })()`)
+
+  const PLATES = [
+    { name: 'skin', cls: 'endfield-plate-skin', url: DECAL_URL, shot: 'decal-plate-skin.png' },
+    { name: 'official-badge', cls: 'endfield-plate-official-badge', url: `${DECAL_ROUTE}/local/official-badge.png`, shot: 'decal-plate-official-badge.png' },
+    { name: 'official-wordmark', cls: 'endfield-plate-official-wordmark', url: `${DECAL_ROUTE}/local/official-wordmark.png`, shot: 'decal-plate-official-wordmark.png' },
+    { name: 'official-lockup', cls: 'endfield-plate-official-lockup', url: `${DECAL_ROUTE}/local/official-badge.png`, shot: 'decal-plate-official-lockup.png' },
+  ]
+  const PLATE_CLASSES = PLATES.map((p) => p.cls)
+  console.log('--- plates (shipped vs local official conversions) ---')
+  await evalIn(cdp, `(() => { document.documentElement.style.setProperty('--endfield-decal-opacity', '0.12'); document.documentElement.style.setProperty('--endfield-decal-scale', '1'); return true })()`)
+  for (const plate of PLATES) {
+    await withClass(false)
+    await evalIn(cdp, `(() => {
+      const root = document.documentElement
+      for (const c of ${JSON.stringify(PLATE_CLASSES)}) root.classList.toggle(c, c === ${JSON.stringify(plate.cls)})
+      return true
+    })()`)
+    await sleep(300)
+    const box = await evalIn(cdp, GEOMETRY)
+    await evalIn(cdp, `(() => { document.documentElement.classList.toggle('endfield-mark-decal', false); return true })()`)
+    await sleep(300)
+    const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    await evalIn(cdp, `(() => { document.documentElement.classList.toggle('endfield-mark-decal', true); return true })()`)
+    await sleep(350)
+    const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    const r = await diff(cdp, rect, off, on)
+    const served = await evalIn(cdp, `(async () => {
+      try { const res = await fetch(${JSON.stringify(plate.url)}, { cache: 'no-store' }); return res.status }
+      catch { return 0 }
+    })()`)
+    console.log(`  ${plate.name.padEnd(17)} box ${Math.round(parseFloat(box.rule.width) || 0)}x${Math.round(parseFloat(box.rule.height) || 0)} ` +
+      `at right ${box.rule.right} / top ${box.rule.top} -> ${r.changed} px (peak Δ${r.maxDelta})` +
+      `${r.inkBox ? `, ink x ${r.inkBox[0]}..${r.inkBox[2]}, y ${r.inkBox[1]}..${r.inkBox[3]}` : ''}; route says ${served}`)
+    console.log(`      screenshot: ${await shoot(cdp, plate.shot, panelClip)}`)
+  }
+  await evalIn(cdp, `(() => {
+    document.getElementById('decal-probe-plates')?.remove()
+    const root = document.documentElement
+    for (const c of ${JSON.stringify(PLATE_CLASSES)}) root.classList.remove(c)
+    root.classList.remove('endfield-mark-decal', 'endfield-mark')
+    return true
+  })()`)
+  await sleep(300)
+  await evalIn(cdp, `(() => { document.documentElement.classList.add('endfield-mark', 'endfield-mark-decal'); return true })()`)
+  await setVars({ z: 0, opacity: 0.12, top: 214, scale: 1 })
   await sleep(400)
-  console.log(`screenshot (decal armed): ${await shoot(cdp, 'decal-panel.png', panelClip)}`)
+  console.log(`screenshot (decal armed, shipped plate): ${await shoot(cdp, 'decal-panel.png', panelClip)}`)
   await evalIn(cdp, `(() => { document.documentElement.classList.remove('endfield-mark-decal','endfield-mark'); return true })()`)
   await sleep(300)
   console.log(`screenshot (decal off):   ${await shoot(cdp, 'decal-panel-off.png', panelClip)}`)

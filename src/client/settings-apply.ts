@@ -23,8 +23,11 @@
  *     rather than falling back.
  */
 import {
+  DECAL_PLATES,
+  DECAL_PLATE_CLASSES,
   MARK_TEXT_MAX,
   SKIN_SETTINGS_DEFAULTS,
+  decalPlateClass,
   normalizeSkinSettings,
   tintChannels,
 } from '../settings.ts'
@@ -128,6 +131,17 @@ export const DECAL_OPACITY_VAR = '--endfield-decal-opacity'
 export const DECAL_SCALE_VAR = '--endfield-decal-scale'
 
 /**
+ * Which plate prints, as one class per plate.
+ *
+ * The shipped plate is the CSS default; the official ones are local conversions of artwork the
+ * user supplies (they live in the gitignored `assets/logo/local/`, see make-official-plates), so
+ * the class names carry the choice and the stylesheet carries the URL. Exactly one is armed at a
+ * time, and only while the decal rendering is the one selected. The names themselves live in
+ * `settings.ts`, because the live check arms them by hand too.
+ */
+export { DECAL_PLATE_CLASSES, decalPlateClass }
+
+/**
  * The mark's text, written as a quoted CSS string.
  *
  * `content` needs a quoted string, and the value is a user-editable one -- so the quotes
@@ -204,6 +218,12 @@ export function applySkinSettings(
   // half-armed, and switching style is one idempotent call rather than a remove-then-add.
   root.classList.toggle(MARK_DECAL_CLASS, settings.mark && settings.markStyle === 'decal')
   root.classList.toggle(MARK_TEXT_CLASS, settings.mark && settings.markStyle === 'text')
+  // One plate class at a time: the shipped plate (which needs none — it is the CSS default) or
+  // one local official conversion. Armed only while the decal is the rendering in use, so the
+  // plate choice cannot leak into the wordmark's rule.
+  for (const plate of DECAL_PLATES) {
+    root.classList.toggle(decalPlateClass(plate), settings.mark && settings.markStyle === 'decal' && settings.decalPlate === plate)
+  }
   root.style.setProperty(MARK_TEXT_VAR, cssContentString(settings.markText))
   root.style.setProperty(DECAL_OPACITY_VAR, String(settings.decalOpacity))
   root.style.setProperty(DECAL_SCALE_VAR, String(settings.decalScale))
@@ -221,6 +241,7 @@ export function clearSkinSettings(): void {
   root.classList.remove(MARK_CLASS)
   root.classList.remove(MARK_DECAL_CLASS)
   root.classList.remove(MARK_TEXT_CLASS)
+  for (const cls of DECAL_PLATE_CLASSES) root.classList.remove(cls)
   root.classList.remove(DOT_BLOCK_CLASS)
   root.style.removeProperty(ACCENT_VAR)
   root.style.removeProperty(ACCENT_INK_VAR)

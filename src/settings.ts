@@ -94,6 +94,15 @@ export const SKIN_SETTINGS_DEFAULTS = {
   decalOpacity: 0.12,
   /** Multiplier on the plate's width. 1 puts it at 46% of the panel, which is about 600px. */
   decalScale: 1,
+  /**
+   * Which plate prints.
+   *
+   * `skin` is this repository's own drawing and the only one that ships. The official plates are
+   * conversions of artwork the USER supplies, built locally by `scripts/make-official-plates.mjs`
+   * into the gitignored `assets/logo/local/`; a fresh clone cannot have them, so the default must
+   * stay `skin` — a default that only exists on one machine is not a default.
+   */
+  decalPlate: 'skin' as DecalPlate,
 }
 
 /** Longest mark accepted. A wordmark is read as a mark, not as a sentence. */
@@ -148,6 +157,7 @@ export interface SkinSettings {
   markText: string
   decalOpacity: number
   decalScale: number
+  decalPlate: DecalPlate
 }
 
 /** The two renderings of the page mark. */
@@ -174,6 +184,53 @@ export const DECAL_FILE = 'endfield-decal.png'
 export const DECAL_URL = `${DECAL_ROUTE}/${DECAL_FILE}`
 /** The asset's own aspect ratio, as CSS spells it (`aspect-ratio: 624 / 113`). */
 export const DECAL_ASPECT_CSS = '624 / 113'
+
+/**
+ * Locally built plates, from whatever official artwork the user has the right to use.
+ *
+ * They are NOT in the repository (`.gitignore` keeps `assets/logo/local/` out) and not part of
+ * any release: `scripts/make-official-plates.mjs` converts files the user supplies into the same
+ * pure-grey, alpha-carrying form as the shipped plate, and the settings page offers them only to
+ * the installation that has them. A missing file paints nothing — an empty decal, not an error.
+ */
+export const LOCAL_PLATE_DIR = 'local'
+export const OFFICIAL_PLATES = {
+  'official-wordmark': { file: 'official-wordmark.png', label: 'Official wordmark (ENDFIELD)' },
+  'official-badge': { file: 'official-badge.png', label: 'Official badge (终末地)' },
+  'official-lockup': { file: 'official-badge.png', label: 'Official lockup (badge + wordmark)' },
+} as const
+
+/** The plates a user can pick: the shipped one, or one of the local official conversions. */
+export const DECAL_PLATES = ['skin', ...Object.keys(OFFICIAL_PLATES)] as const
+export type DecalPlate = (typeof DECAL_PLATES)[number]
+
+/** The URL of a locally built plate (the lockup composes the badge with the wordmark). */
+export function localPlateUrl(plate: DecalPlate): string | null {
+  if (plate === 'skin') return null
+  const entry = OFFICIAL_PLATES[plate as keyof typeof OFFICIAL_PLATES]
+  return entry ? `${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${entry.file}` : null
+}
+
+/** The wordmark file a lockup composes with, named here so the CSS and the builder agree. */
+export const LOCAL_WORDMARK_FILE = 'official-wordmark.png'
+
+/** Coerce a stored value into a known plate. An unknown plate falls back to the shipped one. */
+export function safeDecalPlate(value: unknown): DecalPlate {
+  return typeof value === 'string' && (DECAL_PLATES as readonly string[]).includes(value)
+    ? (value as DecalPlate)
+    : SKIN_SETTINGS_DEFAULTS.decalPlate
+}
+
+/**
+ * The root class that arms one plate, spelled here rather than in the stylesheet module.
+ *
+ * Three places need it to agree — the settings path that toggles it, the decor sheet that keys
+ * the rule on it, and the live check that arms it by hand — and a class name is exactly the kind
+ * of string that gets renamed in two of the three.
+ */
+export const DECAL_PLATE_CLASS_PREFIX = 'endfield-plate-'
+export const decalPlateClass = (plate: string): string => `${DECAL_PLATE_CLASS_PREFIX}${plate}`
+export const DECAL_PLATE_CLASSES = DECAL_PLATES.map(decalPlateClass)
 
 /** Coerce a stored decal opacity into 0..1. */
 export function safeDecalOpacity(value: unknown): number {
@@ -247,5 +304,6 @@ export function normalizeSkinSettings(section: unknown): SkinSettings {
     markText: safeMarkText(raw.markText),
     decalOpacity: safeDecalOpacity(raw.decalOpacity),
     decalScale: safeDecalScale(raw.decalScale),
+    decalPlate: safeDecalPlate(raw.decalPlate),
   }
 }

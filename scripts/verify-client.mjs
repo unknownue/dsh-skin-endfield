@@ -740,12 +740,15 @@ await check('the settings page exposes every field and commits to the scope', as
   assert(byType('number').length === 1, 'missing the corner-radius field')
   assert(byType('checkbox').length === 5, `expected 5 toggles (panel fill, section marker, and the three page effects), got ${byType('checkbox').length}`)
 
-  // The mark's style is a CHOICE, not a switch: both renderings occupy the same corner, so
-  // there is no configuration in which both are on. One select, two options.
-  const styleSelect = flat.find((n) => n.type === 'select')
+  // The mark's style and the decal's plate are CHOICES, not switches: both occupy one slot, so
+  // there is no configuration in which two of them are on. Two selects, and the plate one has to
+  // offer the shipped artwork plus every local official conversion.
+  const selects = flat.filter((n) => n.type === 'select')
+  assert(selects.length === 2, `expected 2 selects (mark style, decal plate), got ${selects.length}`)
+  const styleSelect = selects.find((n) => flat.filter((o) => o.type === 'option').some((o) => o.props?.value === 'text'))
   assert(styleSelect !== undefined, 'no mark-style select')
   const styleOptions = flat.filter((n) => n.type === 'option').map((o) => o.props?.value)
-  assert(styleOptions.join(',') === 'decal,text', `mark style must offer both renderings, got ${styleOptions.join(',')}`)
+  assert(styleOptions.slice(0, 2).join(',') === 'decal,text', `mark style must offer both renderings, got ${styleOptions.slice(0, 2).join(',')}`)
   assert(styleSelect.props.value === 'decal', `the plate is the shipped default, got ${styleSelect.props.value}`)
   writes.length = 0
   styleSelect.props.onChange({ target: { value: 'text' } })
@@ -754,6 +757,20 @@ await check('the settings page exposes every field and commits to the scope', as
   // An unknown style must fall back rather than reach the stylesheet as a third class.
   styleSelect.props.onChange({ target: { value: 'sideways' } })
   assert(writes[1][1] === 'decal', `an unknown style must fall back to the plate, got ${writes[1][1]}`)
+
+  const plateSelect = selects.find((n) => n !== styleSelect)
+  const plateValues = styleOptions.filter((v) => v === 'skin' || String(v).startsWith('official-'))
+  assert(plateValues.join(',') === 'skin,official-wordmark,official-badge,official-lockup',
+    `the plate list must run from the shipped mark to every official conversion, got ${plateValues.join(',')}`)
+  assert(plateSelect.props.value === 'skin', `a fresh install must select the shipped plate, got ${plateSelect.props.value}`)
+  writes.length = 0
+  plateSelect.props.onChange({ target: { value: 'official-lockup' } })
+  assert(writes.length === 1 && writes[0][0] === 'decalPlate' && writes[0][1] === 'official-lockup',
+    `the plate must commit through the scope, got ${JSON.stringify(writes)}`)
+  // A plate that no longer exists (a stale settings document) must fall back to the shipped one
+  // rather than arming a class no rule matches.
+  plateSelect.props.onChange({ target: { value: 'someones-draft' } })
+  assert(writes[1][1] === 'skin', `an unknown plate must fall back to the shipped mark, got ${writes[1][1]}`)
   // Leave the recorder clean for the assertions below, which count their own writes.
   writes.length = 0
 
@@ -777,7 +794,7 @@ await check('the settings page exposes every field and commits to the scope', as
   reset.props.onClick()
   const fields = writes.map(([field]) => field).sort()
   assert(
-    fields.join(',') === 'accent,bloom,cornerRadius,decalOpacity,decalScale,dotBlock,headerLight,labelPrefix,mark,markStyle,markText,surfaceFill,tint',
+    fields.join(',') === 'accent,bloom,cornerRadius,decalOpacity,decalPlate,decalScale,dotBlock,headerLight,labelPrefix,mark,markStyle,markText,surfaceFill,tint',
     `Reset must cover every field, got ${fields.join(',')}`,
   )
 

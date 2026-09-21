@@ -49,6 +49,8 @@ function parseArgs(argv) {
     // `--source` selects the conversion path by itself: asking for a source and silently
     // re-rendering the built-in lockup instead is a trap worth not leaving in the argument parser.
     else if (arg === '--source') { out.source = argv[++i]; out.mode = 'convert' }
+    else if (arg === '--ink-mode') out.inkMode = argv[++i]
+    else if (arg === '--normalize') out.normalize = true
     else if (arg === '--out') out.out = argv[++i]
     else if (arg === '--scale') out.scale = Number(argv[++i])
     else if (arg === '--height') out.height = Number(argv[++i])
@@ -310,26 +312,85 @@ async function convertSource(args) {
       const d = ctx.getImageData(0, 0, w, h).data
       const [ir, ig, ib] = ${JSON.stringify(PLATE_INK)}
       const dark = ${args.polarity === 'dark'}
+      /**
+       * The source's own statistics, read before anything is converted.
+       *
+       * Picking the polarity by eye is how the first pass at the official badge came out as
+       * contour outlines: the artwork is black line work on a WHITE ground, so "luminance ->
+       * alpha" made the paper the ink. The corner and the mean settle it: an opaque white
+       * corner means the polarity is dark (the ground must go), a transparent corner means the
+       * artwork is already cut out and the luminance is the ink.
+       */
+      const lumaAt = (x, y) => {
+        const i = (y * w + x) * 4
+        return Math.round(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2])
+      }
+      let sum = 0, min = 255, max = 0, transparent = 0
+      for (let i = 0; i < d.length; i += 4) {
+        const luma = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]
+        sum += luma
+        if (luma < min) min = luma
+        if (luma > max) max = luma
+        if (d[i + 3] < 250) transparent++
+      }
+      const stats = {
+        width: img.naturalWidth, height: img.naturalHeight,
+        corners: [lumaAt(0, 0), lumaAt(w - 1, 0), lumaAt(0, h - 1), lumaAt(w - 1, h - 1)],
+        min, max, mean: Math.round(sum / (d.length / 4)),
+        transparentPixels: transparent,
+        opaqueShare: +(1 - transparent / (d.length / 4)).toFixed(3),
+      }
+      /**
+       * Two ways to read a source, because cut-out artwork and artwork-on-a-ground are not the
+       * same picture:
+       *
+       *   silhouette  — the source's own alpha IS the ink (a black mark already cut out of its
+       *                 background); every painted pixel becomes the plate grey.
+       *   luma-alpha  — luminance IS the ink (white lettering on black, a screenshot, a scan).
+       *
+       * normalize then rescales alpha so the brightest painted pixel reaches full strength.
+       * It exists because some official files are ALREADY watermarks: the ENDFIELD wordmark
+       * ships at about 33% alpha, which multiplied by the decal's own 0.12 opacity would be
+       * invisible. Normalising keeps the relative levels (the hatch stays lighter than the
+       * letter body) while putting the plate back at full ink.
+       */
+      const inkMode = ${JSON.stringify(args.inkMode ?? 'luma-alpha')}
+      const normalize = ${args.normalize === true}
+      let peak = 0
+      for (let i = 0; i < d.length; i += 4) {
+        const a = d[i + 3] / 255
+        const luma = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255
+        const covered = inkMode === 'silhouette' ? a : luma * a
+        if (covered > peak) peak = covered
+      }
+      const gain = normalize && peak > 0 ? 1 / peak : 1
       for (let i = 0; i < d.length; i += 4) {
         const a = d[i + 3] / 255
         let luma = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255
         if (dark) luma = 1 - luma
+        const covered = inkMode === 'silhouette' ? a : luma * a
         d[i] = ir; d[i + 1] = ig; d[i + 2] = ib
-        d[i + 3] = Math.round(Math.max(0, Math.min(1, luma)) * a * 255)
+        d[i + 3] = Math.round(Math.max(0, Math.min(1, covered * gain)) * 255)
       }
       ctx.putImageData(new ImageData(d, w, h), 0, 0)
-      return c.toDataURL('image/png')
+      return { dataUrl: c.toDataURL('image/png'), stats }
     })()`)
-    const png = Buffer.from(dataUrl.split(',')[1], 'base64')
-    const report = await evaluate(INSPECT(dataUrl))
+    const png = Buffer.from(dataUrl.dataUrl.split(',')[1], 'base64')
+    const report = await evaluate(INSPECT(dataUrl.dataUrl))
     mkdirSync(dirname(out), { recursive: true })
     writeFileSync(out, png)
-    console.log(`source: ${sourcePath} (polarity ${args.polarity})`)
+    const s = dataUrl.stats
+    console.log(`source: ${sourcePath} (ink ${args.inkMode ?? 'luma-alpha'}${args.normalize ? ', normalized' : ''}${args.polarity === 'dark' ? ', polarity dark' : ''})`)
+    console.log(`  ${s.width}x${s.height} px, luma ${s.min}..${s.max} (mean ${s.mean}), `
+      + `corners ${s.corners.join('/')}, opaque ${(s.opaqueShare * 100).toFixed(0)}%`)
+    console.log(`  hint: ${s.transparentPixels > s.width * 4
+      ? 'the artwork is already cut out — luminance is the ink, polarity light is right'
+      : 'the artwork sits on an opaque ground — polarity dark turns the ground into transparency'}`)
     console.log(`${out} — ${(png.length / 1024).toFixed(1)} kB`)
     console.log(assertGrey(report, 'converted decal'))
     if (args.preview) {
       mkdirSync(OUT_DIR, { recursive: true })
-      await writePreview(evaluate, dataUrl, 'converted', join(OUT_DIR, 'decal-preview-converted.png'))
+      await writePreview(evaluate, dataUrl.dataUrl, 'converted', join(OUT_DIR, 'decal-preview-converted.png'))
     }
   } finally {
     browser.close()

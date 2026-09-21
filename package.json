@@ -58,6 +58,7 @@
     "verify:page-effects": "node scripts/verify-page-effects-live.mjs",
     "decal:render": "node scripts/make-decal.mjs",
     "decal:check": "node scripts/make-decal.mjs --check",
+    "decal:official": "node scripts/make-official-plates.mjs",
     "inspect:dom": "node scripts/inspect-shell-dom.mjs",
     "inspect:green": "node scripts/probe-green.mjs",
     "inspect:composer": "node scripts/probe-composer-dom.mjs",

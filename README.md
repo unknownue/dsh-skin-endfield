@@ -36,6 +36,7 @@
 | **Mark text** | 竖排 wordmark 的文字（只对该渲染生效） | `ENDFIELD` |
 | **Decal opacity** | 印版浓淡（0–0.6） | `0.12` |
 | **Decal scale** | 印版大小（0.4–1.8×，1× = 面板宽的 46%） | `1` |
+| **Plate** | 印版用哪张图：皮肤自带那张（随包）/ 三张**官方资产的本地转换**（不随包，见下） | 皮肤自带 |
 
 ### Panel fill 关掉时，关掉的到底是什么
 
@@ -517,9 +518,28 @@ node scripts/make-decal.mjs --source your-logo.png --polarity dark --out tmp/x.p
 
 代价写在明处：`z-index: 0` 意味着它**会浅浅地压过它穿过的正文**（0.12 的灰）。所以默认值是这个数，而且它有自己的开关 —— "水贴压在一张密集表格上"是口味选择，不该替用户做掉。它仍然**不碰**点阵块（3）与输入区那条不透明带（7，sticky）。
 
+### 换成官方资产：三张**本地**印版（不提交）
+
+自带那版是同语言的清稿，不够像的话，`Plate` 可以直接换成**官方资产的纯灰转换**：
+
+| 选项 | 源文件（官网，`scripts/harvest/01-official-assets.ps1` 抓下来的那份） | 转换要点 |
+|---|---|---|
+| **Official wordmark** | `endfield_text.<hash>.png`，2743×480 | 官方 `ENDFIELD` 字标，**自带网纹**；文件本身只有约 33% alpha → `--normalize` 拉满，否则叠上 0.12 就没了 |
+| **Official badge** | `endfield.<hash>.png`，430×372 | 倒三角徽标（含 终末地 + `ENDFIELD INDUSTRIES`），黑线稿**已抠图** → `--ink-mode silhouette`；套 polarity 会把白底变成墨 |
+| **Official lockup** | 上面两张 | 用**两层 background** 合成（左徽标 + 右字标），不做任何位图编辑，所以任何分辨率都不糊 |
+
+```sh
+pnpm decal:official                                        # 默认去 E:\Workspace\tmp\endfield-refs\raw\cssimg 找
+node scripts/make-official-plates.mjs --from D:\refs\cssimg # 或自己指目录
+```
+
+**它们不进仓库**：`.gitignore` 忽略 `assets/logo/local/`，官方 logo 的版权不归本项目，README 的合规声明也不允许随包分发（事实与来源见 `docs/design-reference/06-logo-notes.md`）。宿主路由覆盖 `assets/logo` 整棵树，所以本机能用、克隆出去就没有 —— 这正是"默认必须是 `skin`"的原因：只在某台机器上存在的默认值不是默认值。文件缺了就是**什么都不印**（空水贴），不是报错。
+
+> 这两个转换坑是实测踩出来的，注释也在脚本里：官方字标是"**已经是水印**"的文件（alpha ≈ 33%），照常转会在叠上 0.12 后彻底看不见；官方徽标是**黑线稿 + 白底**，"亮度→alpha"会把白纸变成墨，于是得到一张描线轮廓图。`--normalize` 与 `--ink-mode silhouette` 就是为这两件事存在的。
+
 ### 宿主半边要重启一次
 
-印版由宿主半边送达：`/skin-endfield/logo/endfield-decal.png`。只路由 `assets/logo/` 一个目录，**不**路由整个 `assets/` —— `screenshots/`、`in-game-frames/`、`ui-primitives/` 是研究引用，不该因为多一条路由就变得能被任何页面取走。宿主半边**每次 `dsh web` 启动只加载一次**，所以这条路由要重启才存在；在此之前 live 检查会打印 NOTE 并**跳过**那条绘制断言（跳过，不是通过）。
+印版由宿主半边送达：`/skin-endfield/logo/`（自带那张与本地官方印版同一条路由）。只路由 `assets/logo/` 一个目录，**不**路由整个 `assets/` —— `screenshots/`、`in-game-frames/`、`ui-primitives/` 是研究引用，不该因为多一条路由就变得能被任何页面取走。宿主半边**每次 `dsh web` 启动只加载一次**，所以这条路由要重启才存在；在此之前 live 检查会打印 NOTE 并**跳过**那条绘制断言（跳过，不是通过）。
 
 ## 点阵块：正文右上角、贴住右边界（装饰层 18c）
 
