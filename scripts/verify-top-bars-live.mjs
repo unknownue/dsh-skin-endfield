@@ -147,12 +147,17 @@ const PROBE = `(() => {
     divider: (() => { const cs = getComputedStyle(header, '::after')
       if (cs.content === 'none') return null
       return { left: cs.left, right: cs.right, height: cs.height, background: cs.backgroundColor } })(),
-    // The units' centre versus the band's centre, and the controls' right edge versus the
-    // band's content box right edge.
-    centreOffset: (() => { const u = header.querySelector('[role=tablist]')
+    // The units' right edge versus the band's right edge, and the controls' right edge versus
+    // the band's content box right edge.
+    //
+    // This was a CENTRING offset (the row's centre against the band's centre, asserted within
+    // 3px). The row is right-aligned now, by request, so the meaningful reading is the gap
+    // between the row's right edge and the band's -- measured at 151px, the same value the
+    // unit-row check pins from the other side, and the thing that moves if the offset changes.
+    unitRightGap: (() => { const u = header.querySelector('[role=tablist]')
       if (!u) return null
       const ur = u.getBoundingClientRect(); const hr = header.getBoundingClientRect()
-      return Math.round(ur.left + ur.width / 2 - (hr.left + hr.width / 2)) })(),
+      return Math.round(hr.right - ur.right) })(),
     controlRight: (() => {
       const els = [...header.querySelectorAll("[class*='headerUtilities'], [class*='headerCorner']")]
       if (!els.length) return null
@@ -274,8 +279,8 @@ try {
   check(parseFloat(out.divider?.left) >= 10 && parseFloat(out.divider?.right) >= 10,
     `the divider is inset from BOTH ends (${out.divider?.left} / ${out.divider?.right})`)
   check(parseFloat(out.divider?.height) >= 1, `the divider is a hairline (${out.divider?.height})`)
-  check(Math.abs(out.centreOffset) <= 3,
-    `the units are centred on the band (off by ${out.centreOffset}px)`)
+  check(out.unitRightGap !== null && Math.abs(out.unitRightGap - 151) <= 3,
+    `the units are right-aligned on the band (right edge ${out.unitRightGap}px in from the band's right edge; want 151)`)
   check(out.controlRight !== null && Math.abs(out.controlRight - out.bandContentRight) <= 20,
     `the controls are back at the right edge (controls end ${out.controlRight}, band content ends ${out.bandContentRight})`)
 

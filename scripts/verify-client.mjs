@@ -558,6 +558,41 @@ await check('decor CSS body contains no backtick (it would close the template li
   return 'no backtick in the CSS body'
 })
 
+/**
+ * The sheet's braces must balance, and this check exists because they did not.
+ *
+ * A CSS parse error is the quietest kind of breakage in this file: a stray `}` (the residue of
+ * deleting a rule by line range, which is exactly how this was discovered) made the browser drop
+ * the rules after it. Nothing failed — the build was green, the client checks were green, and only
+ * a DOWNSTREAM live check noticed, by measuring a rule that had gone missing: the title's
+ * current-location line came out 1240px wide instead of the crumb's 192px text box, because the
+ * `position: relative` that anchors it had been swallowed.
+ *
+ * Counting is enough to catch that class of mistake (the CSS in this file has no nested braces and
+ * no brace characters inside strings), and it fails with the line number of the imbalance rather
+ * than at the far end of a browser parse.
+ */
+await check('decor CSS braces balance', () => {
+  const src = readFileSync(join(ROOT, 'src', 'client', 'decor.ts'), 'utf8')
+  const open = src.indexOf('export const endfieldDecor = `')
+  assert(open >= 0, 'could not locate the decor template literal')
+  const bodyStart = src.indexOf('`', open) + 1
+  const body = src.slice(bodyStart, src.lastIndexOf('`'))
+  const firstLine = src.slice(0, bodyStart).split('\n').length
+  let depth = 0
+  let deepestLine = 0
+  body.split('\n').forEach((line, i) => {
+    // A rule-opening brace is any `{` on a line that is not inside a declaration; strings in this
+    // sheet never contain one (checked: the content values use quotes and escapes, not braces).
+    for (const char of line) {
+      if (char === '{') { depth++; deepestLine = i }
+      if (char === '}') { depth--; if (depth < 0) throw new Error(`unmatched '}' at line ${firstLine + i}: ${line.trim().slice(0, 70)}`) }
+    }
+  })
+  assert(depth === 0, `${depth} unclosed rule block(s); the sheet's last open brace is around line ${firstLine + deepestLine}`)
+  return 'the sheet parses block-for-block'
+})
+
 await check('decor only nests rules under body (or the skin own root class)', () => {
   // Split on top-level commas only: `:is(a, b)` contains commas that must not
   // be treated as selector separators.

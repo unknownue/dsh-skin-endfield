@@ -9,7 +9,8 @@
  *      with every other plate in the band and never replaced it, so the row read as five
  *      labels rather than five controls. The active unit must not take the wash — it is
  *      already a plate, and tinting it would dim its own ink.
- *   2. The row is centred on the header, square, and sized by its own labels.
+ *   2. The row is RIGHT-ALIGNED in the header -- clear of the right cluster, and measurably right of\n *      the header's centre -- square, and sized by its own labels. It used to be centred;\n *      the centred reading and the right-aligned one fail in different places, so both numbers\n *      (offset from the bar's right edge, clearance to the controls) are printed.
+
  *   3. The current plate's ink differs from its fill and is legible on it (the ink is
  *      derived by colors.ts accentInk(), so a pale accent has to land on dark ink).
  *
@@ -33,8 +34,21 @@ const GEOMETRY = `(() => {
   const tabs = list ? [...list.querySelectorAll('[role=tab]')] : []
   return {
     scale: window.devicePixelRatio || 1,
-    row: list ? (() => { const r = list.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height } })() : null,
-    header: (() => { const h = document.querySelector('header'); if (!h) return null; const r = h.getBoundingClientRect(); return { left: r.left, width: r.width } })(),
+    row: list ? (() => { const r = list.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right } })() : null,
+    header: (() => { const h = document.querySelector('header'); if (!h) return null; const r = h.getBoundingClientRect(); return { left: r.left, width: r.width, right: r.right } })(),
+    // Where the bar's own right-hand controls begin: the buttons that are not part of this row and
+    // sit right of the bar's centre. This is the edge the row has to clear, and it is read rather
+    // than assumed because it is a property of the bar, not of the row.
+    controlsLeft: (() => {
+      const h = document.querySelector('header')
+      if (!h) return null
+      const hr = h.getBoundingClientRect()
+      const lefts = [...h.querySelectorAll('button, [role=button]')]
+        .filter((b) => !b.closest('[role=tablist]'))
+        .map((b) => b.getBoundingClientRect().left)
+        .filter((l) => l > hr.left + hr.width * 0.5)
+      return lefts.length ? Math.min(...lefts) : null
+    })(),
     tabs: tabs.map((tab) => {
       const r = tab.getBoundingClientRect()
       const cs = getComputedStyle(tab)
@@ -99,7 +113,29 @@ try {
     process.exitCode = 2
   } else {
     console.log(`units: ${geometry.tabs.map((t) => `${t.text}(${Math.round(t.width)}px)`).join(', ')}`)
-    console.log(`row  : ${Math.round(geometry.row.width)}px wide, centre ${Math.round(geometry.row.left + geometry.row.width / 2)} vs header centre ${Math.round(geometry.header.left + geometry.header.width / 2)}`)
+    console.log(`row  : ${Math.round(geometry.row.width)}px wide, right edge ${Math.round(geometry.row.right)} against the bar's ${Math.round(geometry.header.right)} (offset ${Math.round(geometry.header.right - geometry.row.right)}px), clearance to the controls ${geometry.controlsLeft === null ? 'n/a' : Math.round(geometry.controlsLeft - geometry.row.right) + 'px'}`)
+    // 2. RIGHT-ALIGNED. Two numbers, because they fail in different places: the offset from the
+    // bar's right edge (the rule's own value) and the clearance to the bar's controls (the thing a
+    // wrong offset breaks silently -- the first measured value put the row 12px UNDER them).
+    const clearance = geometry.row === null || geometry.controlsLeft === null ? null : geometry.controlsLeft - geometry.row.right
+    const offset = geometry.row === null ? null : geometry.header.right - geometry.row.right
+    check(offset !== null && Math.abs(offset - 151) <= 3,
+      `the row is right-aligned: right edge ${geometry.row === null ? 'n/a' : Math.round(geometry.row.right)} = bar ${Math.round(geometry.header.right)} - ${offset === null ? 'n/a' : Math.round(offset)} (want 151)`)
+    check(clearance !== null && clearance >= 8,
+      `and clears the bar's right-hand controls by ${clearance === null ? 'n/a' : `${Math.round(clearance)}px`} (want >= 8; negative means the row is under them)`)
+    check(geometry.row !== null && geometry.row.left + geometry.row.width / 2 > geometry.header.left + geometry.header.width / 2 + 100,
+      `and is not centred on the bar: row centre ${geometry.row === null ? 'n/a' : Math.round(geometry.row.left + geometry.row.width / 2)} vs bar centre ${Math.round(geometry.header.left + geometry.header.width / 2)}`)
+
+    // The clearance has to survive a narrower window, and it does because the offset is taken from
+    // the bar's right edge: both edges move with the window. Emulated rather than reasoned about.
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 800, deviceScaleFactor: 1, mobile: false })
+    await sleep(700)
+    const narrow = await cdp.evalIn(GEOMETRY)
+    await cdp.send('Emulation.clearDeviceMetricsOverride')
+    await sleep(500)
+    const narrowClearance = narrow.row === null || narrow.controlsLeft === null ? null : narrow.controlsLeft - narrow.row.right
+    check(narrowClearance !== null && clearance !== null && Math.abs(narrowClearance - clearance) <= 2,
+      `and that clearance is the same at 1100px (${narrowClearance === null ? 'n/a' : Math.round(narrowClearance)}px against ${clearance === null ? 'n/a' : Math.round(clearance)}px)`)
 
 
     console.log('')
