@@ -230,6 +230,7 @@ try {
   const panelClip = { x: geom.panel[0], y: geom.panel[1], width: geom.panel[2] - geom.panel[0], height: geom.panel[3] - geom.panel[1], scale: 1 }
   const rect = [Math.round(panelClip.x), Math.round(panelClip.y), Math.round(panelClip.width), Math.round(panelClip.height)]
   const shots = [
+    { opacity: 0.12, top: 214, scale: 1, name: 'decal-shipped.png' },
     { opacity: 0.08, top: 214, scale: 1, name: 'decal-panel-a.png' },
     { opacity: 0.08, top: 420, scale: 1, name: 'decal-panel-b.png' },
     { opacity: 0.14, top: 214, scale: 1.3, name: 'decal-panel-c.png' },
