@@ -32,10 +32,12 @@
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser } from './cdp-pipe.mjs'
-import { DECAL_PLATES, DECAL_URL, decalPlateClass, plateUrl } from '../src/settings.ts'
+import { MARK_ANCHORS, MARK_CUSTOM_CLASS, MARK_PLATES, MARK_VERTICAL_CLASS, PAGE_MARK_URL, markAnchorClass, plateClass, plateUrl } from '../src/settings.ts'
 
-/** Every plate class, so a case can clear the others before arming its own. */
-const PLATE_CLASSES = DECAL_PLATES.map((plate) => decalPlateClass(plate))
+/** Every plate class, every anchor class and the vertical class, so a case can clear them all. */
+const PLATE_CLASSES = MARK_PLATES.map((plate) => plateClass(plate))
+const ANCHOR_CLASSES = MARK_ANCHORS.map((anchor) => markAnchorClass(anchor))
+const MARK_KNOB_CLASSES = [...PLATE_CLASSES, ...ANCHOR_CLASSES, MARK_VERTICAL_CLASS, MARK_CUSTOM_CLASS]
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DSH_URL = process.env.DSH_URL
@@ -48,14 +50,13 @@ if (!DSH_URL) { console.error('set DSH_URL (the URL printed by dsh web)'); proce
  * and the dot block both live in the transcript's right half, so "which zone does this class
  * own" is a fact about the design, not something derivable from the names.
  *
- * The mark needs TWO classes to be armed, because it has two renderings: the switch
- * (`endfield-mark`) and the style (`endfield-mark-text` / `endfield-mark-decal`). The generic
- * assertions below use the wordmark, which is the smaller of the two and therefore the harder
- * one to detect; the decal gets its own section further down.
+ * The mark is one image with four knobs, and the knob classes are armed explicitly by the mark's
+ * own section below -- arming "the mark" here means the default combination (the shipped page
+ * mark, horizontal, top-right), which is what a fresh install paints.
  */
 const EFFECTS = [
   { name: 'headerLight', classes: ['endfield-header-light'], zone: 'header' },
-  { name: 'mark', classes: ['endfield-mark', 'endfield-mark-text'], zone: 'mark' },
+  { name: 'mark', classes: ['endfield-mark'], zone: 'mark' },
   { name: 'dotBlock', classes: ['endfield-dots'], zone: 'dotBlock' },
 ]
 
@@ -140,33 +141,52 @@ try {
    */
   const ZONE_READER = `
     const h = document.querySelector("[data-slot='conversation.session.header']")
-    const header = h && h.firstElementChild ? h.firstElementChild.getBoundingClientRect() : null
+    const headerEl = h && h.firstElementChild ? h.firstElementChild : null
+    const header = headerEl ? headerEl.getBoundingClientRect() : null
     const contentEl = document.querySelector('[data-conversation-content]')
     const content = contentEl ? contentEl.getBoundingClientRect() : null
     const scroll = document.querySelector('[data-conversation-scroll]')
-    if (!header || !content || !scroll) return null
+    // Only the panel and its scroller are REQUIRED: the header is one effect's zone and it comes and
+    // goes with the session's view, so making the whole reader depend on it turned a momentarily
+    // missing header into "the mark has no zone" -- a false failure this check has now produced.
+    if (!contentEl || !content || !scroll) return null
     // The mark is a pseudo-element, so its box comes from the computed style of the element
-    // that carries the rule -- it has no getBoundingClientRect of its own. That element is the
-    // panel now, and reading it off the scroller is how this check used to sample empty space.
+    // that carries the rule -- it has no getBoundingClientRect of its own. The panel is that
+    // element, and reading the offsets off the scroller is how this check used to sample empty
+    // space.
+    //
+    // The box is worked out the way the browser does it, not from a fixed corner: either side of
+    // an axis may be auto (the four anchors use left/right and top/bottom in combination), and a
+    // quarter-turned mark is a rotated box, so its FOOTPRINT is the short side wide and the long
+    // side high. Getting this wrong makes the sample window miss the ink, which reads as "the
+    // effect paints nothing" -- the exact false failure this reader has produced before.
     const cs = getComputedStyle(contentEl, '::before')
-    const markRight = parseFloat(cs.right) || 0
-    const markTop = parseFloat(cs.top) || 0
     const markW = parseFloat(cs.width) || 0
     const markH = parseFloat(cs.height) || 0
+    const num = (value) => (value === 'auto' ? null : parseFloat(value))
+    const left = num(cs.left), right = num(cs.right), top = num(cs.top), bottom = num(cs.bottom)
+    const boxX = left !== null ? content.left + left : content.right - (right ?? 0) - markW
+    const boxY = top !== null ? content.top + top : content.bottom - (bottom ?? 0) - markH
+    const rotated = cs.transform !== 'none' && !/^matrix\\(1, 0, 0, 1/.test(cs.transform)
+    const footX = rotated ? boxX + (markW - markH) / 2 : boxX
+    const footY = rotated ? boxY + (markH - markW) / 2 : boxY
+    const footW = rotated ? markH : markW
+    const footH = rotated ? markW : markH
     return {
-      headerRect: [Math.round(header.left), Math.round(header.top), Math.round(header.width), Math.round(Math.min(header.height, 52))],
+      headerRect: header ? [Math.round(header.left), Math.round(header.top), Math.round(header.width), Math.round(Math.min(header.height, 52))] : null,
       // The dot block sits in the transcript's TOP-right corner and is FLUSH to the right edge
-      // (18c: the mark shares that corner and is ordered above the screen rather than separated
-      // from it, which is what the earlier 52px gap was for). The zone is read from the
-      // content box rather than assumed, so it follows the CSS.
+      // (18c). The zone is read from the content box rather than assumed, so it follows the CSS.
       dotRect: [Math.round(content.right - content.width * 0.3), Math.round(content.top), Math.round(content.width * 0.3), Math.round(content.height * 0.17)],
       markRect: [
-        Math.round(content.right - markRight - Math.max(markW, 20)),
-        Math.round(content.top + markTop - 4),
-        Math.round(Math.max(markW, 20) + 8),
-        Math.round(Math.max(markH, 60) + 8),
+        Math.round(footX - 6),
+        Math.round(footY - 6),
+        Math.round(Math.max(footW, 20) + 12),
+        Math.round(Math.max(footH, 60) + 12),
       ],
       markBox: [Math.round(markW), Math.round(markH)],
+      markFootprint: [Math.round(footW), Math.round(footH)],
+      markRotated: rotated,
+      panelRect: [Math.round(content.left), Math.round(content.top), Math.round(content.width), Math.round(content.height)],
       scrollTop: Math.round(scroll.scrollTop),
       scrollMax: Math.round(scroll.scrollHeight - scroll.clientHeight),
     }
@@ -291,28 +311,36 @@ try {
 
   const withClass = async (cls, on) => evalIn(cdp,
     `(() => { document.documentElement.classList.toggle(${JSON.stringify(cls)}, ${on}); return true })()`)
-  /** The mark's two style classes. Naming them here means a third rendering has to be added. */
-  const MARK_STYLE_CLASSES = ['endfield-mark-text', 'endfield-mark-decal']
-  /** Arm exactly one mark rendering, with the switch, or disarm the mark entirely. */
-  const armMark = async (style, on) => {
-    for (const cls of MARK_STYLE_CLASSES) await withClass(cls, on && cls === style)
+  /**
+   * Arm the mark, with or without each of its knobs.
+   *
+   * The knobs are cleared first, always: they are one-of-N choices living on the same root, so an
+   * app whose stored settings already armed a plate, an anchor or the vertical turn would have
+   * two rules matching and the later one answering for the earlier — which is exactly the false
+   * reading this check produced the first time a knob shipped.
+   */
+  const armMark = async (on, knobs = {}) => {
+    for (const cls of MARK_KNOB_CLASSES) await withClass(cls, false)
+    if (on) {
+      if (knobs.plate !== undefined) await withClass(plateClass(knobs.plate), true)
+      if (knobs.anchor !== undefined) await withClass(markAnchorClass(knobs.anchor), true)
+      if (knobs.vertical === true) await withClass(MARK_VERTICAL_CLASS, true)
+    }
     await withClass('endfield-mark', on)
   }
-  /**
-   * Arm or disarm one effect.
-   *
-   * The mark needs the extra care of naming a STYLE, because it has two renderings and they
-   * share one pseudo-element: an app whose stored settings already armed the other one would
-   * have both rules matching, and the later rule would silently answer for the earlier. That is
-   * not hypothetical — it is what this check reported the first time the decal shipped, with the
-   * live app on `endfield-mark-decal` and the check toggling only the classes it knew about. So
-   * arming the mark always names the rendering it wants and clears the other.
-   */
   const armEffect = async (effect, on) => {
-    if (effect.name === 'mark') { await armMark('endfield-mark-text', on); return }
+    if (effect.name === 'mark') { await armMark(on); return }
     for (const cls of effect.classes) await withClass(cls, on)
   }
-  const readZones = () => evalIn(cdp, `(() => { ${ZONE_READER} })()`)
+  /** Read the zones, and say what is missing when the reader comes back empty. */
+  const readZones = async () => {
+    const zones = await evalIn(cdp, `(() => { ${ZONE_READER} })()`)
+    if (zones === null) {
+      const state = await evalIn(cdp, `(() => ({ content: !!document.querySelector('[data-conversation-content]'), scroll: !!document.querySelector('[data-conversation-scroll]'), phase: document.querySelector('[data-phase]')?.getAttribute('data-phase') ?? null, view: (document.querySelector('[data-slot=conversation.session]')?.children.length ?? -1) }))()`)
+      console.log(`[warn] the zone reader found no panel: ${JSON.stringify(state)}`)
+    }
+    return zones
+  }
 
   // The zone boxes are read ONCE, with all three effects on, and reused for every state below.
   // Two reasons, both learned by breaking it: a pseudo-element whose effect is switched off has
@@ -330,16 +358,24 @@ try {
   await sleep(400)
   const baseShot = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
   check('a fresh app paints none of the three effects',
-    Object.keys(ZONES).every((z) => rects[z].length === 4),
-    `zones: ${Object.keys(ZONES).map((z) => `${z} ${rects[z].join(',')}`).join(' | ')}`)
+    Object.keys(ZONES).every((z) => rects[z] === null || rects[z].length === 4),
+    `zones: ${Object.keys(ZONES).map((z) => `${z} ${rects[z] === null ? 'not on screen' : rects[z].join(',')}`).join(' | ')}`)
 
-  // The two effects that share the transcript's top-right corner must actually overlap: that is
-  // the property the flush-to-the-edge revision rests on, and the thing an earlier revision
-  // avoided by leaving a 52px gap.
-  const corner = overlapOf(rects.mark, rects.dotBlock)
-  check('the mark and the halftone block share the top-right corner',
-    corner !== null,
-    corner ? `shared strip x ${corner[0]}..${corner[0] + corner[2]}, y ${corner[1]}..${corner[1] + corner[3]}` : 'the two zones do not intersect')
+  /**
+   * The default corner leaves the halftone block alone.
+   *
+   * An earlier revision had the wordmark and the block overlapping in this corner, on purpose. The
+   * image mark is wider and shorter, so the arrangement is now "the block owns the corner, the mark
+   * sits under it" -- and that is worth an assertion in its own right, because a mark that grows
+   * upward (a bigger scale, a taller drawing) would eat the block's zone without failing anything
+   * else.
+   */
+  const overlap = overlapOf(rects.mark, rects.dotBlock)
+  check('the default mark sits clear of the halftone block',
+    overlap === null,
+    `mark x ${rects.mark[0]}..${rects.mark[0] + rects.mark[2]}, y ${rects.mark[1]}..${rects.mark[1] + rects.mark[3]}; `
+    + `block x ${rects.dotBlock[0]}..${rects.dotBlock[0] + rects.dotBlock[2]}, y ${rects.dotBlock[1]}..${rects.dotBlock[1] + rects.dotBlock[3]}`
+    + (overlap === null ? '' : ` — they overlap at x ${overlap[0]}, y ${overlap[1]}`))
 
   // Each effect, one at a time: it must repaint part of its own zone, and outside the corner it
   // shares with another effect it must repaint nothing at all.
@@ -384,12 +420,12 @@ try {
    */
   const scrolledTo = (expression) => evalIn(cdp,
     `(() => { const s = document.querySelector('[data-conversation-scroll]'); s.scrollTop = ${expression}; return Math.round(s.scrollTop) })()`)
-  const markInkAt = async (expression, style = 'endfield-mark-text') => {
-    await armMark(style, false)
+  const markInkAt = async (expression, knobs = undefined) => {
+    await armMark(false)
     const applied = await scrolledTo(expression)
     await sleep(450)
     const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    await armMark(style, true)
+    await armMark(true, knobs)
     await sleep(450)
     const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
     return { applied, ...(await changedShare(rects.mark, off, on)) }
@@ -411,28 +447,13 @@ try {
   await scrolledTo('s.scrollHeight')
 
   /**
-   * The decal: the mark's second rendering, and the one that needs the host half.
+   * The four knobs, measured rather than described: the artwork, the turn, the size and the corner.
    *
-   * Two claims are checked here and they fail differently. The BOX is a CSS claim — the wordmark
-   * is a tall thin strip, the plate is a wide one — and it holds with nothing but the bundle. The
-   * PAINT is an end-to-end claim: it also needs the plate to be served, and the host half is
-   * loaded once per `dsh web` start, so a stale host half answers 404 and the plate is simply
-   * absent. That state is reported as a NOTE and the paint assertion is skipped: "the app has not
-   * been restarted since the route shipped" is a deployment fact, and the alternative — calling
-   * it a pass — is how a broken asset URL survives a green suite.
+   * Each one is a claim about PAINT, because each one can be wrong in a way that looks right in
+   * the stylesheet: a plate whose URL 404s paints nothing, a "vertical" mark that forgot to turn
+   * is a wide mark, a size multiplier that is ignored changes no pixels, and an anchor that is
+   * armed without moving the box leaves the ink exactly where it was.
    */
-  const markBoxNow = () => evalIn(cdp, `(() => {
-    const panel = document.querySelector('[data-conversation-content]')
-    const cs = getComputedStyle(panel, '::before')
-    const b = panel.getBoundingClientRect()
-    const right = parseFloat(cs.right) || 0, top = parseFloat(cs.top) || 0
-    const w = parseFloat(cs.width) || 0, h = parseFloat(cs.height) || 0
-    return {
-      width: w, height: h, content: cs.content,
-      background: cs.backgroundImage.startsWith('url("data:') ? 'data: URI' : cs.backgroundImage.slice(0, 70),
-      zone: [Math.round(b.right - right - w), Math.round(b.top + top), Math.round(w), Math.round(h)],
-    }
-  })()`)
   /**
    * Every plate, measured where it prints.
    *
@@ -442,30 +463,16 @@ try {
    * all of them at once — that is reported once, with the reason, instead of four times.
    */
   const PLATE_CASES = [
-    { plate: 'skin', cls: 'endfield-plate-skin', url: DECAL_URL },
-    ...DECAL_PLATES.filter((plate) => plate !== 'skin')
-      .map((plate) => ({ plate, cls: decalPlateClass(plate), url: plateUrl(plate) })),
+    { plate: 'skin', url: PAGE_MARK_URL },
+    ...MARK_PLATES.filter((plate) => plate !== 'skin')
+      .map((plate) => ({ plate, url: plateUrl(plate) })),
   ]
-  const armPlate = async (cls) => {
-    for (const c of PLATE_CLASSES) await withClass(c, c === cls)
-  }
   const fetchStatus = (url) => evalIn(cdp, `(async () => {
     try {
       const r = await fetch(${JSON.stringify(url)}, { cache: 'no-store' })
       return { status: r.status, type: r.headers.get('content-type'), bytes: (await r.arrayBuffer()).byteLength }
     } catch (error) { return { status: 0, error: String(error) } }
   })()`)
-
-  await armMark('endfield-mark-text', true)
-  await sleep(350)
-  const textBox = await markBoxNow()
-  await armMark('endfield-mark-decal', true)
-  await sleep(450)
-  const decalBox = await markBoxNow()
-  check('mark: the wordmark and the plate are two different renderings',
-    textBox.height > textBox.width * 3 && decalBox.width > decalBox.height * 3,
-    `wordmark ${Math.round(textBox.width)}x${Math.round(textBox.height)} px (a vertical strip), `
-    + `plate ${Math.round(decalBox.width)}x${Math.round(decalBox.height)} px (a horizontal one); plate background ${decalBox.background}`)
 
   const served = {}
   for (const item of PLATE_CASES) served[item.plate] = await fetchStatus(item.url)
@@ -478,11 +485,13 @@ try {
         + '(the plate route is registered in src/index.ts and the host half loads once per "dsh web" start, so a route added since the last start is missing until it is restarted)')
 
   for (const item of PLATE_CASES) {
-    await armMark('endfield-mark-decal', true)
-    await armPlate(item.cls)
+    const knobs = { plate: item.plate }
+    await armMark(false)
     await scrolledTo('s.scrollHeight')
+    await armMark(true, knobs)
     await sleep(450)
-    const box = await markBoxNow()
+    const zones = await readZones()
+    const zone = ZONES.mark(zones)
     if (served[item.plate].status !== 200) {
       console.log(`\n[NOTE] plate "${item.plate}": not served (${served[item.plate].status}), paint assertion skipped.`)
       continue
@@ -490,36 +499,47 @@ try {
     check(`plate ${item.plate}: served as an image`,
       served[item.plate].type === 'image/png' && served[item.plate].bytes > 2000,
       `GET ${item.url} -> ${served[item.plate].status} ${served[item.plate].type}, ${served[item.plate].bytes} bytes`)
-    await armMark('endfield-mark-decal', false)
+    await armMark(false)
     await sleep(400)
     const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    await armMark('endfield-mark-decal', true)
+    await armMark(true, knobs)
     await sleep(450)
     const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    const ink = await changedShare(box.zone, off, on)
-    check(`plate ${plate.plate}: prints on the panel, at the tail`,
+    const ink = await changedShare(zone, off, on)
+    check(`plate ${item.plate}: prints on the panel, at the tail`,
       ink.share > 0.005,
-      `${ink.changed}/${ink.n} px changed (${(ink.share * 100).toFixed(2)}%) in x ${box.zone[0]}..${box.zone[0] + box.zone[2]}, `
-      + `y ${box.zone[1]}..${box.zone[1] + box.zone[3]} (${Math.round(box.width)}x${Math.round(box.height)} px box), peak delta ${ink.maxDelta}`)
+      `${ink.changed}/${ink.n} px changed (${(ink.share * 100).toFixed(2)}%) in x ${zone[0]}..${zone[0] + zone[2]}, `
+      + `y ${zone[1]}..${zone[1] + zone[3]} (a ${zones.markFootprint[0]}x${zones.markFootprint[1]} px footprint), peak delta ${ink.maxDelta}`)
   }
-  // Leave the app with neither rendering armed; the classes were never stored.
-  await armMark('endfield-mark-decal', false)
-  await armPlate(null)
-  await scrolledTo('s.scrollHeight')
 
-  // The mark's own variable drives its content, and it is published even when the mark is off.
-  //
-  // It is NOT compared against the default: `markText` is a user setting by design (someone
-  // who does not want the studio's wordmark can put a project or a role call sign there), so
-  // a check that demands "ENDFIELD" fails on a correctly configured app — which is exactly
-  // what it did here, on `ENDFIELDTF`. What the vocabulary can assert is that the property is
-  // a usable CSS string: published, quoted or bare, non-empty, and within the cap the schema
-  // enforces.
-  const markText = await evalIn(cdp, `getComputedStyle(document.documentElement).getPropertyValue('--endfield-mark-text').trim()`)
-  const markValue = markText.replace(/^"|"$/g, '')
-  check('the mark text is reachable as a custom property',
-    markValue.length > 0 && markValue.length <= 14 && /^[\x20-\x7e]+$/.test(markValue),
-    `--endfield-mark-text resolved to ${JSON.stringify(markText)} (${markValue.length} chars, cap 14)`)
+  /**
+   * The turn and the corner, as two claims about where the ink lands.
+   *
+   * A quarter turn is not "the same mark, rotated" from the check's side: it is a footprint whose
+   * height exceeds its width where the horizontal one's does not, and a mark that is turned has to
+   * say so in its own computed transform (`matrix(-1…, 1…)` for a right angle, not the identity).
+   * The corner is the same kind of claim: moving the anchor has to move the INK, not just the
+   * class, and the four cursors are the only thing standing between "the rule exists" and "the
+   * picture is in the corner the label names".
+   */
+  await armMark(true, { plate: 'skin', vertical: true })
+  await sleep(450)
+  const vertical = await readZones()
+  await armMark(true, { plate: 'skin', anchor: 'bottom-left' })
+  await sleep(450)
+  const anchored = await readZones()
+  const panel = vertical.panelRect
+  check('mark: the vertical turn makes the footprint tall instead of wide',
+    vertical.markRotated && vertical.markFootprint[1] > vertical.markFootprint[0] * 2,
+    `computed transform is ${vertical.markRotated ? 'a rotation' : 'the identity'}; footprint `
+    + `${vertical.markFootprint[0]}x${vertical.markFootprint[1]} px (horizontal default was ${rects.mark[2]}x${rects.mark[3]})`)
+  const inLowerLeft = anchored.markRect[0] < panel[0] + panel[2] / 2 && anchored.markRect[1] > panel[1] + panel[3] / 2
+  check('mark: the bottom-left anchor moves the box to that corner',
+    inLowerLeft,
+    `panel x ${panel[0]}..${panel[0] + panel[2]}, y ${panel[1]}..${panel[1] + panel[3]}; the anchored box is `
+    + `x ${anchored.markRect[0]}..${anchored.markRect[0] + anchored.markRect[2]}, y ${anchored.markRect[1]}..${anchored.markRect[1] + anchored.markRect[3]}`)
+  await armMark(false)
+  await scrolledTo('s.scrollHeight')
 
   // All three together must be allowed, since each keeps to its own zone — and each zone must
   // still show its OWN effect's change against the all-off baseline.

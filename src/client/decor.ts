@@ -22,12 +22,16 @@
  * `font-family` override breaks them). Text faces are set via `--dsw-font-family`.
  */
 import {
-  DECAL_ASPECT_CSS,
-  DECAL_ROUTE,
-  DECAL_URL,
-  DECAL_WIDTH_SHARE,
+  MARK_BOTTOM_INSET_PX,
+  MARK_GUTTER_PX,
+  MARK_TOP_INSET_PX,
+  MARK_WIDTH_SHARE,
+  PAGE_MARK_ASPECT,
+  PAGE_MARK_URL,
+  PLATES,
   PLATE_BADGE_FILE,
   PLATE_DIR,
+  PLATE_ROUTE,
   PLATE_WORDMARK_FILE,
 } from '../settings.ts'
 
@@ -1545,20 +1549,18 @@ html.endfield-header-light [data-slot='conversation.session.header']::before {
   mask-image: linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.55) 12%, rgba(0, 0, 0, 0) 30%);
 }
 
-/* ── 18b. the transcript: the page mark, in the right margin ────────────── */
-/* TWO RENDERINGS, ONE IDEA, ONE CORNER. The mark is set either as a vertical wordmark of
-   outline text (18b-i) or as the printed logo plate, a grey decal under the transcript
-   (18b-ii). Both hang off the same hook, and the settings path guarantees exactly one of them
-   is armed at a time -- the corner has room for one mark in it, and the block in 18c already
-   lives there too.
+/* ── 18b. the transcript: the page mark, an image printed on the panel ──── */
+/* ONE IMAGE, FOUR KNOBS. The mark is a picture -- one of the four drawings that ship with the skin
+   or an image the user uploaded -- and the settings decide which corner it hangs in, whether it is
+   turned a quarter turn, how large it is and how strongly it prints. It used to have a second
+   rendering (outline type set vertically, with an editable word in it); that went when the image
+   arrived, and what stayed is the geometry, which is the part that was measured.
 
-   Positioned in the right margin because that is the one column of the conversation that
-   holds no prose: the tool cards all end well short of it. That is not a stylistic choice
-   but the fix for a measured failure -- wherever the transcript's own text runs, a light
-   mark and light body text sit on top of each other, and the mark was measured as painted
-   (571 lit pixels in one row against the baseline's 0) while remaining invisible. The
-   vertical setting does the second half of the job: it reads as a page mark rather than as
-   a word someone has to parse.
+   The hook is the transcript PANEL, and the mark is aimed at its margin for a measured reason: the
+   right margin is the one column of the conversation that holds no prose (the tool cards all end
+   well short of it), so a light mark and light body text do not sit on top of each other. A mark
+   that runs wherever the text runs was measured as painted -- 571 lit pixels in one row against the
+   baseline's 0 -- while remaining invisible.
 
    THE HOOK IS THE PANEL, NOT THE SCROLLER, and that is the fix for this effect's own
    measured failure. It used to hang off [data-conversation-scroll]::after, which is the
@@ -1601,110 +1603,147 @@ html.endfield-header-light [data-slot='conversation.session.header']::before {
 html.endfield-mark [data-conversation-content] {
   position: relative;
 }
-/* 18b-i. the wordmark: outline text, set vertically in the right margin. */
-html.endfield-mark-text [data-conversation-content]::before {
-  content: var(--endfield-mark-text, "ENDFIELD");
-  position: absolute;
-  right: 30px;
-  top: 22px;
-  z-index: 2;
-  writing-mode: vertical-rl;
-  pointer-events: none;
-  user-select: none;
-  /* No font-family here, and the omission is deliberate. The layer's guardrail bans
-     font-family outright (an element-level override would break the shell's icon fonts),
-     and the mark does not need one: it is a pseudo-element with text content, so it
-     INHERITS the body's stack, which is the skin's own -- the same faces every heading
-     and paragraph in the transcript already uses. Declaring it would only re-state what
-     inheritance already gives. */
-  /* Sized so the strip finishes above the dot block: eight glyphs at 22px plus 0.34em of
-     tracking is roughly 300px of run, against a block that starts at about y=336. */
-  font-size: clamp(17px, 2vw, 22px);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: transparent;
-  -webkit-text-stroke: 1.4px rgba(217, 217, 217, 0.34);
+/* 18b-i. the mark: one image, printed on the panel. */
+/* A page mark is a print on the page, and the honest version of that here is: it paints OVER the
+   transcript's own canvas, because there is nothing else it can paint on. The first attempt put it
+   UNDER the content (z-index -1), which is what "a print on the page" sounds like, and it
+   contributed exactly 0 pixels: the transcript paints an OPAQUE canvas (#191919) inside the panel,
+   and a negative-z-index pseudo-element is covered by it -- measured both ways in
+   scripts/probe-decal-live.mjs (z -1 -> 0 px changed, z 0 -> 8735 px at opacity 0.08 and 10560 px
+   at 0.12). So the mark sits at z-index 0: above the canvas and the in-flow prose, still below the
+   halftone block (3) and the composer's opaque band (7, sticky) -- the two surfaces the effects are
+   not allowed to touch. What it does touch is the prose it crosses, which is why the default
+   opacity is 0.12 and why this effect has its own switch.
+
+   The artwork is a raster image (assets/logo/*.png, generated from the SVG sources in the same
+   directory by scripts/make-decal.mjs) because the drawings set type in Michroma: an SVG used as a
+   CSS background-image cannot load a webfont, so the letterforms have to be baked in. Every one of
+   them is pure grey with alpha -- the generator fails the build if a rendered pixel is tinted -- so
+   the skin, not the asset, decides how it reads. An uploaded image is painted the same way, through
+   --endfield-mark-image; it does not have to be grey, and it is the user's business if it is not.
+
+   WHERE IT SITS is four settings, not one: which drawing, whether it is turned a quarter turn, how
+   big it is, and which corner it hangs in. The base rule is the default combination (the shipped
+   page mark, horizontal, scale 1, top-right at y 214 -- below the block that owns y 52..197, and
+   clear of the composer's band from y 774). The rules below compose the other combinations from the
+   same box, and the vertical ones are computed from the aspect ratio rather than nudged by hand:
+   rotating about the centre keeps the centre, so the offsets have to be reduced by half the
+   difference between the long and short sides. --endfield-mark-aspect is a NUMBER for that reason
+   (CSS can divide by a number, not by an aspect-ratio spelling), published by the settings path
+   from the plate's arithmetic or measured from an uploaded image once it loads. */
+html.endfield-mark [data-conversation-content] {
+  position: relative;
 }
-
-/* 18b-ii. the plate: the printed decal, a page mark that is an IMAGE. */
-/* A decal is a print on the page, and the honest version of that here is: it paints OVER the
-   transcript's own canvas, because there is nothing else it can paint on. The first attempt
-   put it UNDER the content (z-index -1), which is what "a print on the page" sounds like, and
-   it contributed exactly 0 pixels: the transcript paints an OPAQUE canvas (#191919) inside the
-   panel, and a negative-z-index pseudo-element is covered by it -- measured both ways in
-   scripts/probe-decal-live.mjs (z -1 -> 0 px changed, z 0 -> 8735 px at opacity 0.08 and
-   10560 px at 0.12). So the plate sits at z-index 0: above the canvas and the in-flow prose,
-   still below the halftone block (3) and the composer's opaque band (7, sticky) -- the two
-   surfaces the effects are not allowed to touch. What it does touch is the prose it crosses,
-   which is why the default opacity is 0.12 and why this effect has its own switch: a watermark
-   over a dense table is a taste call, not a default anyone should be stuck with.
-
-   The plate is a raster asset (assets/logo/endfield-decal.png, generated from the SVG source
-   by scripts/make-decal.mjs) because it sets type in Michroma: an SVG used as a CSS
-   background-image cannot load a webfont, so the letterforms have to be baked in. It is pure
-   grey with alpha -- the generator fails the build if a rendered pixel is tinted -- so the skin,
-   not the asset, decides how it reads. The --endfield-decal-image custom property is published
-   as an overridable name for exactly that reason: a user who has converted their own artwork
-   with "node scripts/make-decal.mjs --source ..." can point the skin at it without a rebuild,
-   and the probe uses the same seam to measure the plate before the host half has been restarted.
-
-   Where it sits: the right margin below the dot block. The block owns y 52..197 of the corner,
-   the composer owns the bottom band from y 774, and between them the transcript's right margin
-   is empty for 570px -- which is where a page mark can sit at a size worth printing (measured
-   600x109 at scale 1, x 944..1544 / y 266..375) without covering the block, the composer or
-   the panel's own edges. right: 40px keeps its edge clear of the panel's edge, and the box is
-   sized from the asset's aspect ratio so a swapped plate keeps its proportions
-   (--endfield-decal-ratio is the override). */
-html.endfield-mark-decal [data-conversation-content]::before {
+html.endfield-mark [data-conversation-content]::before {
+  --mark-aspect: ${PAGE_MARK_ASPECT.toFixed(3)};
+  --mark-long: calc(${MARK_WIDTH_SHARE * 100}% * var(--endfield-mark-scale, 1));
+  --mark-short: calc(var(--mark-long) / var(--mark-aspect));
   content: '';
   position: absolute;
-  right: 40px;
-  top: 214px;
+  right: ${MARK_GUTTER_PX}px;
+  top: ${MARK_TOP_INSET_PX}px;
   z-index: 0;
-  width: calc(${DECAL_WIDTH_SHARE * 100}% * var(--endfield-decal-scale, 1));
-  aspect-ratio: var(--endfield-decal-ratio, ${DECAL_ASPECT_CSS});
-  background-image: var(--endfield-decal-image, url('${DECAL_URL}'));
+  width: var(--mark-long);
+  aspect-ratio: var(--mark-aspect);
+  background-image: url('${PAGE_MARK_URL}');
   background-repeat: no-repeat;
-  background-position: right top;
+  background-position: center;
   background-size: contain;
-  opacity: var(--endfield-decal-opacity, 0.12);
+  opacity: var(--endfield-mark-opacity, 0.12);
   pointer-events: none;
   user-select: none;
 }
 
-/* ── 18b-iii. the plate set: three more drawings of the same page mark ──── */
-/* The page mark above is the full lockup and the default. These are the same family at other
-   proportions, all authored in this repository as SVG (assets/logo/wordmark.svg, badge.svg) and
-   rendered by "node scripts/make-decal.mjs --svg ...": the lettering alone, the stamp, and the two
-   composed as two background layers (badge left, wordmark right) so no raster editing is involved.
-
-   Geometry follows each drawing's own aspect: the wordmark is wide and prints where the page mark
-   does, the badge is a near-square stamp so it is set smaller and lower. Every plate hangs off the
-   same ::before, and the settings path guarantees exactly one is armed. */
+/* 18b-ii. the four drawings, and an uploaded image.
+   Each drawing carries its OWN ratio as --mark-aspect, and the box is that ratio applied to the
+   long side -- so the badge prints as a stamp rather than being stretched into the page mark's
+   wide band. The ratio is a local property rather than a global one for exactly that reason: a
+   single published value would be right for the drawing that happened to be selected when it was
+   written and wrong for the other three. */
 html.endfield-plate-wordmark [data-conversation-content]::before {
-  background-image: url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}');
-  aspect-ratio: 1342 / 200;
+  --mark-aspect: ${PLATES.wordmark.aspect.toFixed(3)};
+  background-image: url('${PLATE_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}');
 }
 
 html.endfield-plate-badge [data-conversation-content]::before {
-  background-image: url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}');
-  aspect-ratio: 265 / 300;
-  width: calc(15% * var(--endfield-decal-scale, 1));
-  right: 56px;
-  top: 268px;
+  --mark-aspect: ${PLATES.badge.aspect.toFixed(3)};
+  --mark-long: calc(15% * var(--endfield-mark-scale, 1));
+  background-image: url('${PLATE_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}');
 }
 
 html.endfield-plate-lockup [data-conversation-content]::before {
+  --mark-aspect: 4;
   background-image:
-    url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}'),
-    url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}');
+    url('${PLATE_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}'),
+    url('${PLATE_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}');
   background-size: auto 84%, auto 46%;
   background-position: left center, right center;
   background-repeat: no-repeat, no-repeat;
-  aspect-ratio: 4 / 1;
+}
+
+/* An uploaded image replaces whichever drawing was selected: same box, same knobs, the user's ink.
+   Its ratio is MEASURED (by the settings path, once the image loads) rather than known, which is
+   the one case where the value has to arrive through a custom property. */
+html.endfield-mark-custom [data-conversation-content]::before {
+  --mark-aspect: var(--endfield-mark-aspect, ${PAGE_MARK_ASPECT.toFixed(3)});
+  background-image: var(--endfield-mark-image, url('${PAGE_MARK_URL}'));
+  background-size: contain;
+  background-position: center;
+}
+
+/* 18b-iii. the four corners, horizontal. */
+html.endfield-mark-top-left [data-conversation-content]::before {
+  left: ${MARK_GUTTER_PX}px;
+  right: auto;
+}
+
+html.endfield-mark-bottom-right [data-conversation-content]::before {
+  top: auto;
+  bottom: ${MARK_BOTTOM_INSET_PX}px;
+}
+
+html.endfield-mark-bottom-left [data-conversation-content]::before {
+  left: ${MARK_GUTTER_PX}px;
+  right: auto;
+  top: auto;
+  bottom: ${MARK_BOTTOM_INSET_PX}px;
+}
+
+/* 18b-iv. turned a quarter turn: vertical, then the same four corners.
+   The rotation is about the box's centre, so the footprint becomes short-wide instead of
+   long-high -- and every offset has to move by half the difference between the two sides for the
+   footprint (not the box) to land where the anchor says. The long side is 40% rather than 46% here
+   because the space between the block and the composer is 570px tall, and a 600px strip would run
+   under the composer's band. */
+html.endfield-mark-vertical [data-conversation-content]::before {
+  --mark-long: calc(40% * var(--endfield-mark-scale, 1));
+  --mark-short: calc(var(--mark-long) / var(--mark-aspect));
+  transform: rotate(90deg);
+  transform-origin: center;
+}
+
+html.endfield-mark-vertical.endfield-mark-top-right [data-conversation-content]::before {
+  right: calc(${MARK_GUTTER_PX}px + (var(--mark-short) - var(--mark-long)) / 2);
+  top: calc(${MARK_TOP_INSET_PX}px + (var(--mark-long) - var(--mark-short)) / 2);
+}
+
+html.endfield-mark-vertical.endfield-mark-top-left [data-conversation-content]::before {
+  left: calc(${MARK_GUTTER_PX}px - (var(--mark-long) - var(--mark-short)) / 2);
+  right: auto;
+  top: calc(${MARK_TOP_INSET_PX}px + (var(--mark-long) - var(--mark-short)) / 2);
+}
+
+html.endfield-mark-vertical.endfield-mark-bottom-right [data-conversation-content]::before {
+  right: calc(${MARK_GUTTER_PX}px + (var(--mark-short) - var(--mark-long)) / 2);
+  top: auto;
+  bottom: calc(${MARK_BOTTOM_INSET_PX}px - (var(--mark-long) - var(--mark-short)) / 2);
+}
+
+html.endfield-mark-vertical.endfield-mark-bottom-left [data-conversation-content]::before {
+  left: calc(${MARK_GUTTER_PX}px - (var(--mark-long) - var(--mark-short)) / 2);
+  right: auto;
+  top: auto;
+  bottom: calc(${MARK_BOTTOM_INSET_PX}px - (var(--mark-long) - var(--mark-short)) / 2);
 }
 
 /* The end of 18b. Section 18c picks the corner back up. */

@@ -1,50 +1,44 @@
 /**
- * Probe: does the page decal actually print, and where does it read best?
+ * Probe: the mark's knobs, and the upload path, measured on the running GUI.
  *
- * The decal is a raster plate painted by CSS as the conversation panel's ::before, under the
- * transcript. Three things can each make it invisible, and they look identical from the
- * browser's side, so this probe separates them:
+ * The mark is one image with five knobs (artwork, orientation, size, opacity, corner) plus an
+ * optional user-supplied image, and every one of them can be wrong in a way that looks right in
+ * the stylesheet: a plate whose file 404s paints nothing, a "vertical" mark that forgot to turn is
+ * simply wide, a scale that is ignored changes no pixels, and an anchor armed without moving the
+ * box leaves the ink exactly where it was. So this probe measures INK, and prints a screenshot per
+ * reading so the numbers can be compared with an eye.
  *
- *   1. THE ASSET never arrived. The plate is served by the host half at
- *      /skin-endfield/logo/endfield-decal.png, and a host half that has not been restarted
- *      since the route was added answers 404 -- the probe reports that first, because it is
- *      a deployment fact and not a CSS bug. To keep measuring in that state it injects the
- *      plate it finds on disk as `--endfield-decal-image`, which is the same override a user
- *      swapping in their own converted artwork would set.
- *   2. THE RULE never applied. `endfield-mark` + `endfield-mark-decal` gate it; the probe
- *      switches them on itself, so the reading does not depend on the stored settings.
- *   3. THE INK is there but too faint, too large, or behind something opaque. The probe
- *      measures the pixel difference the class makes, and reports WHERE the change is.
- *
- * It then walks the tuning grid (opacity x top x scale) and writes a screenshot per reading, so
- * "0.12 at the shipped position" can be compared with its neighbours by eye rather than assumed.
+ * It also drives the upload route end to end: a small image is posted exactly as the settings page
+ * posts it, the answer's URL is armed as a custom image, and the result is measured. That path
+ * crosses both halves of the plugin (the settings page's fetch, the host's writer, the stylesheet's
+ * `url()`), so it is worth one run rather than unit coverage alone.
  *
  * Run: $env:DSH_URL = '...token=...'; node scripts/probe-decal-live.mjs
  */
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchBrowser } from './cdp-pipe.mjs'
-import { DECAL_FILE, DECAL_ROUTE, DECAL_URL } from '../src/settings.ts'
+import {
+  MARK_VERTICAL_CLASS, PAGE_MARK_URL, PLATE_BADGE_FILE, PLATE_DIR, PLATE_ROUTE, PAGE_MARK_ASPECT,
+  USER_UPLOAD_PATH, plateClass,
+} from '../src/settings.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const LOGO_DIR = join(ROOT, 'assets', 'logo')
 const OUT = join(ROOT, 'tests', 'out')
 const DSH_URL = process.env.DSH_URL
 if (!DSH_URL) { console.error('set DSH_URL (the URL printed by dsh web)'); process.exit(2) }
-
-const platePath = join(ROOT, 'assets', 'logo', DECAL_FILE)
-const plate = readFileSync(platePath).toString('base64')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-const browser = await launchBrowser({ profile: '_dsh-skin-decal-live' })
+const browser = await launchBrowser({ profile: '_dsh-skin-mark-probe' })
 const evalIn = async (cdp, expression) => {
   const r = await cdp.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
   if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails).slice(0, 500))
   return r.result.value
 }
 
-/** Open a session so the panel is mounted with a transcript in it. */
+/** Open a session, so the panel is mounted with a transcript in it. */
 const OPEN = `(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
   let mounted = !!document.querySelector('[data-conversation-scroll] [class*="flowItem"]')
@@ -62,42 +56,32 @@ const OPEN = `(async () => {
   return { mounted }
 })()`
 
-/** What the rule resolves to, and what else lives in that column. */
+/** The mark's box as the browser resolved it: offsets (either side may be auto), size, transform. */
 const GEOMETRY = `(() => {
   const round = (n) => Math.round(n * 10) / 10
-  const panel = document.querySelector('[data-conversation-content]')
-  const scroll = document.querySelector('[data-conversation-scroll]')
-  const header = document.querySelector("[data-slot='conversation.session.header']")
-  const seat = document.querySelector('[data-composer-seat]')
-  const rect = (el) => {
-    if (!el) return null
-    const b = el.getBoundingClientRect()
-    return [round(b.left), round(b.top), round(b.right), round(b.bottom)]
-  }
-  const cs = getComputedStyle(panel, '::before')
-  const bg = cs.backgroundImage
-  const b = panel.getBoundingClientRect()
-  const right = parseFloat(cs.right) || 0
-  const top = parseFloat(cs.top) || 0
-  const w = parseFloat(cs.width) || 0
-  const h = parseFloat(cs.height) || 0
+  const contentEl = document.querySelector('[data-conversation-content]')
+  const b = contentEl.getBoundingClientRect()
+  const cs = getComputedStyle(contentEl, '::before')
+  const num = (v) => (v === 'auto' ? null : parseFloat(v))
+  const w = parseFloat(cs.width) || 0, h = parseFloat(cs.height) || 0
+  const left = num(cs.left), right = num(cs.right), top = num(cs.top), bottom = num(cs.bottom)
+  const boxX = left !== null ? b.left + left : b.right - (right ?? 0) - w
+  const boxY = top !== null ? b.top + top : b.bottom - (bottom ?? 0) - h
+  const rotated = cs.transform !== 'none' && !/^matrix\\(1, 0, 0, 1/.test(cs.transform)
   return {
-    classes: [...document.documentElement.classList].filter((c) => c.startsWith('endfield')).join(' '),
-    panel: rect(panel),
-    scroll: rect(scroll),
-    seat: rect(seat),
-    header: rect(header && header.firstElementChild ? header.firstElementChild : header),
-    rule: {
-      content: cs.content, position: cs.position, zIndex: cs.zIndex, opacity: cs.opacity,
-      right: cs.right, top: cs.top, width: cs.width, height: cs.height, backgroundSize: cs.backgroundSize,
-      // A data: URL is 100 chars of noise; report only how it is dressed.
-      background: bg.startsWith('url("data:') ? 'data: URI (injected plate)' : bg.slice(0, 90),
-    },
-    box: [round(b.right - right - w), round(b.top + top), round(w), round(h)],
+    panel: [round(b.left), round(b.top), round(b.width), round(b.height)],
+    rule: { width: cs.width, height: cs.height, opacity: cs.opacity, transform: cs.transform, aspect: cs.aspectRatio },
+    background: cs.backgroundImage.startsWith('url("data:') ? 'data: URI (injected)' : cs.backgroundImage.slice(0, 64),
+    box: [round(boxX), round(boxY), round(w), round(h)],
+    // What the viewer sees: a rotated box's footprint, not its unrotated frame.
+    footprint: rotated
+      ? [round(boxX + (w - h) / 2), round(boxY + (h - w) / 2), round(h), round(w)]
+      : [round(boxX), round(boxY), round(w), round(h)],
+    rotated,
   }
 })()`
 
-/** Pixels that differ inside a rect, and where they are. */
+/** Pixels that differ inside a rect, and where the change is. */
 const diff = (cdp, rect, a, b) => evalIn(cdp, `(async () => {
   const load = async (b64) => {
     const img = new Image(); img.src = 'data:image/png;base64,' + b64; await img.decode()
@@ -113,14 +97,13 @@ const diff = (cdp, rect, a, b) => evalIn(cdp, `(async () => {
   const h = Math.max(1, Math.round(Math.min(${rect[3]}, ch - y)))
   const da = A.getContext('2d').getImageData(x, y, w, h).data
   const db = B.getContext('2d').getImageData(x, y, w, h).data
-  let changed = 0, n = 0, maxDelta = 0
+  let changed = 0, maxDelta = 0
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (let row = 0; row < h; row++) for (let col = 0; col < w; col++) {
     const i = (row * w + col) * 4
-    n++
     const d = Math.max(Math.abs(da[i] - db[i]), Math.abs(da[i + 1] - db[i + 1]), Math.abs(da[i + 2] - db[i + 2]))
     if (d > maxDelta) maxDelta = d
-    if (d > 2) {
+    if (d > 3) {
       changed++
       const ax = x + col, ay = y + row
       if (ax < minX) minX = ax
@@ -129,10 +112,9 @@ const diff = (cdp, rect, a, b) => evalIn(cdp, `(async () => {
       if (ay > maxY) maxY = ay
     }
   }
-  return { changed, n, share: changed / n, maxDelta, box: [x, y, w, h], inkBox: changed ? [minX, minY, maxX, maxY] : null }
+  return { changed, maxDelta, inkBox: changed === 0 ? null : [minX, minY, maxX, maxY] }
 })()`)
 
-/** A no-op save, so the screenshots land next to the other probes' output. */
 const shoot = async (cdp, name, clip) => {
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png', ...(clip ? { clip } : {}) })
   mkdirSync(OUT, { recursive: true })
@@ -148,191 +130,145 @@ try {
   const opened = await evalIn(cdp, OPEN)
   console.log(`session mounted: ${opened.mounted}`)
 
-  // 1. Is the deployed host half serving the plate? (A restart is a deployment fact.)
-  const served = await evalIn(cdp, `(async () => {
-    try {
-      const r = await fetch(${JSON.stringify(DECAL_URL)}, { method: 'GET', cache: 'no-store' })
-      return { status: r.status, type: r.headers.get('content-type'), bytes: (await r.arrayBuffer()).byteLength }
-    } catch (error) { return { status: 0, error: String(error) } }
+  const routes = await evalIn(cdp, `(async () => {
+    const out = {}
+    for (const url of [${JSON.stringify(PAGE_MARK_URL)}, '${PLATE_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}']) {
+      try { const r = await fetch(url, { cache: 'no-store' }); out[url] = r.status } catch (e) { out[url] = String(e) }
+    }
+    return out
   })()`)
-  console.log(`host route ${DECAL_URL}: ${JSON.stringify(served)}`)
-  if (served.status !== 200) {
-    console.log(`[NOTE] the running host half does not serve ${DECAL_ROUTE} yet (status ${served.status}).`)
-    console.log('       The route was added to src/index.ts, and the host half is loaded once per')
-    console.log('       `dsh web` start, so it needs a restart to exist. Everything below injects the')
-    console.log('       plate from disk instead, which is the same override a converted plate would use.')
-  }
+  for (const [url, status] of Object.entries(routes)) console.log(`route ${url}: ${status}`)
 
-  const withClasses = (styleClass) => evalIn(cdp, `(() => {
+  /** Arm the mark with one combination of knobs (the same classes the settings path toggles). */
+  const arm = (on, knobs = {}) => evalIn(cdp, `(() => {
     const root = document.documentElement
-    root.classList.add('endfield-mark')
-    root.classList.toggle('endfield-mark-decal', ${JSON.stringify(styleClass === 'decal')})
-    root.classList.toggle('endfield-mark-text', ${JSON.stringify(styleClass === 'text')})
-    return [...root.classList].filter((c) => c.startsWith('endfield')).join(' ')
+    for (const c of [...root.classList]) if (c.startsWith('endfield-plate-') || c.startsWith('endfield-mark-')) root.classList.remove(c)
+    if (${on}) {
+      root.classList.add('endfield-mark')
+      ${knobs.plate === undefined ? '' : `root.classList.add(${JSON.stringify(plateClass(knobs.plate))})`}
+      ${knobs.anchor === undefined ? '' : `root.classList.add('endfield-mark-${knobs.anchor}')`}
+      ${knobs.vertical === true ? `root.classList.add(${JSON.stringify(MARK_VERTICAL_CLASS)})` : ''}
+    }
+    return [...root.classList].filter((c) => c.startsWith('endfield-')).join(' ')
   })()`)
-
-  // Inject the on-disk plate through the documented override, so the measurement does not
-  // depend on the host half having been restarted.
-  await evalIn(cdp, `(() => {
-    const style = document.createElement('style')
-    style.id = 'decal-probe-plate'
-    style.textContent = 'html { --endfield-decal-image: url("data:image/png;base64,${plate}"); }'
-    document.head.appendChild(style)
-    return true
-  })()`)
-
-  console.log(`classes with the decal armed: ${await withClasses('decal')}`)
-  await sleep(400)
-  const geom = await evalIn(cdp, GEOMETRY)
-  console.log('--- geometry ---')
-  console.log(`  panel ${geom.panel.join(' .. ')}  scroll ${geom.scroll.join(' .. ')}`)
-  console.log(`  seat ${geom.seat ? geom.seat.join(' .. ') : 'none'}  header ${geom.header ? geom.header.join(' .. ') : 'none'}`)
-  console.log(`  rule: content=${geom.rule.content} ${geom.rule.position} z=${geom.rule.zIndex} opacity=${geom.rule.opacity} ` +
-    `${geom.rule.width} x ${geom.rule.height} at right ${geom.rule.right} / top ${geom.rule.top}`)
-  console.log(`  background: ${geom.rule.background} (${geom.rule.backgroundSize})`)
-  console.log(`  box: x ${geom.box[0]}..${geom.box[0] + geom.box[2]}, y ${geom.box[1]}..${geom.box[1] + geom.box[3]}`)
-
-  // 2. The tuning grid, measured and screenshotted.
-  //
-  // The z-index axis is the first thing to read, because it decides whether the decal exists at
-  // all: the transcript paints an OPAQUE canvas (#191919) inside the panel, so a negative
-  // z-index pseudo-element is covered by it and contributes exactly nothing. Above that canvas
-  // the plate necessarily paints over the prose it crosses -- which is why opacity and position
-  // are tuned next, and why the default is as low as it is.
-  const grid = [
-    { z: -1, opacity: 0.12, top: 214, scale: 1 },
-    { z: 0, opacity: 0.04, top: 214, scale: 1 },
-    { z: 0, opacity: 0.08, top: 214, scale: 1 },
-    { z: 0, opacity: 0.12, top: 214, scale: 1 },
-    { z: 0, opacity: 0.2, top: 214, scale: 1 },
-    { z: 0, opacity: 0.08, top: 120, scale: 1 },
-    { z: 0, opacity: 0.08, top: 420, scale: 1 },
-    { z: 0, opacity: 0.08, top: 214, scale: 0.7 },
-    { z: 0, opacity: 0.08, top: 214, scale: 1.3 },
-  ]
-
-  const setVars = (v) => evalIn(cdp, `(() => {
+  const vars = (v) => evalIn(cdp, `(() => {
     const s = document.documentElement.style
-    s.setProperty('--endfield-decal-opacity', ${JSON.stringify(String(v.opacity))})
-    s.setProperty('--endfield-decal-scale', ${JSON.stringify(String(v.scale))})
-    document.getElementById('decal-probe-geometry')?.remove()
-    const style = document.createElement('style')
-    style.id = 'decal-probe-geometry'
-    style.textContent = 'html.endfield-mark-decal [data-conversation-content]::before { top: ${v.top}px; z-index: ${v.z}; }'
-    document.head.appendChild(style)
+    ${v.opacity === undefined ? '' : `s.setProperty('--endfield-mark-opacity', ${JSON.stringify(String(v.opacity))})`}
+    ${v.scale === undefined ? '' : `s.setProperty('--endfield-mark-scale', ${JSON.stringify(String(v.scale))})`}
     return true
   })()`)
 
-  console.log('--- the ink each setting contributes (panel area, decal on vs off) ---')
-  const withClass = (on) => evalIn(cdp, `(() => {
-    document.documentElement.classList.toggle('endfield-mark-decal', ${on})
-    return true
-  })()`)
-  const panelClip = { x: geom.panel[0], y: geom.panel[1], width: geom.panel[2] - geom.panel[0], height: geom.panel[3] - geom.panel[1], scale: 1 }
-  const rect = [Math.round(panelClip.x), Math.round(panelClip.y), Math.round(panelClip.width), Math.round(panelClip.height)]
-  const shots = [
-    { opacity: 0.12, top: 214, scale: 1, name: 'decal-shipped.png' },
-    { opacity: 0.08, top: 214, scale: 1, name: 'decal-panel-a.png' },
-    { opacity: 0.08, top: 420, scale: 1, name: 'decal-panel-b.png' },
-    { opacity: 0.14, top: 214, scale: 1.3, name: 'decal-panel-c.png' },
-  ]
-  for (const v of grid) {
-    await setVars(v)
-    await withClass(false)
+  /**
+   * One reading: measure the ink a combination contributes, and say where it landed.
+   *
+   * The baseline is the SAME knobs at opacity 0, not "the mark switched off". Switching the class
+   * off looks cleaner and is wrong here: the running app re-applies the stored settings on its own
+   * re-renders, so the "off" screenshot can still contain the stored mark -- which is exactly how
+   * the first run of this probe reported 0 px for the shipped plate and non-zero for everything
+   * else. Opacity 0 is a state the app does not argue with, and it isolates the knobs from whatever
+   * the document happens to say.
+   */
+  const readAt = async (label, knobs, shotName) => {
+    await arm(true, knobs)
+    await vars({ opacity: 0 })
     await sleep(350)
     const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    await withClass(true)
-    await sleep(350)
+    await vars({ opacity: knobs.opacity ?? 0.12 })
+    await sleep(400)
+    const geometry = await evalIn(cdp, GEOMETRY)
     const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    const r = await diff(cdp, rect, off, on)
-    console.log(`  z ${String(v.z).padStart(2)}  opacity ${v.opacity.toFixed(2)}  top ${String(v.top).padStart(3)}  scale ${v.scale.toFixed(2)} -> ` +
-      `${r.changed}/${r.n} px (${(r.share * 100).toFixed(2)}%), peak delta ${r.maxDelta}` +
-      `${r.inkBox ? `, ink x ${r.inkBox[0]}..${r.inkBox[2]}, y ${r.inkBox[1]}..${r.inkBox[3]}` : ''}`)
-    const wanted = shots.find((s) => s.opacity === v.opacity && s.top === v.top && s.scale === v.scale && v.z === 0)
-    if (wanted) console.log(`      screenshot: ${await shoot(cdp, wanted.name, panelClip)}`)
+    const panel = geometry.panel
+    const r = await diff(cdp, [Math.round(panel[0]), Math.round(panel[1]), Math.round(panel[2]), Math.round(panel[3])], off, on)
+    console.log(`  ${label.padEnd(34)} ${String(r.changed).padStart(6)} px  peak Δ${String(r.maxDelta).padStart(3)}  `
+      + `footprint ${geometry.footprint[2]}x${geometry.footprint[3]} at ${geometry.footprint[0]},${geometry.footprint[1]}`
+      + `${geometry.rotated ? ' (rotated)' : ''}`)
+    if (shotName) console.log(`      screenshot: ${await shoot(cdp, shotName, { x: panel[0], y: panel[1], width: panel[2], height: panel[3], scale: 1 })}`)
+    return r
   }
 
-  // 3. The plates side by side, so "which artwork" is a picture and not a promise.
-  //
-  // All four are drawn in this repository (assets/logo/*.svg -> assets/logo/plates/*.png) and are
-  // served by the same host route as the page mark — so before the host half has been restarted
-  // none of them arrive. The probe injects them from disk as data URIs, which is the same seam
-  // `--endfield-decal-image` uses, and reports for each plate whether the route is delivering the
-  // file as well.
-  await evalIn(cdp, `(() => {
-    const badge = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'plates', 'badge.png')).toString('base64'))}
-    const wordmark = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'plates', 'wordmark.png')).toString('base64'))}
-    const style = document.createElement('style')
-    style.id = 'decal-probe-plates'
-    style.textContent = [
-      'html.endfield-plate-wordmark [data-conversation-content]::before { background-image: url("data:image/png;base64,' + wordmark + '") !important; }',
-      'html.endfield-plate-badge [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '") !important; }',
-      'html.endfield-plate-lockup [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '"), url("data:image/png;base64,' + wordmark + '") !important; }',
-    ].join('\\n')
-    document.head.appendChild(style)
-    return true
-  })()`)
+  console.log('\n--- the four drawings (horizontal, default corner) ---')
+  for (const plate of ['skin', 'wordmark', 'badge', 'lockup']) {
+    await readAt(`plate ${plate}`, { plate }, `mark-plate-${plate}.png`)
+  }
 
-  const PLATES = [
-    { name: 'skin', cls: 'endfield-plate-skin', url: DECAL_URL, shot: 'decal-plate-skin.png' },
-    { name: 'wordmark', cls: 'endfield-plate-wordmark', url: `${DECAL_ROUTE}/plates/wordmark.png`, shot: 'decal-plate-wordmark.png' },
-    { name: 'badge', cls: 'endfield-plate-badge', url: `${DECAL_ROUTE}/plates/badge.png`, shot: 'decal-plate-badge.png' },
-    { name: 'lockup', cls: 'endfield-plate-lockup', url: `${DECAL_ROUTE}/plates/badge.png`, shot: 'decal-plate-lockup.png' },
-  ]
-  const PLATE_CLASSES = PLATES.map((p) => p.cls)
-  console.log('--- plates (the four drawings the skin ships) ---')
-  await evalIn(cdp, `(() => { document.documentElement.style.setProperty('--endfield-decal-opacity', '0.12'); document.documentElement.style.setProperty('--endfield-decal-scale', '1'); return true })()`)
-  for (const plate of PLATES) {
-    await withClass(false)
+  console.log('\n--- opacity (plate skin) ---')
+  for (const opacity of [0.06, 0.12, 0.2]) {
+    await readAt(`opacity ${opacity.toFixed(2)}`, { plate: 'skin', opacity })
+  }
+
+  console.log('\n--- size (plate skin, opacity 0.12) ---')
+  await vars({ opacity: 0.12 })
+  for (const scale of [0.6, 1, 1.5]) {
+    await vars({ scale })
+    await readAt(`scale ${scale.toFixed(2)}x`, { plate: 'skin' }, scale === 1 ? 'mark-scale-1.png' : undefined)
+  }
+
+  console.log('\n--- orientation: the same box, turned ---')
+  await vars({ scale: 1 })
+  await readAt('horizontal', { plate: 'skin' }, 'mark-horizontal.png')
+  await readAt('vertical', { plate: 'skin', vertical: true }, 'mark-vertical.png')
+
+  console.log('\n--- the four corners (horizontal) ---')
+  for (const anchor of ['top-right', 'top-left', 'bottom-right', 'bottom-left']) {
+    await readAt(`anchor ${anchor}`, { plate: 'skin', anchor })
+  }
+
+  /**
+   * The upload path, end to end: the same POST the settings page makes, then the same two custom
+   * properties the settings path publishes. A 64x64 chequerboard is used rather than one of the
+   * plates so the reading cannot be confused with a plate rule that is still armed.
+   */
+  console.log('\n--- the upload path ---')
+  const chequer = await evalIn(cdp, `(() => {
+    const c = document.createElement('canvas'); c.width = 96; c.height = 96
+    const ctx = c.getContext('2d')
+    for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#ffffff' : 'rgba(255,255,255,0.25)'
+      ctx.fillRect(x * 8, y * 8, 8, 8)
+    }
+    return c.toDataURL('image/png')
+  })()`)
+  const upload = await evalIn(cdp, `(async () => {
+    const r = await fetch(${JSON.stringify(USER_UPLOAD_PATH)}, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dataUrl: ${JSON.stringify(chequer)} }),
+    })
+    return { status: r.status, body: await r.json().catch(() => null) }
+  })()`)
+  console.log(`  POST ${USER_UPLOAD_PATH} -> ${upload.status} ${JSON.stringify(upload.body)}`)
+  if (upload.status !== 200) {
+    console.log('  [NOTE] the running host half does not answer that POST yet. The route is registered')
+    console.log('         in src/index.ts and a host half loads once per "dsh web" start, so it takes a')
+    console.log('         restart to appear; the host-side contract itself is covered by verify-host.mjs.')
+  }  if (upload.status === 200 && upload.body?.url) {
+    const served = await evalIn(cdp, `fetch(${JSON.stringify(upload.body.url)}, { cache: 'no-store' }).then((r) => r.status)`)
+    console.log(`  GET ${upload.body.url} -> ${served}`)
     await evalIn(cdp, `(() => {
       const root = document.documentElement
-      for (const c of ${JSON.stringify(PLATE_CLASSES)}) root.classList.toggle(c, c === ${JSON.stringify(plate.cls)})
+      for (const c of [...root.classList]) if (c.startsWith('endfield-plate-') || c.startsWith('endfield-mark-')) root.classList.remove(c)
+      root.classList.add('endfield-mark', 'endfield-mark-custom')
+      root.style.setProperty('--endfield-mark-image', 'url("' + ${JSON.stringify(upload.body.url)} + '")')
+      root.style.setProperty('--endfield-mark-aspect', '1')
       return true
     })()`)
-    await sleep(300)
-    const box = await evalIn(cdp, GEOMETRY)
-    await evalIn(cdp, `(() => { document.documentElement.classList.toggle('endfield-mark-decal', false); return true })()`)
-    await sleep(300)
-    const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    await evalIn(cdp, `(() => { document.documentElement.classList.toggle('endfield-mark-decal', true); return true })()`)
-    await sleep(350)
-    const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
-    const r = await diff(cdp, rect, off, on)
-    const served = await evalIn(cdp, `(async () => {
-      try { const res = await fetch(${JSON.stringify(plate.url)}, { cache: 'no-store' }); return res.status }
-      catch { return 0 }
-    })()`)
-    console.log(`  ${plate.name.padEnd(17)} box ${Math.round(parseFloat(box.rule.width) || 0)}x${Math.round(parseFloat(box.rule.height) || 0)} ` +
-      `at right ${box.rule.right} / top ${box.rule.top} -> ${r.changed} px (peak Δ${r.maxDelta})` +
-      `${r.inkBox ? `, ink x ${r.inkBox[0]}..${r.inkBox[2]}, y ${r.inkBox[1]}..${r.inkBox[3]}` : ''}; route says ${served}`)
-    console.log(`      screenshot: ${await shoot(cdp, plate.shot, panelClip)}`)
+    await sleep(400)
+    const geometry = await evalIn(cdp, GEOMETRY)
+    console.log(`  custom image armed: footprint ${geometry.footprint[2]}x${geometry.footprint[3]} at ${geometry.footprint[0]},${geometry.footprint[1]}; background ${geometry.background}`)
+    console.log(`      screenshot: ${await shoot(cdp, 'mark-custom-upload.png', { x: geometry.panel[0], y: geometry.panel[1], width: geometry.panel[2], height: geometry.panel[3], scale: 1 })}`)
+    const worse = geometry.footprint[2] < 60 || geometry.footprint[3] < 60
+    if (worse) console.log('  [WARN] the custom mark printed smaller than 60px on a side — check the measured aspect')
   }
-  await evalIn(cdp, `(() => {
-    document.getElementById('decal-probe-plates')?.remove()
-    const root = document.documentElement
-    for (const c of ${JSON.stringify(PLATE_CLASSES)}) root.classList.remove(c)
-    root.classList.remove('endfield-mark-decal', 'endfield-mark')
-    return true
-  })()`)
-  await sleep(300)
-  await evalIn(cdp, `(() => { document.documentElement.classList.add('endfield-mark', 'endfield-mark-decal'); return true })()`)
-  await setVars({ z: 0, opacity: 0.12, top: 214, scale: 1 })
-  await sleep(400)
-  console.log(`screenshot (decal armed, shipped plate): ${await shoot(cdp, 'decal-panel.png', panelClip)}`)
-  await evalIn(cdp, `(() => { document.documentElement.classList.remove('endfield-mark-decal','endfield-mark'); return true })()`)
-  await sleep(300)
-  console.log(`screenshot (decal off):   ${await shoot(cdp, 'decal-panel-off.png', panelClip)}`)
 
-  // Leave nothing behind: the injected plate and geometry override both go, along with the
-  // classes (the stored settings were never touched).
+  // Leave nothing behind: the classes and the two properties were never stored.
   await evalIn(cdp, `(() => {
-    document.getElementById('decal-probe-plate')?.remove()
-    document.getElementById('decal-probe-geometry')?.remove()
-    const s = document.documentElement.style
-    s.removeProperty('--endfield-decal-opacity')
-    s.removeProperty('--endfield-decal-scale')
+    const root = document.documentElement
+    for (const c of [...root.classList]) if (c.startsWith('endfield-plate-') || c.startsWith('endfield-mark-')) root.classList.remove(c)
+    const had = ${JSON.stringify([])}
+    void had
     return true
   })()`)
+  console.log(`\n(the page mark's own ratio is ${PAGE_MARK_ASPECT.toFixed(3)} — reload the page to restore the stored settings)`)
   process.exit(0)
 } catch (error) {
   console.error('probe failed:', error.message)

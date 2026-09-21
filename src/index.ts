@@ -15,12 +15,27 @@
  * offer. Registering a settings *namespace* is not providing a service — it is
  * a registration effect on this plugin's fiber.
  */
-import { createReadStream, statSync } from 'node:fs'
-import type { ServerResponse } from 'node:http'
+import { createHash } from 'node:crypto'
+import { createReadStream, mkdirSync, statSync, writeFileSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { homedir } from 'node:os'
 import { dirname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import z from '@deepseek-ai/schemastery'
-import { DECAL_PLATES, DECAL_ROUTE, SKIN_SETTINGS_DEFAULTS, SKIN_SETTINGS_NAMESPACE } from './settings.ts'
+import {
+  MARK_ANCHORS,
+  MARK_ORIENTATIONS,
+  MARK_PLATES,
+  SKIN_SETTINGS_DEFAULTS,
+  SKIN_SETTINGS_NAMESPACE,
+  UPLOAD_MAX_BYTES,
+  UPLOAD_TYPES,
+  USER_DIR_NAME,
+  USER_DIR_PREFIX,
+  USER_ROUTE,
+  USER_UPLOAD_PATH,
+  PLATE_ROUTE,
+} from './settings.ts'
 import type { HostContext } from './types.ts'
 
 export const name = 'dsh-skin-endfield'
@@ -55,11 +70,12 @@ export const SkinSettingsSchema = z.object({
   headerLight: z.boolean().default(SKIN_SETTINGS_DEFAULTS.headerLight),
   mark: z.boolean().default(SKIN_SETTINGS_DEFAULTS.mark),
   dotBlock: z.boolean().default(SKIN_SETTINGS_DEFAULTS.dotBlock),
-  markStyle: z.union([z.const('decal'), z.const('text')]).default(SKIN_SETTINGS_DEFAULTS.markStyle),
-  markText: z.string().default(SKIN_SETTINGS_DEFAULTS.markText),
-  decalOpacity: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.decalOpacity),
-  decalScale: z.number().min(0.4).max(1.8).default(SKIN_SETTINGS_DEFAULTS.decalScale),
-  decalPlate: z.union(DECAL_PLATES.map((plate) => z.const(plate))).default(SKIN_SETTINGS_DEFAULTS.decalPlate),
+  markOrientation: z.union(MARK_ORIENTATIONS.map((value) => z.const(value))).default(SKIN_SETTINGS_DEFAULTS.markOrientation),
+  markAnchor: z.union(MARK_ANCHORS.map((value) => z.const(value))).default(SKIN_SETTINGS_DEFAULTS.markAnchor),
+  markOpacity: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.markOpacity),
+  markScale: z.number().min(0.4).max(1.8).default(SKIN_SETTINGS_DEFAULTS.markScale),
+  markPlate: z.union(MARK_PLATES.map((plate) => z.const(plate))).default(SKIN_SETTINGS_DEFAULTS.markPlate),
+  markImage: z.string().default(SKIN_SETTINGS_DEFAULTS.markImage),
 })
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -79,7 +95,79 @@ export const FONT_ROUTE = '/skin-endfield/fonts'
  * agree on it: this handler, the decor sheet that paints the plate, and the settings page that
  * previews it. A rename that reaches two of the three is a blank decal no type check would catch.
  */
-export const LOGO_ROUTE = DECAL_ROUTE
+export const LOGO_ROUTE = PLATE_ROUTE
+
+/**
+ * Where an uploaded image goes: the user's own DSH data directory, never this package.
+ *
+ * A mark the user picked belongs to the user, so it must survive a reinstall of the plugin and
+ * must not appear as an untracked file in a repository checkout. `DSH_SKIN_MARKS_DIR` overrides
+ * the location, which is what lets the host checks upload into a temporary directory instead of
+ * the real one.
+ */
+export function marksDir(): string {
+  const override = process.env.DSH_SKIN_MARKS_DIR
+  return override !== undefined && override !== '' ? override : join(homedir(), '.dsh', USER_DIR_PREFIX, USER_DIR_NAME)
+}
+
+/**
+ * Read a JSON request body with a ceiling, so a runaway client cannot fill memory.
+ *
+ * Cordis hands the handler a Node request; there is no framework in front of it, so the body has
+ * to be collected here. The limit is twice the image cap because the payload is base64 (4/3) plus
+ * the data-URL prefix and the JSON wrapper.
+ */
+async function readJsonBody(req: IncomingMessage, limit: number): Promise<unknown> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of req) {
+    const buffer = chunk as Buffer
+    size += buffer.length
+    if (size > limit) throw new Error('the request body is too large')
+    chunks.push(buffer)
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
+/** A data URL of one of the four accepted image types, and nothing else. */
+const DATA_URL = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/]*={0,2})$/
+
+/**
+ * Accept one uploaded image.
+ *
+ * The browser reads the picked file and posts it here, so the checks that matter are all on this
+ * side: an allow-list of image types (an SVG would be a script carrier, and anything else is not
+ * an image at all), a size ceiling, and a filename derived from the content's SHA-1 rather than
+ * from anything the client sent — which makes the name inert, makes a re-upload idempotent, and
+ * means the directory can be listed without surprises.
+ */
+async function handleUpload(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const respond = (status: number, body: unknown): void => {
+    res.statusCode = status
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify(body))
+  }
+  try {
+    const body = await readJsonBody(req, UPLOAD_MAX_BYTES * 2)
+    const dataUrl = body !== null && typeof body === 'object' ? (body as { dataUrl?: unknown }).dataUrl : undefined
+    if (typeof dataUrl !== 'string') return respond(400, { error: 'expected { dataUrl }' })
+    const match = DATA_URL.exec(dataUrl)
+    if (match === null) return respond(415, { error: 'only PNG, JPEG, WebP or GIF data URLs are accepted' })
+    const bytes = Buffer.from(match[2] ?? '', 'base64')
+    if (bytes.length === 0) return respond(400, { error: 'the image is empty' })
+    if (bytes.length > UPLOAD_MAX_BYTES) {
+      return respond(413, { error: `that image is ${(bytes.length / 1048576).toFixed(1)} MB; the limit is ${(UPLOAD_MAX_BYTES / 1048576).toFixed(0)} MB` })
+    }
+    const ext = UPLOAD_TYPES[match[1] as keyof typeof UPLOAD_TYPES]
+    const name = `mark-${createHash('sha1').update(bytes).digest('hex').slice(0, 12)}.${ext}`
+    const dir = marksDir()
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, name), bytes)
+    respond(200, { url: `${USER_ROUTE}/${name}`, bytes: bytes.length })
+  } catch (error) {
+    respond(400, { error: error instanceof Error ? error.message : String(error) })
+  }
+}
 
 const MIME: Record<string, string> = {
   '.woff2': 'font/woff2',
@@ -180,7 +268,33 @@ export function apply(ctx: HostContext): void {
     handler: (req, res) => {
       serveFrom(LOGO_DIR, LOGO_ROUTE, req.url, res)
     },
-  }), 'dsh-skin-endfield: logo route')
+  }), 'dsh-skin-endfield: plate route')
 
-  ctx.logger?.info?.(`dsh-skin-endfield: serving fonts at ${FONT_ROUTE} and the decal at ${LOGO_ROUTE}`)
+  /**
+   * The user's own marks: GET serves one, POST /upload writes one.
+   *
+   * One route rather than two because they are the same directory and the same guard; the only
+   * difference is the method, and the upload path is intercepted before it can be read as a
+   * filename (there is no file called `upload`, so the worst case without the interception would
+   * be a 404).
+   */
+  ctx.effect?.(() => ctx.webServer?.register({
+    kind: 'prefix',
+    path: USER_ROUTE,
+    handler: (req, res) => {
+      const path = (req.url ?? '').split('?')[0] ?? ''
+      if (req.method === 'POST' && path === USER_UPLOAD_PATH) {
+        return handleUpload(req, res)
+      }
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.statusCode = 405
+        res.setHeader('allow', 'GET, HEAD, POST')
+        res.end('method not allowed')
+        return undefined
+      }
+      return serveFrom(marksDir(), USER_ROUTE, req.url, res)
+    },
+  }), 'dsh-skin-endfield: user mark route')
+
+  ctx.logger?.info?.(`dsh-skin-endfield: serving fonts at ${FONT_ROUTE}, plates at ${LOGO_ROUTE}, and uploads at ${USER_ROUTE}`)
 }

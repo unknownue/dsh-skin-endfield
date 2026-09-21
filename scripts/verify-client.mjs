@@ -733,47 +733,60 @@ await check('the settings page exposes every field and commits to the scope', as
   const inputs = flat.filter((n) => n.type === 'input')
   const byType = (t) => inputs.filter((n) => n.props.type === t)
   assert(byType('color').length === 2, `expected 2 colour pickers (accent + outline), got ${byType('color').length}`)
-  // Three sliders since the decal shipped: bloom, the plate's opacity and its scale. The
-  // count is asserted rather than the labels because a dropped control is the failure this
-  // check exists for -- and a new one has to be added here deliberately.
-  assert(byType('range').length === 3, `expected 3 sliders (bloom, decal opacity, decal scale), got ${byType('range').length}`)
+  // Three sliders: bloom, the mark's scale and its opacity. The count is asserted rather than the
+  // labels because a dropped control is the failure this check exists for, and a new one has to be
+  // added here deliberately.
+  assert(byType('range').length === 3, `expected 3 sliders (bloom, mark scale, mark opacity), got ${byType('range').length}`)
   assert(byType('number').length === 1, 'missing the corner-radius field')
   assert(byType('checkbox').length === 5, `expected 5 toggles (panel fill, section marker, and the three page effects), got ${byType('checkbox').length}`)
+  assert(byType('file').length === 1, `expected 1 file picker (the custom mark image), got ${byType('file').length}`)
+  const filePicker = byType('file')[0]
+  assert(filePicker.props.disabled === true, 'the file picker must be inert while the mark is off')
+  assert(String(filePicker.props.accept).includes('image/png'), `the picker must accept images, got ${filePicker.props.accept}`)
 
-  // The mark's style and the decal's plate are CHOICES, not switches: both occupy one slot, so
-  // there is no configuration in which two of them are on. Two selects, and the plate one has to
-  // offer the shipped artwork plus every local official conversion.
+  /**
+   * Three selects: the artwork, the orientation and the corner.
+   *
+   * Each is a CHOICE rather than a switch, because each occupies one slot -- two plates cannot
+   * print at once, and a mark cannot be both horizontal and vertical. The lists are compared
+   * against the settings module instead of a literal, so a value added there without a control
+   * here (or the reverse) fails instead of drifting.
+   */
   const selects = flat.filter((n) => n.type === 'select')
-  assert(selects.length === 2, `expected 2 selects (mark style, decal plate), got ${selects.length}`)
-  const styleSelect = selects.find((n) => flat.filter((o) => o.type === 'option').some((o) => o.props?.value === 'text'))
-  assert(styleSelect !== undefined, 'no mark-style select')
-  const styleOptions = flat.filter((n) => n.type === 'option').map((o) => o.props?.value)
-  assert(styleOptions.slice(0, 2).join(',') === 'decal,text', `mark style must offer both renderings, got ${styleOptions.slice(0, 2).join(',')}`)
-  assert(styleSelect.props.value === 'decal', `the plate is the shipped default, got ${styleSelect.props.value}`)
-  writes.length = 0
-  styleSelect.props.onChange({ target: { value: 'text' } })
-  assert(writes.length === 1 && writes[0][0] === 'markStyle' && writes[0][1] === 'text',
-    `mark style must commit through the scope, got ${JSON.stringify(writes)}`)
-  // An unknown style must fall back rather than reach the stylesheet as a third class.
-  styleSelect.props.onChange({ target: { value: 'sideways' } })
-  assert(writes[1][1] === 'decal', `an unknown style must fall back to the plate, got ${writes[1][1]}`)
+  assert(selects.length === 3, `expected 3 selects (artwork, orientation, position), got ${selects.length}`)
+  const settingsModule = await import(pathToFileURL(join(ROOT, 'src', 'settings.ts')).href)
+  const allOptions = flat.filter((n) => n.type === 'option').map((o) => o.props?.value)
+  const forSelect = (values) => selects.find((s) => (s.children ?? []).flat(3).some((o) => values.includes(o?.props?.value)))
+  const artworkSelect = selects.find((s) => (s.children ?? []).flat(3).some((o) => o?.props?.value === 'skin'))
+  const orientationSelect = selects.find((s) => (s.children ?? []).flat(3).some((o) => o?.props?.value === 'vertical'))
+  const anchorSelect = selects.find((s) => (s.children ?? []).flat(3).some((o) => o?.props?.value === 'bottom-left'))
+  assert(artworkSelect !== undefined, 'no artwork select')
+  assert(orientationSelect !== undefined, 'no orientation select')
+  assert(anchorSelect !== undefined, 'no position select')
+  assert(forSelect(settingsModule.MARK_PLATES) !== undefined, 'the artwork select must carry the plate values')
 
-  const plateSelect = selects.find((n) => n !== styleSelect)
-  // The list is compared against the settings module rather than a literal, so adding a plate there
-  // without offering it in the page (or the reverse) fails here instead of drifting.
-  const { DECAL_PLATES } = await import(pathToFileURL(join(ROOT, 'src', 'settings.ts')).href)
-  const plateValues = styleOptions.filter((v) => DECAL_PLATES.includes(v))
-  assert(plateValues.join(',') === DECAL_PLATES.join(','),
-    `the plate list must run from the page mark to every plate that ships, got ${plateValues.join(',')}`)
-  assert(plateSelect.props.value === 'skin', `a fresh install must select the shipped plate, got ${plateSelect.props.value}`)
+  const plateValues = allOptions.filter((v) => settingsModule.MARK_PLATES.includes(v))
+  assert(plateValues.join(',') === settingsModule.MARK_PLATES.join(','),
+    `the artwork list must run from the page mark to every plate that ships, got ${plateValues.join(',')}`)
+  assert(artworkSelect.props.value === 'skin', `a fresh install must select the shipped drawing, got ${artworkSelect.props.value}`)
   writes.length = 0
-  plateSelect.props.onChange({ target: { value: 'lockup' } })
-  assert(writes.length === 1 && writes[0][0] === 'decalPlate' && writes[0][1] === 'lockup',
-    `the plate must commit through the scope, got ${JSON.stringify(writes)}`)
-  // A plate that no longer exists (a stale settings document) must fall back to the shipped one
-  // rather than arming a class no rule matches.
-  plateSelect.props.onChange({ target: { value: 'someones-draft' } })
-  assert(writes[1][1] === 'skin', `an unknown plate must fall back to the shipped mark, got ${writes[1][1]}`)
+  artworkSelect.props.onChange({ target: { value: 'lockup' } })
+  assert(writes.length === 1 && writes[0][0] === 'markPlate' && writes[0][1] === 'lockup',
+    `the artwork must commit through the scope, got ${JSON.stringify(writes)}`)
+  // An unknown plate (a stale settings document) must fall back rather than arming a class no rule
+  // matches.
+  artworkSelect.props.onChange({ target: { value: 'someones-draft' } })
+  assert(writes[1][1] === 'skin', `an unknown drawing must fall back to the shipped mark, got ${writes[1][1]}`)
+
+  writes.length = 0
+  orientationSelect.props.onChange({ target: { value: 'vertical' } })
+  assert(writes[0][0] === 'markOrientation' && writes[0][1] === 'vertical', `orientation commit: ${JSON.stringify(writes)}`)
+  orientationSelect.props.onChange({ target: { value: 'sideways' } })
+  assert(writes[1][1] === 'horizontal', `an unknown orientation must fall back, got ${writes[1][1]}`)
+  anchorSelect.props.onChange({ target: { value: 'bottom-left' } })
+  assert(writes[2][0] === 'markAnchor' && writes[2][1] === 'bottom-left', `anchor commit: ${JSON.stringify(writes)}`)
+  anchorSelect.props.onChange({ target: { value: 'middle' } })
+  assert(writes[3][1] === 'top-right', `an unknown corner must fall back, got ${writes[3][1]}`)
   // Leave the recorder clean for the assertions below, which count their own writes.
   writes.length = 0
 
@@ -797,22 +810,22 @@ await check('the settings page exposes every field and commits to the scope', as
   reset.props.onClick()
   const fields = writes.map(([field]) => field).sort()
   assert(
-    fields.join(',') === 'accent,bloom,cornerRadius,decalOpacity,decalPlate,decalScale,dotBlock,headerLight,labelPrefix,mark,markStyle,markText,surfaceFill,tint',
+    fields.join(',') === 'accent,bloom,cornerRadius,dotBlock,headerLight,labelPrefix,mark,markAnchor,markImage,markOpacity,markOrientation,markPlate,markScale,surfaceFill,tint',
     `Reset must cover every field, got ${fields.join(',')}`,
   )
 
-  // The decal's two numbers must round-trip through their guards: a stored value outside the
-  // range (a hand-edited settings document) must land inside it rather than in the stylesheet.
+  // The mark's two numbers must round-trip through their guards: a stored value outside the range
+  // (a hand-edited settings document) must land inside it rather than in the stylesheet.
   const opacitySlider = byType('range').find((n) => n.props.value === 0.12)
-  assert(opacitySlider !== undefined, 'no decal opacity slider showing the shipped 0.12')
+  assert(opacitySlider !== undefined, 'no mark opacity slider showing the shipped 0.12')
   writes.length = 0
   opacitySlider.props.onInput({ target: { value: '9' } })
-  assert(writes[0][0] === 'decalOpacity' && writes[0][1] === 1, `opacity guard failed: ${JSON.stringify(writes)}`)
+  assert(writes[0][0] === 'markOpacity' && writes[0][1] === 1, `opacity guard failed: ${JSON.stringify(writes)}`)
   const scaleSlider = byType('range').find((n) => n.props.value === 1)
-  assert(scaleSlider !== undefined, 'no decal scale slider showing the shipped 1')
+  assert(scaleSlider !== undefined, 'no mark scale slider showing the shipped 1')
   writes.length = 0
   scaleSlider.props.onInput({ target: { value: '0' } })
-  assert(writes[0][0] === 'decalScale' && writes[0][1] === 0.4, `scale guard failed: ${JSON.stringify(writes)}`)
+  assert(writes[0][0] === 'markScale' && writes[0][1] === 0.4, `scale guard failed: ${JSON.stringify(writes)}`)
 
   return `${inputs.length} controls, accent=${accentPicker.props.value}, reset covers ${fields.length} fields`
 })
@@ -883,8 +896,12 @@ await check('panel fill off empties the surface tokens and the elevation', async
 await check('the three page effects are independent, and each is off by default', async () => {
   // Imported from src/, like the elevation check above: these are values the modules
   // produce, and a bundle is the wrong place to assert them.
-  const { HEADER_LIGHT_CLASS, MARK_CLASS, DOT_BLOCK_CLASS, MARK_TEXT_VAR, applySkinSettings } =
-    await import(pathToFileURL(join(ROOT, 'src', 'client', 'settings-apply.ts')).href)
+  const {
+    HEADER_LIGHT_CLASS, MARK_CLASS, DOT_BLOCK_CLASS,
+    MARK_IMAGE_VAR, MARK_ASPECT_VAR, MARK_OPACITY_VAR, MARK_SCALE_VAR, applySkinSettings,
+  } = await import(pathToFileURL(join(ROOT, 'src', 'client', 'settings-apply.ts')).href)
+  const { MARK_PLATES, MARK_ANCHORS, MARK_CUSTOM_CLASS, MARK_VERTICAL_CLASS, plateClass, markAnchorClass } =
+    await import(pathToFileURL(join(ROOT, 'src', 'settings.ts')).href)
   const apply = (section) => applySkinSettings(section, undefined)
   const on = (cls) => rootClasses.has(cls)
 
@@ -895,13 +912,14 @@ await check('the three page effects are independent, and each is off by default'
   globalThis.document = documentStub
   try {
 
-  // Defaults: nothing on, and the mark text still published (harmless when the mark is off).
+  // Defaults: nothing on, and the mark's own numbers still published (harmless while it is off).
   rootClasses.clear()
   apply({})
   assert(!on(HEADER_LIGHT_CLASS) && !on(MARK_CLASS) && !on(DOT_BLOCK_CLASS),
     `defaults must leave all three effects off, got ${JSON.stringify([...rootClasses])}`)
-  assert(rootVars.get(MARK_TEXT_VAR) === '"ENDFIELD"',
-    `the mark text must be published as a quoted CSS string, got ${rootVars.get(MARK_TEXT_VAR)}`)
+  assert(rootVars.get(MARK_OPACITY_VAR) === '0.12', `the opacity must be published, got ${rootVars.get(MARK_OPACITY_VAR)}`)
+  assert(rootVars.get(MARK_SCALE_VAR) === '1', `the scale must be published, got ${rootVars.get(MARK_SCALE_VAR)}`)
+  assert(!on(MARK_CUSTOM_CLASS), 'no custom image by default')
 
   for (const [name, cls] of [['headerLight', HEADER_LIGHT_CLASS], ['mark', MARK_CLASS], ['dotBlock', DOT_BLOCK_CLASS]]) {
     rootClasses.clear()
@@ -923,23 +941,54 @@ await check('the three page effects are independent, and each is off by default'
   assert(!on(HEADER_LIGHT_CLASS) && !on(MARK_CLASS) && !on(DOT_BLOCK_CLASS),
     `turning them off must remove the classes, got ${JSON.stringify([...rootClasses])}`)
 
-  // The mark text is normalised and escaped before it reaches `content`.
-  apply({ mark: true, markText: '  my   project  ' })
-  assert(rootVars.get(MARK_TEXT_VAR) === '"MY PROJECT"',
-    `the mark must be trimmed, collapsed and upper-cased, got ${rootVars.get(MARK_TEXT_VAR)}`)
-  apply({ markText: 'a"b\\c' })
-  const quoted = rootVars.get(MARK_TEXT_VAR)
-  assert(quoted.startsWith('"') && quoted.endsWith('"') && !/["\\]/.test(quoted.slice(1, -1)),
-    `quotes and backslashes must not survive into content, got ${quoted}`)
-  apply({ markText: 'x'.repeat(80) })
-  assert(rootVars.get(MARK_TEXT_VAR).length <= 16, `the mark text must be capped, got ${rootVars.get(MARK_TEXT_VAR).length} chars`)
+  /**
+   * The mark's four knobs, one class each, and exactly one of each axis.
+   *
+   * "Plate" and "anchor" are one-of-N choices, so the failure to catch is not a missing class but
+   * two of them alive at once -- which the stylesheet would resolve by source order, i.e. silently.
+   */
+  rootClasses.clear()
+  apply({ mark: true, markPlate: 'badge', markAnchor: 'bottom-left', markOrientation: 'vertical' })
+  const platesOn = MARK_PLATES.filter((plate) => on(plateClass(plate)))
+  const anchorsOn = MARK_ANCHORS.filter((anchor) => on(markAnchorClass(anchor)))
+  assert(platesOn.join(',') === 'badge', `exactly one plate class, got ${platesOn.join(',')}`)
+  assert(anchorsOn.join(',') === 'bottom-left', `exactly one anchor class, got ${anchorsOn.join(',')}`)
+  assert(on(MARK_VERTICAL_CLASS), 'the vertical class must be armed')
+  // A plate's ratio belongs to the plate's own rule, not to a published value: one number would be
+  // right for the selected drawing and wrong for the other three.
+  assert(rootVars.get(MARK_ASPECT_VAR) === undefined,
+    `a plate must not publish a global aspect, got ${rootVars.get(MARK_ASPECT_VAR)}`)
+
+  // Switching a choice must REMOVE the previous one rather than stacking a second.
+  apply({ mark: true, markPlate: 'wordmark', markAnchor: 'top-right', markOrientation: 'horizontal' })
+  assert(MARK_PLATES.filter((plate) => on(plateClass(plate))).join(',') === 'wordmark', 'the plate choice must replace, not stack')
+  assert(MARK_ANCHORS.filter((anchor) => on(markAnchorClass(anchor))).join(',') === 'top-right', 'the anchor choice must replace, not stack')
+  assert(!on(MARK_VERTICAL_CLASS), 'going back to horizontal must clear the vertical class')
+
+  /**
+   * A custom image replaces the plate, and only a path under our own upload route is accepted.
+   *
+   * The stored value goes into a CSS `url()`, so anything else (`http://…`, a `file:` path, a
+   * `data:` URL) would make the skin fetch or read whatever a hand-edited document asked for.
+   */
+  apply({ mark: true, markImage: '/skin-endfield/user/mark-abc123.png' })
+  assert(on(MARK_CUSTOM_CLASS), 'a custom image must arm the custom class')
+  assert(MARK_PLATES.filter((plate) => on(plateClass(plate))).length === 0, 'a custom image must take the plate class out')
+  assert(rootVars.get(MARK_IMAGE_VAR) === 'url("/skin-endfield/user/mark-abc123.png")',
+    `the image must be published as a url(), got ${rootVars.get(MARK_IMAGE_VAR)}`)
+  for (const bad of ['https://example.com/x.png', '/etc/passwd', 'data:image/png;base64,AAAA', '/skin-endfield/user/../../secret']) {
+    apply({ mark: true, markImage: bad })
+    assert(!on(MARK_CUSTOM_CLASS), `an off-route value must not arm the custom class: ${bad}`)
+  }
+  apply({ mark: true, markImage: '' })
+  assert(!on(MARK_CUSTOM_CLASS), 'clearing the image must go back to the plate')
 
   } finally {
     if (hadDocument) globalThis.document = previousDocument
     else delete globalThis.document
   }
 
-  return 'each switch additive and independent; off removes; mark text normalised, escaped, capped'
+  return 'each switch additive and independent; off removes; one plate and one anchor at a time; only on-route images'
 })
 
 // ── report ──────────────────────────────────────────────────────────────────

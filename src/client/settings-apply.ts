@@ -23,12 +23,15 @@
  *     rather than falling back.
  */
 import {
-  DECAL_PLATES,
-  DECAL_PLATE_CLASSES,
-  MARK_TEXT_MAX,
+  MARK_ANCHORS,
+  MARK_PLATES,
+  MARK_CUSTOM_CLASS,
+  MARK_VERTICAL_CLASS as MARK_VERTICAL_CLASS_FROM_SETTINGS,
+  PLATE_CLASSES,
   SKIN_SETTINGS_DEFAULTS,
-  decalPlateClass,
+  markAnchorClass,
   normalizeSkinSettings,
+  plateClass,
   tintChannels,
 } from '../settings.ts'
 import type { ThemeTokenOverrides } from '../types.ts'
@@ -112,52 +115,62 @@ export const MARK_CLASS = 'endfield-mark'
 export const DOT_BLOCK_CLASS = 'endfield-dots'
 
 /**
- * The two renderings of the page mark, one class each.
+ * The page mark: one image, and the four knobs that place it.
  *
- * The switch (`endfield-mark`) says a mark exists; the style class says which mark. Both are
- * needed, and they are separate because the style is also the thing that decides which
- * pseudo-element contract the sheet owes: the wordmark is outline text with `writing-mode`,
- * the plate is a background image with a box, and a single rule trying to be both would have
- * to switch `content`, `writing-mode`, `background-image` and the geometry at once.
+ * The switch (`endfield-mark`) says a mark exists. The rest are classes because each one is a
+ * whole geometry rather than a value: which drawing prints, whether it is turned a quarter turn,
+ * and which corner it is pinned to. The mark's numbers (opacity, scale) are custom properties,
+ * because those really are values the stylesheet multiplies by.
  *
- * Exactly one style class is on at a time (see `applySkinSettings`), so the switch never has
- * two marks fighting for the same corner.
+ * Exactly one plate class and one anchor class are on at a time (see `applySkinSettings`), so the
+ * stylesheet never has to resolve two competing placements.
  */
-export const MARK_DECAL_CLASS = 'endfield-mark-decal'
-export const MARK_TEXT_CLASS = 'endfield-mark-text'
+export const MARK_VERTICAL_CLASS = MARK_VERTICAL_CLASS_FROM_SETTINGS
 
-/** The plate's own knobs: how strongly it prints, how large it is set. */
-export const DECAL_OPACITY_VAR = '--endfield-decal-opacity'
-export const DECAL_SCALE_VAR = '--endfield-decal-scale'
-
+/** The mark's own numbers, and the artwork the stylesheet should paint. */
+export const MARK_OPACITY_VAR = '--endfield-mark-opacity'
+export const MARK_SCALE_VAR = '--endfield-mark-scale'
+export const MARK_IMAGE_VAR = '--endfield-mark-image'
 /**
- * Which plate prints, as one class per plate.
+ * The artwork's aspect ratio, as a plain NUMBER.
  *
- * The page mark is the CSS default; the other three are alternatives, so the class names carry the
- * choice and the stylesheet carries the URL. Exactly one is armed at a time, and only while the
- * decal rendering is the one selected. The names themselves live in `settings.ts`, because the
- * live check arms them by hand too.
+ * A number rather than `aspect-ratio`'s `624 / 113` spelling, because the vertical placement
+ * divides by it: the short side is the long side over the aspect, and CSS can only divide by a
+ * number. It is published from the settings for a plate (whose ratio is known) and measured from
+ * the image itself for an upload.
  */
-export { DECAL_PLATE_CLASSES, decalPlateClass }
+export const MARK_ASPECT_VAR = '--endfield-mark-aspect'
 
-/**
- * The mark's text, written as a quoted CSS string.
- *
- * `content` needs a quoted string, and the value is a user-editable one -- so the quotes
- * are added here, once, and the text itself is stripped of anything that could terminate
- * it (`"` and `\`, plus control characters). This is the same discipline the palette uses
- * for colours: normalise at the seam, never trust the document.
- */
-export const MARK_TEXT_VAR = '--endfield-mark-text'
-
-/** Quote and escape a value for use as a CSS `content` string. */
-export function cssContentString(text: string): string {
-  const safe = text.replace(/[\\"\u0000-\u001f]/g, '').slice(0, MARK_TEXT_MAX)
-  return `"${safe.length > 0 ? safe : SKIN_SETTINGS_DEFAULTS.markText}"`
-}
+/** Which plate prints, as one class per plate; the names live in `settings.ts`. */
+export { PLATE_CLASSES, plateClass }
 
 /** The layer id the theme seam keys one override layer by. */
 export const TOKEN_SOURCE = 'dsh-skin-endfield'
+
+/**
+ * Measure whatever the mark is about to paint, so the stylesheet can divide by the ratio.
+ *
+ * Plates have a known ratio, so their value is published synchronously and nothing flashes. An
+ * uploaded image does not: it is measured once it loads, which is a fire-and-forget job because a
+ * missing or slow image must not hold up the rest of the settings. Until it resolves, the
+ * stylesheet's fallback ratio applies -- a slightly wrong box for a frame or two, never a blank
+ * mark, and never a layout that depends on the network.
+ */
+function publishMarkAspect(root: HTMLElement, url: string | null): void {
+  // The browser half is compiled for the browser, but the offline checks import this module into
+  // Node to assert what it writes -- and a measuring side effect must not be the thing that makes
+  // them unable to. Nothing else here needs a guard like this: there is no `Image` in Node, and
+  // there is no alternative path that would still measure the picture.
+  if (url === null || typeof Image !== 'function') return
+  const image = new Image()
+  image.onload = () => {
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      root.style.setProperty(MARK_ASPECT_VAR, String(image.naturalWidth / image.naturalHeight))
+    }
+  }
+  image.onerror = () => { root.style.removeProperty(MARK_ASPECT_VAR) }
+  image.src = url
+}
 
 /**
  * Set every skin variable from one settings section, and (when a theme service is
@@ -213,19 +226,31 @@ export function applySkinSettings(
   root.classList.toggle(HEADER_LIGHT_CLASS, settings.headerLight)
   root.classList.toggle(MARK_CLASS, settings.mark)
   root.classList.toggle(DOT_BLOCK_CLASS, settings.dotBlock)
-  // The style classes follow the switch, so turning the mark off leaves neither rendering
-  // half-armed, and switching style is one idempotent call rather than a remove-then-add.
-  root.classList.toggle(MARK_DECAL_CLASS, settings.mark && settings.markStyle === 'decal')
-  root.classList.toggle(MARK_TEXT_CLASS, settings.mark && settings.markStyle === 'text')
-  // One plate class at a time: the page mark (which needs none — it is the CSS default) or one of
-  // the alternatives. Armed only while the decal is the rendering in use, so the plate choice
-  // cannot leak into the wordmark's rule.
-  for (const plate of DECAL_PLATES) {
-    root.classList.toggle(decalPlateClass(plate), settings.mark && settings.markStyle === 'decal' && settings.decalPlate === plate)
+  // The mark's four knobs, one class each, all gated on the switch: turning the mark off must
+  // leave nothing half-armed, and every one of them is idempotent so a settings change is one
+  // call rather than a remove-then-add.
+  const custom = settings.mark && settings.markImage !== ''
+  root.classList.toggle(MARK_CUSTOM_CLASS, custom)
+  root.classList.toggle(MARK_VERTICAL_CLASS, settings.mark && settings.markOrientation === 'vertical')
+  for (const anchor of MARK_ANCHORS) {
+    root.classList.toggle(markAnchorClass(anchor), settings.mark && settings.markAnchor === anchor)
   }
-  root.style.setProperty(MARK_TEXT_VAR, cssContentString(settings.markText))
-  root.style.setProperty(DECAL_OPACITY_VAR, String(settings.decalOpacity))
-  root.style.setProperty(DECAL_SCALE_VAR, String(settings.decalScale))
+  for (const plate of MARK_PLATES) {
+    root.classList.toggle(plateClass(plate), settings.mark && !custom && settings.markPlate === plate)
+  }
+  root.style.setProperty(MARK_OPACITY_VAR, String(settings.markOpacity))
+  root.style.setProperty(MARK_SCALE_VAR, String(settings.markScale))
+  if (custom) {
+    root.style.setProperty(MARK_IMAGE_VAR, `url("${settings.markImage}")`)
+    publishMarkAspect(root, settings.markImage)
+  } else {
+    root.style.removeProperty(MARK_IMAGE_VAR)
+    // A plate's ratio is NOT a value the settings own: each drawing's rule carries its own, because
+    // one published number is right for the drawing that was selected when it was written and wrong
+    // for the other three -- which is how the badge first shipped stretched into the page mark's
+    // band, painted in 67 pixels instead of 13000.
+    root.style.removeProperty(MARK_ASPECT_VAR)
+  }
 
   theme?.overrideTokens(TOKEN_SOURCE, endfieldTokens(settings))
 
@@ -238,9 +263,10 @@ export function clearSkinSettings(): void {
   root.classList.remove(SURFACE_CLASS)
   root.classList.remove(HEADER_LIGHT_CLASS)
   root.classList.remove(MARK_CLASS)
-  root.classList.remove(MARK_DECAL_CLASS)
-  root.classList.remove(MARK_TEXT_CLASS)
-  for (const cls of DECAL_PLATE_CLASSES) root.classList.remove(cls)
+  root.classList.remove(MARK_CUSTOM_CLASS)
+  root.classList.remove(MARK_VERTICAL_CLASS)
+  for (const anchor of MARK_ANCHORS) root.classList.remove(markAnchorClass(anchor))
+  for (const cls of PLATE_CLASSES) root.classList.remove(cls)
   root.classList.remove(DOT_BLOCK_CLASS)
   root.style.removeProperty(ACCENT_VAR)
   root.style.removeProperty(ACCENT_INK_VAR)
@@ -250,9 +276,10 @@ export function clearSkinSettings(): void {
   root.style.removeProperty(RADIUS_VAR)
   root.style.removeProperty(PREFIX_VAR)
   root.style.removeProperty(SURFACE_VAR)
-  root.style.removeProperty(MARK_TEXT_VAR)
-  root.style.removeProperty(DECAL_OPACITY_VAR)
-  root.style.removeProperty(DECAL_SCALE_VAR)
+  root.style.removeProperty(MARK_OPACITY_VAR)
+  root.style.removeProperty(MARK_SCALE_VAR)
+  root.style.removeProperty(MARK_IMAGE_VAR)
+  root.style.removeProperty(MARK_ASPECT_VAR)
 }
 
 /** The values in force when nothing has been stored. */

@@ -9,10 +9,26 @@
  */
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { Readable } from 'node:stream'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const HOST = join(ROOT, 'lib', 'index.js')
+
+/**
+ * A request as the upload handler sees it: a method, a url, and a body it can read.
+ *
+ * The handler collects the body with `for await (const chunk of req)`, so a Readable is enough --
+ * and it is the whole reason this is a stream rather than a string: the host code has to be able
+ * to enforce its own ceiling while reading, which a pre-materialised string would hide.
+ */
+function fakeRequest(method, url, body) {
+  const req = Readable.from(body === undefined ? [] : [Buffer.from(body, 'utf8')])
+  req.method = method
+  req.url = url
+  return req
+}
 
 const results = []
 async function check(name, fn) {
@@ -90,17 +106,105 @@ await check('host exports apply() and injects webServer', () => {
   return `inject=${JSON.stringify(module.inject)}`
 })
 
-await check('apply() registers exactly two prefix routes', () => {
+await check('apply() registers exactly three prefix routes', () => {
   module.apply(host)
-  assert(routes.length === 2, `expected 2 routes, got ${routes.length}`)
+  assert(routes.length === 3, `expected 3 routes, got ${routes.length}`)
   const paths = routes.map((route) => route.path).sort()
-  assert(paths.join(',') === '/skin-endfield/fonts,/skin-endfield/logo', `unexpected paths: ${paths.join(',')}`)
+  assert(paths.join(',') === '/skin-endfield/fonts,/skin-endfield/logo,/skin-endfield/user', `unexpected paths: ${paths.join(',')}`)
   for (const route of routes) assert(route.kind === 'prefix', `expected a prefix route, got "${route.kind}"`)
   return paths.join(' + ')
 })
 
+/**
+ * The upload route is the only place this plugin writes anything, so it gets the most attention:
+ * what a user's own image may be, what it may be called, and where it lands.
+ *
+ * Uploads are redirected into a temporary directory through `DSH_SKIN_MARKS_DIR` -- the override
+ * the host honours for exactly this reason -- so the check never writes into the real user data
+ * directory, and it deletes what it wrote afterwards.
+ */
+await check('an uploaded image lands in the marks directory with a content-derived name', async () => {
+  const dir = join(tmpdir(), `dsh-skin-marks-${process.pid}`)
+  rmSync(dir, { recursive: true, force: true })
+  process.env.DSH_SKIN_MARKS_DIR = dir
+  try {
+    const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex')
+    const body = JSON.stringify({ dataUrl: `data:image/png;base64,${png.toString('base64')}` })
+    const res = new StubResponse()
+    await routeFor('/skin-endfield/user').handler(fakeRequest('POST', '/skin-endfield/user/upload', body), res)
+    assert(res.statusCode === 200, `expected 200, got ${res.statusCode} ${res.body}`)
+    const answer = JSON.parse(res.body)
+    assert(typeof answer.url === 'string' && answer.url.startsWith('/skin-endfield/user/mark-'), `unexpected url: ${answer.url}`)
+    assert(/^mark-[0-9a-f]{12}\.png$/.test(answer.url.split('/').pop()), `the name must be content-derived, got ${answer.url}`)
+    const written = join(dir, answer.url.split('/').pop())
+    assert(existsSync(written), `nothing was written to ${written}`)
+    assert(readFileSync(written).equals(png), 'the written bytes must be the uploaded ones')
+    return `${answer.url} (${answer.bytes} bytes)`
+  } finally {
+    delete process.env.DSH_SKIN_MARKS_DIR
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+await check('the upload route refuses what is not an image, and anything oversized', async () => {
+  const dir = join(tmpdir(), `dsh-skin-marks-${process.pid}-reject`)
+  rmSync(dir, { recursive: true, force: true })
+  process.env.DSH_SKIN_MARKS_DIR = dir
+  try {
+    const route = routeFor('/skin-endfield/user')
+    const cases = [
+      ['a foreign url', JSON.stringify({ dataUrl: 'https://example.com/logo.png' }), 415],
+      ['svg (a script carrier)', JSON.stringify({ dataUrl: `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}` }), 415],
+      ['no dataUrl at all', JSON.stringify({ hello: 'world' }), 400],
+      ['an empty image', JSON.stringify({ dataUrl: 'data:image/png;base64,' }), 400],
+    ]
+    for (const [what, body, expected] of cases) {
+      const res = new StubResponse()
+      await route.handler(fakeRequest('POST', '/skin-endfield/user/upload', body), res)
+      assert(res.statusCode === expected, `${what}: expected ${expected}, got ${res.statusCode} (${res.body})`)
+    }
+    // One byte over the ceiling is refused with 413 rather than written.
+    const big = Buffer.alloc(2 * 1024 * 1024 + 1, 7)
+    const res = new StubResponse()
+    await route.handler(fakeRequest('POST', '/skin-endfield/user/upload',
+      JSON.stringify({ dataUrl: `data:image/png;base64,${big.toString('base64')}` })), res)
+    assert(res.statusCode === 413, `an oversized upload: expected 413, got ${res.statusCode} (${res.body})`)
+    assert(!existsSync(dir) || readdirSync(dir).length === 0, 'a refused upload must not leave a file behind')
+    return `${cases.length + 1} refusals, nothing written`
+  } finally {
+    delete process.env.DSH_SKIN_MARKS_DIR
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+await check('the user route serves uploads, refuses other methods, and cannot escape its directory', async () => {
+  const dir = join(tmpdir(), `dsh-skin-marks-${process.pid}-serve`)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'mark-abcdef123456.png'), 'png-bytes')
+  process.env.DSH_SKIN_MARKS_DIR = dir
+  try {
+    const route = routeFor('/skin-endfield/user')
+    const ok = new StubResponse()
+    route.handler(fakeRequest('GET', '/skin-endfield/user/mark-abcdef123456.png'), ok)
+    assert(ok.statusCode === 200, `expected 200, got ${ok.statusCode}`)
+    assert(ok.headers['content-type'] === 'image/png', `unexpected content-type: ${ok.headers['content-type']}`)
+
+    const cross = new StubResponse()
+    route.handler(fakeRequest('GET', '/skin-endfield/user/../logo/endfield-decal.png'), cross)
+    assert(cross.statusCode === 403 || cross.statusCode === 404, `a cross-directory read returned ${cross.statusCode}`)
+
+    const del = new StubResponse()
+    await route.handler(fakeRequest('DELETE', '/skin-endfield/user/mark-abcdef123456.png'), del)
+    assert(del.statusCode === 405, `expected 405 for DELETE, got ${del.statusCode}`)
+    return 'served, traversal blocked, other methods refused'
+  } finally {
+    delete process.env.DSH_SKIN_MARKS_DIR
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 /** The route for one prefix, so the checks below cannot silently test the wrong one. */
-const routeFor = (path) => {
+function routeFor(path) {
   const route = routes.find((r) => r.path === path)
   assert(route !== undefined, `no route registered for ${path}`)
   return route

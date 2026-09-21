@@ -51,61 +51,56 @@ export const SKIN_SETTINGS_DEFAULTS = {
    *
    * They are separate switches rather than one "effects" toggle because they answer
    * different questions and do not have to travel together: the top-bar light is a
-   * chrome treatment on the shell's own bar, the wordmark is a page mark in the
-   * transcript's right margin, and the dot block is a bounded piece of print in its
-   * upper-right corner. Any subset is a legitimate configuration, and each one is
-   * confined to its own zone so that no combination can overlap another.
+   * chrome treatment on the shell's own bar, the page mark is an image printed on the
+   * transcript panel, and the dot block is a bounded piece of print in its
+   * upper-right corner. Any subset is a legitimate configuration.
    *
    * OFF by default on purpose: this layer paints on top of (or behind) content the
    * shell owns, so a fresh install must look exactly like the skin without them. A
    * user opts in per effect.
    */
   headerLight: false,
-  /** The vertical ENDFIELD mark in the transcript's right margin. */
+  /** The image printed on the transcript panel. */
   mark: false,
   /** The halftone block in the transcript's upper-right corner. */
   dotBlock: false,
   /**
-   * How the page mark is set: the vertical wordmark, or the printed logo plate.
+   * How the mark is set, and where it is pinned.
    *
-   * Two renderings of one idea, not two effects -- they occupy the same corner, and a page has
-   * room for one mark in it. The plate is the default because a decal reads as printing on the
-   * page at any size, while the wordmark only works as a small vertical strip (it is outline
-   * text: set large it competes with the transcript, set small it stops being legible).
-   * Both ship because the choice is taste, and the earlier round's lettering is not something
-   * a later round gets to delete on the user's behalf.
+   * `horizontal` prints the image the way it was drawn; `vertical` turns it a quarter turn and
+   * sets it down the right-hand margin, which is what a wordmark wants. The anchor is one of the
+   * panel's four corners; the geometry for each combination is in decor.ts 18b, and the rotated
+   * cases are computed rather than nudged by hand.
    */
-  markStyle: 'decal' as 'decal' | 'text',
+  markOrientation: 'horizontal' as MarkOrientation,
+  markAnchor: 'top-right' as MarkAnchor,
   /**
-   * The mark's text. Kept as a setting rather than a constant because the mark is the
-   * one effect whose value depends on the person using it -- someone who does not want
-   * the studio's wordmark can put a project, a branch or a role call sign there
-   * instead. Normalised (upper-cased, trimmed, length-capped) before it is painted.
-   */
-  markText: 'ENDFIELD',
-  /**
-   * How strongly the printed plate reads, and how large it is set.
+   * How strongly the mark prints, and how large it is set.
    *
-   * The decal is drawn UNDER the transcript on purpose -- it is a print on the page, not a
-   * sticker on the glass -- so its opacity is what decides whether it is a watermark or a
-   * stain, and 0.12 is the value that reads on the dark canvas without touching legibility.
-   * Measured, not guessed: `scripts/probe-decal-live.mjs` prints the ink it contributes.
+   * It paints over the transcript's own canvas (the canvas is opaque, so a print underneath it is
+   * simply invisible -- measured in scripts/probe-decal-live.mjs), which is why the opacity is the
+   * knob between "watermark" and "stain" and why 0.12 is the value that ships.
    */
-  decalOpacity: 0.12,
-  /** Multiplier on the plate's width. 1 puts it at 46% of the panel, which is about 600px. */
-  decalScale: 1,
+  markOpacity: 0.12,
+  /** Multiplier on the mark's long side: 1 is 46% of the panel, about 600px. */
+  markScale: 1,
   /**
-   * Which plate prints.
+   * Which drawing to print when no custom image is set.
    *
    * `skin` is the page mark the skin ships as its default (the full lockup); the other three are
    * the same family drawn at other proportions — the lettering alone, the stamp, and the two
    * composed. All four are this repository's own drawings.
    */
-  decalPlate: 'skin' as DecalPlate,
+  markPlate: 'skin' as MarkPlate,
+  /**
+   * A custom image, as the URL the host half serves it from, or empty for "use the plate".
+   *
+   * The settings page uploads a picked file through `/skin-endfield/user/upload`, and the host
+   * writes it into the user's own data directory (outside this repository), so the value stored
+   * here is a small URL and never a megabyte of base64 in the settings document.
+   */
+  markImage: '',
 }
-
-/** Longest mark accepted. A wordmark is read as a mark, not as a sentence. */
-export const MARK_TEXT_MAX = 14
 
 /**
  * A `#RRGGBB` colour. Rejecting anything else matters because the value is
@@ -152,40 +147,68 @@ export interface SkinSettings {
   headerLight: boolean
   mark: boolean
   dotBlock: boolean
-  markStyle: 'decal' | 'text'
-  markText: string
-  decalOpacity: number
-  decalScale: number
-  decalPlate: DecalPlate
+  markOrientation: MarkOrientation
+  markAnchor: MarkAnchor
+  markOpacity: number
+  markScale: number
+  markPlate: MarkPlate
+  markImage: string
 }
 
-/** The two renderings of the page mark. */
-export const MARK_STYLES = ['decal', 'text'] as const
+/** The two ways the mark can be set. */
+export const MARK_ORIENTATIONS = ['horizontal', 'vertical'] as const
+export type MarkOrientation = (typeof MARK_ORIENTATIONS)[number]
 
-/** Coerce an arbitrary stored value into a known mark style. */
-export function safeMarkStyle(value: unknown): 'decal' | 'text' {
-  return value === 'text' ? 'text' : SKIN_SETTINGS_DEFAULTS.markStyle
+/** The panel corners a mark can be pinned to. */
+export const MARK_ANCHORS = ['top-right', 'top-left', 'bottom-right', 'bottom-left'] as const
+export type MarkAnchor = (typeof MARK_ANCHORS)[number]
+
+/** Coerce a stored value into a known orientation. */
+export function safeMarkOrientation(value: unknown): MarkOrientation {
+  return typeof value === 'string' && (MARK_ORIENTATIONS as readonly string[]).includes(value)
+    ? (value as MarkOrientation)
+    : SKIN_SETTINGS_DEFAULTS.markOrientation
 }
 
-/** How wide the plate is set, as a share of the panel, at scale 1. */
-export const DECAL_WIDTH_SHARE = 0.46
+/** Coerce a stored value into a known anchor. */
+export function safeMarkAnchor(value: unknown): MarkAnchor {
+  return typeof value === 'string' && (MARK_ANCHORS as readonly string[]).includes(value)
+    ? (value as MarkAnchor)
+    : SKIN_SETTINGS_DEFAULTS.markAnchor
+}
+
+/** How wide the mark is set, as a share of the panel, at scale 1. */
+export const MARK_WIDTH_SHARE = 0.46
+
+/** The gap between the mark and the panel edge, and its clearance below the header. */
+export const MARK_GUTTER_PX = 40
+export const MARK_TOP_INSET_PX = 214
+/** Clearance above the composer's opaque band, which is about 131px tall. */
+export const MARK_BOTTOM_INSET_PX = 150
 
 /**
- * The plate's own address and proportions, named once for both halves.
+ * Where the mark's artwork and the user's uploads are served from, named once for both halves.
  *
- * The URL is spelled here rather than in each place it is used because three unrelated files
- * need it to agree: the host half serves it, the decor sheet paints it, and the settings page
- * previews it. A route rename that reaches two of the three is a blank decal that no type check
- * would catch.
+ * Two routes rather than one because they are two different things: the drawings that ship with
+ * the skin are read-only files inside the package, while an uploaded image lives in the user's
+ * data directory and is written by the host at the user's request. Keeping them apart is what
+ * lets the GET side of each be a five-line guard.
  */
-export const DECAL_ROUTE = '/skin-endfield/logo'
-export const DECAL_FILE = 'endfield-decal.png'
-export const DECAL_URL = `${DECAL_ROUTE}/${DECAL_FILE}`
-/** The asset's own aspect ratio, as CSS spells it (`aspect-ratio: 624 / 113`). */
-export const DECAL_ASPECT_CSS = '624 / 113'
+export const PLATE_ROUTE = '/skin-endfield/logo'
+export const PAGE_MARK_FILE = 'endfield-decal.png'
+export const PAGE_MARK_URL = `${PLATE_ROUTE}/${PAGE_MARK_FILE}`
+/** The user's own uploads: GET serves one, POST /upload writes one. */
+export const USER_ROUTE = '/skin-endfield/user'
+export const USER_UPLOAD_PATH = `${USER_ROUTE}/upload`
+/** Where the host puts uploads, under the user's data directory (never in this repository). */
+export const USER_DIR_PREFIX = 'skin-endfield'
+export const USER_DIR_NAME = 'marks'
+/** Uploads are capped so one picture cannot fill the settings of a machine. */
+export const UPLOAD_MAX_BYTES = 2 * 1024 * 1024
+export const UPLOAD_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' } as const
 
 /**
- * The plate set: three drawings that ship with the skin, plus the mark they hang from.
+ * The plate set: three drawings that ship with the skin, plus the mark it prints by default.
  *
  * All of them are authored in this repository (`assets/logo/*.svg`) and rendered to PNG by
  * `node scripts/make-decal.mjs --svg ... --height ...`. They differ in composition, not in
@@ -195,22 +218,30 @@ export const DECAL_ASPECT_CSS = '624 / 113'
  */
 export const PLATE_DIR = 'plates'
 export const PLATES = {
-  wordmark: { files: ['wordmark.png'], label: 'Wordmark (wide)' },
-  badge: { files: ['badge.png'], label: 'Badge (stamp)' },
+  wordmark: { files: ['wordmark.png'], label: 'Wordmark (wide)', aspect: 1342 / 200 },
+  badge: { files: ['badge.png'], label: 'Badge (stamp)', aspect: 265 / 300 },
   // The lockup is composed from the other two as two background layers, so it names both files:
   // there is no third PNG, and pretending otherwise would mean raster editing we do not need.
-  lockup: { files: ['badge.png', 'wordmark.png'], label: 'Lockup (badge + wordmark)' },
+  lockup: { files: ['badge.png', 'wordmark.png'], label: 'Lockup (badge + wordmark)', aspect: 4 },
 } as const
 
 /** The plates a user can pick: the page mark that ships as the default, or one of the three. */
-export const DECAL_PLATES = ['skin', ...Object.keys(PLATES)] as const
-export type DecalPlate = (typeof DECAL_PLATES)[number]
+export const MARK_PLATES = ['skin', ...Object.keys(PLATES)] as const
+export type MarkPlate = (typeof MARK_PLATES)[number]
+
+/** The page mark's own aspect ratio, measured from the rendered asset. */
+export const PAGE_MARK_ASPECT = 624 / 113
+
+/** A plate's aspect ratio as a NUMBER, so the stylesheet can divide by it when it rotates. */
+export function plateAspect(plate: MarkPlate): number {
+  return plate === 'skin' ? PAGE_MARK_ASPECT : PLATES[plate as keyof typeof PLATES].aspect
+}
 
 /** The artwork a plate paints: the page mark's own file, or the plate's first layer. */
-export function plateUrl(plate: DecalPlate): string | null {
+export function plateUrl(plate: MarkPlate): string | null {
   if (plate === 'skin') return null
   const entry = PLATES[plate as keyof typeof PLATES]
-  return entry ? `${DECAL_ROUTE}/${PLATE_DIR}/${entry.files[0]}` : null
+  return entry ? `${PLATE_ROUTE}/${PLATE_DIR}/${entry.files[0]}` : null
 }
 
 /** The two files a lockup composes, named here so the stylesheet and the settings page agree. */
@@ -218,10 +249,24 @@ export const PLATE_WORDMARK_FILE = PLATES.wordmark.files[0]
 export const PLATE_BADGE_FILE = PLATES.badge.files[0]
 
 /** Coerce a stored value into a known plate. An unknown plate falls back to the shipped one. */
-export function safeDecalPlate(value: unknown): DecalPlate {
-  return typeof value === 'string' && (DECAL_PLATES as readonly string[]).includes(value)
-    ? (value as DecalPlate)
-    : SKIN_SETTINGS_DEFAULTS.decalPlate
+export function safeMarkPlate(value: unknown): MarkPlate {
+  return typeof value === 'string' && (MARK_PLATES as readonly string[]).includes(value)
+    ? (value as MarkPlate)
+    : SKIN_SETTINGS_DEFAULTS.markPlate
+}
+
+/**
+ * Coerce a stored value into a usable custom image.
+ *
+ * Only a path under our own upload route is accepted, and that is a guard rather than a
+ * restriction for its own sake: the value goes straight into a CSS `url()`, so anything else
+ * (`http://…`, `data:…`, a `file:` path) would make the skin fetch or read whatever a hand-edited
+ * settings document asked for. An empty string means "no custom image, use the plate".
+ */
+export function safeMarkImage(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  return trimmed.startsWith(`${USER_ROUTE}/`) && !trimmed.includes('..') ? trimmed : ''
 }
 
 /**
@@ -231,37 +276,27 @@ export function safeDecalPlate(value: unknown): DecalPlate {
  * the rule on it, and the live check that arms it by hand — and a class name is exactly the kind
  * of string that gets renamed in two of the three.
  */
-export const DECAL_PLATE_CLASS_PREFIX = 'endfield-plate-'
-export const decalPlateClass = (plate: string): string => `${DECAL_PLATE_CLASS_PREFIX}${plate}`
-export const DECAL_PLATE_CLASSES = DECAL_PLATES.map(decalPlateClass)
+export const PLATE_CLASS_PREFIX = 'endfield-plate-'
+export const plateClass = (plate: string): string => `${PLATE_CLASS_PREFIX}${plate}`
+export const PLATE_CLASSES = MARK_PLATES.map(plateClass)
 
-/** Coerce a stored decal opacity into 0..1. */
-export function safeDecalOpacity(value: unknown): number {
+/** The root class that turns the mark a quarter turn, the four that pin it, and the custom-image one. */
+export const MARK_VERTICAL_CLASS = 'endfield-mark-vertical'
+export const MARK_CUSTOM_CLASS = 'endfield-mark-custom'
+export const markAnchorClass = (anchor: string): string => `endfield-mark-${anchor}`
+
+/** Coerce a stored mark opacity into 0..1. */
+export function safeMarkOpacity(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(1, Math.max(0, value))
-    : SKIN_SETTINGS_DEFAULTS.decalOpacity
+    : SKIN_SETTINGS_DEFAULTS.markOpacity
 }
 
-/** Coerce a stored decal scale into 0.4..1.8. Below that the lockup stops being readable. */
-export function safeDecalScale(value: unknown): number {
+/** Coerce a stored mark scale into 0.4..1.8. Below that the mark stops being readable. */
+export function safeMarkScale(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(1.8, Math.max(0.4, value))
-    : SKIN_SETTINGS_DEFAULTS.decalScale
-}
-
-/**
- * Coerce an arbitrary stored value into a usable mark.
- *
- * A page mark is set in a display face at a size measured in tens of pixels, so it is
- * normalised the way a wordmark would be: trimmed, collapsed, upper-cased and capped.
- * A raw string from a settings document would otherwise be able to emit newlines into a
- * `content` value, or a paragraph's worth of characters into a strip that has room for
- * about a word.
- */
-export function safeMarkText(value: unknown): string {
-  if (typeof value !== 'string') return SKIN_SETTINGS_DEFAULTS.markText
-  const cleaned = value.replace(/\s+/g, ' ').trim().toUpperCase().slice(0, MARK_TEXT_MAX)
-  return cleaned.length > 0 ? cleaned : SKIN_SETTINGS_DEFAULTS.markText
+    : SKIN_SETTINGS_DEFAULTS.markScale
 }
 
 /**
@@ -303,10 +338,11 @@ export function normalizeSkinSettings(section: unknown): SkinSettings {
     dotBlock: raw.dotBlock === undefined
       ? SKIN_SETTINGS_DEFAULTS.dotBlock
       : raw.dotBlock === true,
-    markStyle: safeMarkStyle(raw.markStyle),
-    markText: safeMarkText(raw.markText),
-    decalOpacity: safeDecalOpacity(raw.decalOpacity),
-    decalScale: safeDecalScale(raw.decalScale),
-    decalPlate: safeDecalPlate(raw.decalPlate),
+    markOrientation: safeMarkOrientation(raw.markOrientation),
+    markAnchor: safeMarkAnchor(raw.markAnchor),
+    markOpacity: safeMarkOpacity(raw.markOpacity),
+    markScale: safeMarkScale(raw.markScale),
+    markPlate: safeMarkPlate(raw.markPlate),
+    markImage: safeMarkImage(raw.markImage),
   }
 }

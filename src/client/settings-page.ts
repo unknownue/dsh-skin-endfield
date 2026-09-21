@@ -17,24 +17,30 @@
  * is open; there is no save step to get out of step with what is painted.
  */
 import {
-  DECAL_ROUTE,
-  DECAL_URL,
   HEX_COLOR,
-  MARK_TEXT_MAX,
+  MARK_ANCHORS,
+  MARK_ORIENTATIONS,
+  MARK_PLATES,
   PLATES,
   PLATE_BADGE_FILE,
   PLATE_DIR,
+  PLATE_ROUTE,
   PLATE_WORDMARK_FILE,
+  PAGE_MARK_URL,
   SKIN_SETTINGS_DEFAULTS,
+  UPLOAD_MAX_BYTES,
+  UPLOAD_TYPES,
+  USER_UPLOAD_PATH,
   safeAccent,
-  safeDecalOpacity,
-  safeDecalPlate,
-  safeDecalScale,
-  safeMarkStyle,
-  safeMarkText,
+  safeMarkAnchor,
+  safeMarkImage,
+  safeMarkOpacity,
+  safeMarkOrientation,
+  safeMarkPlate,
+  safeMarkScale,
   safeTint,
 } from '../settings.ts'
-import type { DecalPlate } from '../settings.ts'
+import type { MarkAnchor, MarkOrientation, MarkPlate } from '../settings.ts'
 import type { SettingsScope } from '../types.ts'
 import { accentScale } from './colors.ts'
 
@@ -63,11 +69,12 @@ interface SkinDraft {
   headerLight: boolean
   mark: boolean
   dotBlock: boolean
-  markStyle: 'decal' | 'text'
-  markText: string
-  decalOpacity: number
-  decalScale: number
-  decalPlate: DecalPlate
+  markOrientation: MarkOrientation
+  markAnchor: MarkAnchor
+  markOpacity: number
+  markScale: number
+  markPlate: MarkPlate
+  markImage: string
 }
 
 export interface SkinSectionProps {
@@ -106,11 +113,12 @@ export function createSkinSection(React: ReactLike) {
       headerLight: value.headerLight === undefined ? SKIN_SETTINGS_DEFAULTS.headerLight : value.headerLight === true,
       mark: value.mark === undefined ? SKIN_SETTINGS_DEFAULTS.mark : value.mark === true,
       dotBlock: value.dotBlock === undefined ? SKIN_SETTINGS_DEFAULTS.dotBlock : value.dotBlock === true,
-      markStyle: safeMarkStyle(value.markStyle),
-      markText: safeMarkText(typeof value.markText === 'string' ? value.markText : undefined),
-      decalOpacity: safeDecalOpacity(value.decalOpacity),
-      decalScale: safeDecalScale(value.decalScale),
-      decalPlate: safeDecalPlate(value.decalPlate),
+      markOrientation: safeMarkOrientation(value.markOrientation),
+      markAnchor: safeMarkAnchor(value.markAnchor),
+      markOpacity: safeMarkOpacity(value.markOpacity),
+      markScale: safeMarkScale(value.markScale),
+      markPlate: safeMarkPlate(value.markPlate),
+      markImage: safeMarkImage(value.markImage),
     }
   }
 
@@ -156,6 +164,8 @@ export function createSkinSection(React: ReactLike) {
     const scope = props.scope
     const [draft, setDraft] = useState<SkinDraft>(() => read(scope))
     const [error, setError] = useState<string | null>(null)
+    /** One line of feedback for the upload row: reading, uploading, done, or why it failed. */
+    const [upload, setUpload] = useState<string>('')
 
     // Re-read on every committed change. The scope mirror already folds in our
     // own writes and external edits to the settings document, so subscribing is
@@ -344,6 +354,64 @@ export function createSkinSection(React: ReactLike) {
 
     const missing = scope === undefined
 
+    /** One shape for every select on the page, so a new row cannot invent its own chrome. */
+    const selectStyle = (enabled: boolean) => ({
+      width: '240px',
+      fontFamily: 'var(--ds-font-family-code)',
+      fontSize: '12px',
+      letterSpacing: '0.06em',
+      padding: '5px 8px',
+      borderRadius: '0',
+      border: '1px solid var(--dsw-alias-border-l2)',
+      background: 'var(--dsw-alias-bg-layer-1)',
+      color: 'var(--dsw-alias-label-primary)',
+      opacity: enabled ? 1 : 0.5,
+    })
+
+    /**
+     * The mark's artwork, at the opacity in force, on the canvas colour.
+     *
+     * Painted as a background rather than an <img> on purpose: the artwork comes from the
+     * plugin's own routes, and a route the running host half has not loaded yet answers 404. A
+     * background that fails to load paints nothing; an <img> that fails to load shows a
+     * broken-image glyph, which reads as "the page is broken" instead of "the host half needs a
+     * restart". The lockup composes its two files here exactly as the stylesheet does.
+     */
+    const markPreview = (draftView: SkinDraft) => {
+      const badge = `${PLATE_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}`
+      const wordmark = `${PLATE_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}`
+      const custom = draftView.markImage !== ''
+      const layers = custom
+        ? {
+            backgroundImage: `url("${draftView.markImage}")`,
+            backgroundSize: 'contain',
+            backgroundPosition: 'left center',
+            backgroundRepeat: 'no-repeat',
+          }
+        : draftView.markPlate === 'lockup'
+          ? { backgroundImage: `url("${badge}"), url("${wordmark}")`, backgroundSize: 'auto 84%, auto 46%', backgroundPosition: 'left center, right center', backgroundRepeat: 'no-repeat, no-repeat' }
+          : {
+              backgroundImage: `url("${draftView.markPlate === 'skin' ? PAGE_MARK_URL : draftView.markPlate === 'badge' ? badge : wordmark}")`,
+              backgroundSize: 'contain',
+              backgroundPosition: 'left center',
+              backgroundRepeat: 'no-repeat',
+            }
+      return h('span', {
+        key: 'preview',
+        style: {
+          display: 'inline-block',
+          width: '196px',
+          height: '52px',
+          padding: '4px 8px',
+          boxSizing: 'content-box',
+          backgroundColor: 'var(--dsw-specific-canvas, #191919)',
+          border: '1px solid var(--dsw-alias-border-l1)',
+          opacity: Math.max(draftView.markOpacity, 0.25),
+          ...layers,
+        },
+      })
+    }
+
     /**
      * One switch, for the three ambient effects.
      *
@@ -379,178 +447,140 @@ export function createSkinSection(React: ReactLike) {
     const markRow = effectRow(
       'mark',
       'Page mark',
-      'One mark, in the right margin of the transcript — the column that holds no prose. It is set either as a wordmark or as the printed logo plate; pick which below.',
+      'One image printed on the transcript panel. Pick the artwork, the orientation, the size, the opacity and the corner it hangs in below.',
       'Show the mark',
     )
 
-    /**
-     * Which of the two renderings the mark uses.
-     *
-     * A select rather than two switches, because the two would then be able to disagree: they
-     * occupy the same corner, and "both on" is not a configuration — it is an overlap. The
-     * hint says what each one is for, since the choice is really "do I want lettering or a
-     * print on the page".
-     */
-    const markStyleRow = row(
-      'Mark style',
-      'Wordmark: the vertical outline lettering. Logo decal: the grey plate, printed under the transcript like a water-transfer decal.',
+    const markOrientationRow = row(
+      'Orientation',
+      'Horizontal prints the image the way it was drawn. Vertical turns it a quarter turn and sets it down the margin, which is what a wordmark wants.',
       [
         h('select', {
           key: 'sel',
-          value: draft.markStyle,
+          value: draft.markOrientation,
           disabled: !draft.mark,
-          onChange: (e: { target: { value: string } }) => commit('markStyle', safeMarkStyle(e.target.value)),
-          style: {
-            width: '220px',
-            fontFamily: 'var(--ds-font-family-code)',
-            fontSize: '12px',
-            letterSpacing: '0.06em',
-            padding: '5px 8px',
-            borderRadius: '0',
-            border: '1px solid var(--dsw-alias-border-l2)',
-            background: 'var(--dsw-alias-bg-layer-1)',
-            color: 'var(--dsw-alias-label-primary)',
-            opacity: draft.mark ? 1 : 0.5,
-          },
-        }, [
-          h('option', { key: 'decal', value: 'decal' }, 'Logo decal (plate)'),
-          h('option', { key: 'text', value: 'text' }, 'Vertical wordmark'),
-        ]),
-        /**
-         * The plate itself, at the opacity in force, on the canvas colour.
-         *
-         * Painted as a background rather than an <img> on purpose: the asset comes from the
-         * plugin's own route, and a route the running host half has not loaded yet answers 404.
-         * A background that fails to load paints nothing; an <img> that fails to load shows a
-         * broken-image glyph, which reads as "the page is broken" instead of "the host half
-         * needs a restart".
-         */
-        h('span', {
-          key: 'preview',
-          style: {
-            display: 'inline-block',
-            width: '180px',
-            height: '44px',
-            padding: '4px 8px',
-            boxSizing: 'content-box',
-            background: 'var(--dsw-specific-canvas, #191919)',
-            border: '1px solid var(--dsw-alias-border-l1)',
-            opacity: draft.markStyle === 'decal' ? Math.max(draft.decalOpacity, 0.2) : 1,
-            backgroundImage: `url("${DECAL_URL}")`,
-            backgroundRepeat: 'no-repeat',
-            backgroundPosition: 'left center',
-            backgroundSize: 'contain',
-            backgroundColor: 'var(--dsw-specific-canvas, #191919)',
-          },
-        }),
+          onChange: (e: { target: { value: string } }) => commit('markOrientation', safeMarkOrientation(e.target.value)),
+          style: selectStyle(draft.mark),
+        }, MARK_ORIENTATIONS.map((value) =>
+          h('option', { key: value, value }, value === 'horizontal' ? 'Horizontal' : 'Vertical (quarter turn)'))),
       ],
     )
 
-    const decalOpacityRow = row(
-      'Decal opacity',
-      'How strongly the plate prints. It is drawn under the transcript, so this is the knob between "watermark" and "stain".',
-      [
-        h('input', {
-          key: 'range',
-          type: 'range',
-          min: 0, max: 0.6, step: 0.01,
-          value: draft.decalOpacity,
-          disabled: !draft.mark || draft.markStyle !== 'decal',
-          onInput: (e: { target: { value: string } }) => commit('decalOpacity', safeDecalOpacity(Number(e.target.value))),
-          style: { width: '180px', accentColor: 'var(--endfield-focus)', opacity: draft.mark && draft.markStyle === 'decal' ? 1 : 0.5 },
-        }),
-        h('span', { key: 'val', style: { fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, draft.decalOpacity.toFixed(2)),
-      ],
-    )
-
-    const decalScaleRow = row(
-      'Decal scale',
-      'The plate is set to 46% of the panel\'s width at 1. It sits below the halftone block and above the composer, which is the space the transcript leaves free.',
-      [
-        h('input', {
-          key: 'range',
-          type: 'range',
-          min: 0.4, max: 1.8, step: 0.05,
-          value: draft.decalScale,
-          disabled: !draft.mark || draft.markStyle !== 'decal',
-          onInput: (e: { target: { value: string } }) => commit('decalScale', safeDecalScale(Number(e.target.value))),
-          style: { width: '180px', accentColor: 'var(--endfield-focus)', opacity: draft.mark && draft.markStyle === 'decal' ? 1 : 0.5 },
-        }),
-        h('span', { key: 'val', style: { fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, `${draft.decalScale.toFixed(2)}x`),
-      ],
-    )
-
-    /**
-     * The plate box, wherever a preview of it is wanted.
-     *
-     * It paints the SAME background the rule does — including the lockup's two composed layers —
-     * so the row is a real reading of what will print, not an icon standing in for it. A plate
-     * whose file is missing paints nothing, which is exactly the feedback the user needs before
-     * wondering why the decal vanished.
-     */
-    const platePreview = (plate: DecalPlate, opacity: number) => {
-      const badge = `${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}`
-      const wordmark = `${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}`
-      const layers = plate === 'lockup'
-        ? { backgroundImage: `url("${badge}"), url("${wordmark}")`, backgroundSize: 'auto 84%, auto 46%', backgroundPosition: 'left center, right center', backgroundRepeat: 'no-repeat, no-repeat' }
-        : {
-            backgroundImage: `url("${plate === 'skin' ? DECAL_URL : plate === 'badge' ? badge : wordmark}")`,
-            backgroundSize: 'contain',
-            backgroundPosition: 'left center',
-            backgroundRepeat: 'no-repeat',
-          }
-      return h('span', {
-        key: `preview-${plate}`,
-        style: {
-          display: 'inline-block',
-          width: '196px',
-          height: '52px',
-          padding: '4px 8px',
-          boxSizing: 'content-box',
-          backgroundColor: 'var(--dsw-specific-canvas, #191919)',
-          border: '1px solid var(--dsw-alias-border-l1)',
-          opacity: Math.max(opacity, 0.25),
-          ...layers,
-        },
-      })
-    }
-
-    /**
-     * Which plate prints.
-     *
-     * Four drawings of one idea: the page mark that ships as the default, the lettering alone, the
-     * stamp, and the two composed. They differ in composition, so the choice is about which shape
-     * suits the page rather than about which one is "the real" mark.
-     */
-    const decalPlateRow = row(
-      'Plate',
-      'The decal\u2019s artwork: the page mark (a full lockup), the wordmark alone, the badge stamp, or the two composed as a lockup. All four are drawn in this repository.',
+    const markAnchorRow = row(
+      'Position',
+      'Which corner of the transcript panel the mark hangs in. The default sits below the halftone block, which owns the panel\u2019s top-right corner; the others leave the same 40px gutter.',
       [
         h('select', {
           key: 'sel',
-          value: draft.decalPlate,
-          disabled: !draft.mark || draft.markStyle !== 'decal',
-          onChange: (e: { target: { value: string } }) => commit('decalPlate', safeDecalPlate(e.target.value)),
-          style: {
-            width: '240px',
-            fontFamily: 'var(--ds-font-family-code)',
-            fontSize: '12px',
-            letterSpacing: '0.06em',
-            padding: '5px 8px',
-            borderRadius: '0',
-            border: '1px solid var(--dsw-alias-border-l2)',
-            background: 'var(--dsw-alias-bg-layer-1)',
-            color: 'var(--dsw-alias-label-primary)',
-            opacity: draft.mark && draft.markStyle === 'decal' ? 1 : 0.5,
-          },
+          value: draft.markAnchor,
+          disabled: !draft.mark,
+          onChange: (e: { target: { value: string } }) => commit('markAnchor', safeMarkAnchor(e.target.value)),
+          style: selectStyle(draft.mark),
+        }, MARK_ANCHORS.map((value) =>
+          h('option', { key: value, value }, value.replace('-', ' ')))),
+      ],
+    )
+
+    /**
+     * The artwork: one of the four drawings, or the image the user uploaded.
+     *
+     * A custom image wins over the plate, so the plate select is disabled (rather than hidden)
+     * while one is set: the choice is still visible, and "which drawing will I get back if I
+     * clear the upload" stays answerable.
+     */
+    const markArtworkRow = row(
+      'Artwork',
+      'Four drawings ship with the skin. Uploading an image replaces whichever one is selected; clearing the upload brings it back.',
+      [
+        h('select', {
+          key: 'sel',
+          value: draft.markPlate,
+          disabled: !draft.mark || draft.markImage !== '',
+          onChange: (e: { target: { value: string } }) => commit('markPlate', safeMarkPlate(e.target.value)),
+          style: selectStyle(draft.mark && draft.markImage === ''),
         }, [
           h('option', { key: 'skin', value: 'skin' }, 'Page mark (full lockup)'),
           ...Object.entries(PLATES).map(([value, entry]) =>
             h('option', { key: value, value }, entry.label)),
         ]),
-        platePreview(draft.decalPlate, draft.decalOpacity),
+        markPreview(draft),
       ],
     )
+
+    /**
+     * A local image, uploaded through the host half and stored under the user's data directory.
+     *
+     * The file is read here and posted as a data URL; the host validates the type and the size,
+     * writes it next to the other marks and answers with the URL that goes into the settings
+     * document. That is why the stored value is small: a settings document is not a place to keep
+     * a megabyte of base64.
+     */
+    const uploadMarkImage = async (file: File) => {
+      setUpload('reading…')
+      try {
+        if (file.size > UPLOAD_MAX_BYTES) {
+          throw new Error(`that file is ${(file.size / 1048576).toFixed(1)} MB; the limit is ${(UPLOAD_MAX_BYTES / 1048576).toFixed(0)} MB`)
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result))
+          reader.onerror = () => reject(new Error('the file could not be read'))
+          reader.readAsDataURL(file)
+        })
+        setUpload('uploading…')
+        const response = await fetch(USER_UPLOAD_PATH, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ dataUrl }),
+        })
+        const body = await response.json().catch(() => ({})) as { url?: string; error?: string }
+        if (!response.ok || typeof body.url !== 'string') {
+          throw new Error(body.error ?? `the host refused the upload (${response.status})`)
+        }
+        commit('markImage', body.url)
+        setUpload(`using ${file.name}`)
+      } catch (e: unknown) {
+        setUpload(e instanceof Error ? e.message : String(e))
+      }
+    }
+
+    const markImageRow = row(
+      'Custom image',
+      `PNG, JPEG, WebP or GIF, up to ${(UPLOAD_MAX_BYTES / 1048576).toFixed(0)} MB. It is copied into the skin's own folder under your DSH data directory, so it survives a reload and never touches this repository.`,
+      [
+        h('input', {
+          key: 'file',
+          type: 'file',
+          accept: Object.keys(UPLOAD_TYPES).join(','),
+          disabled: !draft.mark,
+          onChange: (e: { target: { files?: FileList | null } }) => {
+            const file = e.target.files?.[0]
+            if (file !== undefined && file !== null) void uploadMarkImage(file)
+          },
+          style: { fontSize: '12px', color: 'var(--dsw-alias-label-secondary)', opacity: draft.mark ? 1 : 0.5 },
+        }),
+        draft.markImage === ''
+          ? null
+          : pill({
+              children: 'Use the drawing instead',
+              disabled: !draft.mark,
+              onClick: () => {
+                commit('markImage', '')
+                setUpload('')
+              },
+            }),
+        upload === ''
+          ? null
+          : h('span', {
+              key: 'status',
+              style: {
+                fontSize: '12px',
+                color: /refused|could not|limit|MB/.test(upload) ? 'var(--dsw-alias-state-error-primary)' : 'var(--dsw-alias-label-tertiary)',
+              },
+            }, upload),
+      ].filter(Boolean),
+    )
+
     const dotRow = effectRow(
       'dotBlock',
       'Halftone block',
@@ -558,31 +588,37 @@ export function createSkinSection(React: ReactLike) {
       'Show the block',
     )
 
-    /** The wordmark's text, only meaningful while the mark is on AND set to the wordmark. */
-    const markTextRow = row(
-      'Mark text',
-      `The wordmark\u2019s text, up to ${MARK_TEXT_MAX} characters; upper-cased and trimmed. The logo decal carries its own lettering, so this row only applies to the vertical wordmark.`,
+    const markScaleRow = row(
+      'Size',
+      'Multiplier on the mark\u2019s long side: 1 is 46% of the panel\u2019s width (about 600px) horizontally, and 40% of its height when vertical.',
       [
         h('input', {
-          key: 'txt',
-          type: 'text',
-          maxLength: MARK_TEXT_MAX,
-          value: draft.markText,
-          disabled: !draft.mark || draft.markStyle !== 'text',
-          onInput: (e: { target: { value: string } }) => commit('markText', safeMarkText(e.target.value)),
-          style: {
-            width: '200px',
-            fontFamily: 'var(--ds-font-family-code)',
-            fontSize: '12px',
-            letterSpacing: '0.12em',
-            padding: '5px 8px',
-            borderRadius: '0',
-            border: '1px solid var(--dsw-alias-border-l2)',
-            background: 'var(--dsw-alias-bg-layer-1)',
-            color: 'var(--dsw-alias-label-primary)',
-            opacity: draft.mark && draft.markStyle === 'text' ? 1 : 0.5,
-          },
+          key: 'range',
+          type: 'range',
+          min: 0.4, max: 1.8, step: 0.05,
+          value: draft.markScale,
+          disabled: !draft.mark,
+          onInput: (e: { target: { value: string } }) => commit('markScale', safeMarkScale(Number(e.target.value))),
+          style: { width: '180px', accentColor: 'var(--endfield-focus)', opacity: draft.mark ? 1 : 0.5 },
         }),
+        h('span', { key: 'val', style: { fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, `${draft.markScale.toFixed(2)}x`),
+      ],
+    )
+
+    const markOpacityRow = row(
+      'Opacity',
+      'How strongly the mark prints. It paints over the transcript, so this is the knob between "watermark" and "stain".',
+      [
+        h('input', {
+          key: 'range',
+          type: 'range',
+          min: 0, max: 0.6, step: 0.01,
+          value: draft.markOpacity,
+          disabled: !draft.mark,
+          onInput: (e: { target: { value: string } }) => commit('markOpacity', safeMarkOpacity(Number(e.target.value))),
+          style: { width: '180px', accentColor: 'var(--endfield-focus)', opacity: draft.mark ? 1 : 0.5 },
+        }),
+        h('span', { key: 'val', style: { fontFamily: 'var(--ds-font-family-code)', fontSize: '12px', color: 'var(--dsw-alias-label-secondary)' } }, draft.markOpacity.toFixed(2)),
       ],
     )
 
@@ -598,7 +634,7 @@ export function createSkinSection(React: ReactLike) {
       accentRow, tintRow, surfaceRow, bloomRow, radiusRow, prefixRow,
       h('p', { key: 'fx', style: { margin: '20px 0 0', fontSize: '12px', lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } },
         'Page effects — three independent treatments, each in its own zone. Off by default; any combination is safe.'),
-      headerLightRow, markRow, markStyleRow, markTextRow, decalOpacityRow, decalScaleRow, decalPlateRow, dotRow,
+      headerLightRow, markRow, markArtworkRow, markImageRow, markOrientationRow, markAnchorRow, markScaleRow, markOpacityRow, dotRow,
       error
         ? h('p', { style: { margin: '10px 0 0', fontSize: '12px', color: 'var(--dsw-alias-state-error-primary)' } }, `Save failed: ${error}`)
         : null,
@@ -616,11 +652,14 @@ export function createSkinSection(React: ReactLike) {
             commit('headerLight', SKIN_SETTINGS_DEFAULTS.headerLight)
             commit('mark', SKIN_SETTINGS_DEFAULTS.mark)
             commit('dotBlock', SKIN_SETTINGS_DEFAULTS.dotBlock)
-            commit('markStyle', SKIN_SETTINGS_DEFAULTS.markStyle)
-            commit('markText', SKIN_SETTINGS_DEFAULTS.markText)
-            commit('decalOpacity', SKIN_SETTINGS_DEFAULTS.decalOpacity)
-            commit('decalScale', SKIN_SETTINGS_DEFAULTS.decalScale)
-            commit('decalPlate', SKIN_SETTINGS_DEFAULTS.decalPlate)
+            commit('markOrientation', SKIN_SETTINGS_DEFAULTS.markOrientation)
+            commit('markAnchor', SKIN_SETTINGS_DEFAULTS.markAnchor)
+            commit('markOpacity', SKIN_SETTINGS_DEFAULTS.markOpacity)
+            commit('markScale', SKIN_SETTINGS_DEFAULTS.markScale)
+            commit('markPlate', SKIN_SETTINGS_DEFAULTS.markPlate)
+            // The reset returns to the drawing that ships, and does not delete the upload: the
+            // file stays in the user's marks folder, ready to be picked again.
+            commit('markImage', SKIN_SETTINGS_DEFAULTS.markImage)
           },
         }),
       ),
