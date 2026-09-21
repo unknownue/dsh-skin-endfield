@@ -17,7 +17,11 @@
  *      sampled in-page and compared against the same zone with the class off. A rule that
  *      exists but paints nothing is the exact failure three rounds of review reported, so
  *      the assertion is on pixels, not on computed style;
- *   4. the other zones do not change, which is what "independent" has to mean.
+ *   4. the other zones do not change, which is what "independent" has to mean;
+ *   5. the MARK in particular paints in the panel's corner at BOTH ends of the transcript and
+ *      in the same place, because its ink is a page mark and not content: it shipped invisible
+ *      for a whole round by being anchored to the transcript's scroller (see KNOWN_BROKEN, now
+ *      empty, and 18b in decor.ts).
  *
  * Run: $env:DSH_URL = '...token=...'; node scripts/verify-page-effects-live.mjs
  *
@@ -85,16 +89,12 @@ const OPEN = `(async () => {
 })()`
 
 /**
- * Sample a zone by screenshotting it through an element handle and averaging in-page.
- * `shot()` is an in-page helper that draws the zone from a freshly captured image, so the
- * reading is of PAINTED PIXELS rather than of computed style.
- *
- * The MARK's zone is the only one that cannot be derived from an element's box, and the
- * first run of this check reported a false failure because of it: the mark is a
- * pseudo-element positioned against the CONTENT cell (right: 30px), while the check
- * estimated its strip from the SCROLLER's box -- two different boxes, so the sample window
- * missed the mark entirely and read a perfectly steady 29.26. The zone is therefore read
- * from the same element the effect is anchored to, measured from its right edge inward.
+ * The MARK's zone is read from the element the mark is anchored to, which is the transcript
+ * PANEL (`[data-conversation-content]`), not the scroller: the scroller carries its
+ * absolutely positioned children with its scroll offset, which is what made the mark
+ * invisible (see 18b in decor.ts). The reader once estimated this strip from the SCROLLER's
+ * box and missed the ink entirely -- reading a steady "paints nothing" -- so the zone has to
+ * come from the same hook the rule uses.
  */
 const ZONES = {
   header: (g) => g.headerRect,
@@ -137,9 +137,9 @@ try {
     const scroll = document.querySelector('[data-conversation-scroll]')
     if (!header || !content || !scroll) return null
     // The mark is a pseudo-element, so its box comes from the computed style of the element
-    // that carries the rule -- it has no getBoundingClientRect of its own.
-    const cs = getComputedStyle(scroll, '::after')
-    const sb = scroll.getBoundingClientRect()
+    // that carries the rule -- it has no getBoundingClientRect of its own. That element is the
+    // panel now, and reading it off the scroller is how this check used to sample empty space.
+    const cs = getComputedStyle(contentEl, '::before')
     const markRight = parseFloat(cs.right) || 0
     const markTop = parseFloat(cs.top) || 0
     const markW = parseFloat(cs.width) || 0
@@ -152,12 +152,14 @@ try {
       // content box rather than assumed, so it follows the CSS.
       dotRect: [Math.round(content.right - content.width * 0.3), Math.round(content.top), Math.round(content.width * 0.3), Math.round(content.height * 0.17)],
       markRect: [
-        Math.round(sb.right - markRight - Math.max(markW, 20)),
-        Math.round(sb.top + markTop - 4),
+        Math.round(content.right - markRight - Math.max(markW, 20)),
+        Math.round(content.top + markTop - 4),
         Math.round(Math.max(markW, 20) + 8),
         Math.round(Math.max(markH, 60) + 8),
       ],
       markBox: [Math.round(markW), Math.round(markH)],
+      scrollTop: Math.round(scroll.scrollTop),
+      scrollMax: Math.round(scroll.scrollHeight - scroll.clientHeight),
     }
   `
 
@@ -196,13 +198,28 @@ try {
       const da = ctxA.getImageData(x, y, w, h).data
       const db = ctxB.getImageData(x, y, w, h).data
       let changed = 0, n = 0, maxDelta = 0
-      for (let i = 0; i < da.length; i += 4) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (let row = 0; row < h; row++) for (let col = 0; col < w; col++) {
+        const i = (row * w + col) * 4
         n++
         const d = Math.max(Math.abs(da[i] - db[i]), Math.abs(da[i + 1] - db[i + 1]), Math.abs(da[i + 2] - db[i + 2]))
         if (d > maxDelta) maxDelta = d
-        if (d > 6) changed++
+        if (d > 6) {
+          changed++
+          const ax = x + col, ay = y + row
+          if (ax < minX) minX = ax
+          if (ay < minY) minY = ay
+          if (ax > maxX) maxX = ax
+          if (ay > maxY) maxY = ay
+        }
       }
-      return { share: changed / n, changed, n, maxDelta, box: [x, y, w, h] }
+      // WHERE the change is, not only how much: a mark that is carried by the transcript's
+      // scroll paints the same amount of ink at a different y, and that is the difference the
+      // mark's failure consisted of.
+      return {
+        share: changed / n, changed, n, maxDelta, box: [x, y, w, h],
+        inkBox: changed === 0 ? null : [minX, minY, maxX, maxY],
+      }
     })()`)
   }
 
@@ -250,15 +267,17 @@ try {
    * hidden — but does not fail the suite either, because it is not the check's business to
    * decide whether the feature ships broken.
    *
-   * `mark` is one: its class is applied and its pseudo-element resolves (content is the
-   * configured text, box 22x206, stroke present in the computed style) yet switching it on
-   * changes no pixels at all. Traced to the scroll container's `overflow: auto` clipping the
-   * pseudo-element's ink: forcing `overflow: visible` on it makes the mark paint ~1838 lit
-   * pixels where the clipped version paints 56. That element is what provides the transcript's
-   * scrolling, so the fix is a product decision, not a check-side tweak. The suite prints the
-   * names it recorded, and this set should shrink to nothing once the cause is addressed.
+   * EMPTY, and the one entry it held is why this set exists. `mark` was in it with a guess
+   * attached ("the scroll container's overflow: auto clips its ink"). The guess was wrong: the
+   * mark was anchored to the SCROLLER, so its absolutely positioned ink was carried by the
+   * transcript's scroll offset and sat ~5600px above the panel whenever the transcript was
+   * scrolled — which in a real session is always. Forcing `overflow: visible` appeared to fix
+   * it only because a non-scrolling element has no scroll offset to be carried by. The fix is
+   * in 18b (panel hook, z-index 2), `scripts/probe-mark-visibility.mjs` is the probe that
+   * separated the two readings, and the assertions below now pin the mark to its zone at BOTH
+   * ends of the transcript instead of accepting a recorded failure.
    */
-  const KNOWN_BROKEN = new Set(['mark'])
+  const KNOWN_BROKEN = new Set()
   const knownBroken = new Set()
 
   const withClass = async (cls, on) => evalIn(cdp,
@@ -320,6 +339,46 @@ try {
       worstOther < 0.005,
       `largest other-zone change ${(worstOther * 100).toFixed(3)}% in "${worstName}" ${worstDetail} (threshold 0.5%)`)
   }
+
+  /**
+   * The mark's own failure, pinned as an assertion: it must paint in its zone at BOTH ends of
+   * the transcript, in the same place.
+   *
+   * "The mark paints" was never the property that was broken — it painted 1713 px of ink at
+   * scrollTop 0 and 0 px at every other scroll position, because its ink was anchored inside the
+   * scroller and therefore carried by the scroll offset. A check that only ever measured at one
+   * scroll position would have called that a pass or a mystery depending on where it stood, so
+   * both ends are measured and the ink boxes have to agree: that is what "a page mark" means
+   * here, and it is the difference between a 300px run that is always in the corner and a mark
+   * only someone who scrolls to the top will ever see.
+   */
+  const scrolledTo = (expression) => evalIn(cdp,
+    `(() => { const s = document.querySelector('[data-conversation-scroll]'); s.scrollTop = ${expression}; return Math.round(s.scrollTop) })()`)
+  const markInkAt = async (expression) => {
+    await withClass('endfield-mark', false)
+    const applied = await scrolledTo(expression)
+    await sleep(450)
+    const off = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    await withClass('endfield-mark', true)
+    await sleep(450)
+    const on = (await cdp.send('Page.captureScreenshot', { format: 'png' })).data
+    return { applied, ...(await changedShare(rects.mark, off, on)) }
+  }
+  const atTail = await markInkAt('s.scrollHeight')
+  const atTop = await markInkAt('0')
+  const inkWhere = (r) => (r.inkBox ? `ink x ${r.inkBox[0]}..${r.inkBox[2]}, y ${r.inkBox[1]}..${r.inkBox[3]}` : 'no ink')
+  for (const [label, r, where] of [['at the tail of the transcript', atTail, atTail.applied], ['at the top of the transcript', atTop, 0]]) {
+    check(`mark: paints on the panel ${label}`,
+      r.share > 0.005,
+      `${r.changed}/${r.n} px changed (${(r.share * 100).toFixed(2)}%) at scrollTop ${where}, peak delta ${r.maxDelta}; ${inkWhere(r)}`)
+  }
+  const pinned = atTail.inkBox !== null && atTop.inkBox !== null
+    && Math.abs(atTail.inkBox[1] - atTop.inkBox[1]) <= 3
+    && Math.abs(atTail.inkBox[0] - atTop.inkBox[0]) <= 2
+  check('mark: the ink stays put while the transcript scrolls (pinned, not carried)',
+    pinned,
+    `scrolled ${atTop.applied} -> ${atTail.applied}: ${inkWhere(atTop)} then ${inkWhere(atTail)} (a carried mark would move by the scroll delta)`)
+  await scrolledTo('s.scrollHeight')
 
   // The mark's own variable drives its content, and it is published even when the mark is off.
   //

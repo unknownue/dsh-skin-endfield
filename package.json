@@ -65,6 +65,7 @@
     "preview:sheet": "node scripts/preview-top-sheet.mjs",
     "shots:brackets": "node scripts/probe-bracket-shots.mjs",
     "inspect:surfaces": "node scripts/probe-surface-bg.mjs",
+    "probe:mark": "node scripts/probe-mark-visibility.mjs",
     "smoke": "node scripts/smoke-browser.mjs",
     "showcase": "node scripts/showcase.mjs",
     "inspect:top": "node scripts/inspect-conversation-top.mjs",
