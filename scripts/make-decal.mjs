@@ -434,16 +434,32 @@ async function convertSource(args) {
   }
 }
 
-/** Check the shipped asset: exists, is grey, has alpha, and still fits the CSS's box. */
+/**
+ * Check every shipped plate: exists, is grey, has alpha, and still fits the asset budget.
+ *
+ * The whole set rather than the page mark alone, because the plates are separate committed files
+ * and "the one the check happens to look at is fine" is how a tinted or bloated plate reaches a
+ * release. The renderer asserts greyscale as it writes, but nothing re-checks a committed PNG.
+ */
 async function checkShipped() {
-  const png = readFileSync(SHIPPED_PNG)
+  const plates = [
+    SHIPPED_PNG,
+    join(ASSET_DIR, 'plates', 'wordmark.png'),
+    join(ASSET_DIR, 'plates', 'badge.png'),
+  ]
   const { browser, evaluate } = await openPage('_dsh-skin-decal-check')
   try {
-    const report = await evaluate(INSPECT(`data:image/png;base64,${png.toString('base64')}`))
-    console.log(`${SHIPPED_PNG} (${(png.length / 1024).toFixed(1)} kB)`)
-    console.log(assertGrey(report, 'shipped decal'))
-    if (png.length > 160 * 1024) throw new Error(`the decal is ${(png.length / 1024).toFixed(0)} kB — too heavy for a page asset`)
-    return report
+    for (const path of plates) {
+      const png = readFileSync(path)
+      const label = path.replace(ROOT + '\\', '')
+      const report = await evaluate(INSPECT(`data:image/png;base64,${png.toString('base64')}`))
+      console.log(`${label} (${(png.length / 1024).toFixed(1)} kB)`)
+      console.log(assertGrey(report, label))
+      if (png.length > 160 * 1024) throw new Error(`${label} is ${(png.length / 1024).toFixed(0)} kB — too heavy for a page asset`)
+      if (report.width < 120 || report.height < 90) {
+        throw new Error(`${label} is ${report.width}x${report.height} px — too small to print as a decal`)
+      }
+    }
   } finally {
     browser.close()
   }
