@@ -542,7 +542,7 @@ pnpm decal:check      # 断言每张已发货的图：上色像素 R=G=B、有 a
 
 ### 宿主半边要重启一次
 
-印版由宿主半边送达：`/skin-endfield/logo/`。只路由 `assets/logo/` 一个目录，**不**路由整个 `assets/` —— `screenshots/`、`in-game-frames/`、`ui-primitives/` 是研究引用。宿主半边**每次 `dsh web` 启动只加载一次**，所以这条路由要重启才存在；在此之前 live 检查会把"每张印版都被送达"报成**一条失败**（并说明原因是重启），跳过各自的落墨断言。
+印版由宿主半边送达：`/skin-endfield/logo/`。宿主半边一共只注册两条只读路由（`assets/fonts/` 与 `assets/logo/`），参考集不在仓库里，所以没有第三件需要防的东西。宿主半边**每次 `dsh web` 启动只加载一次**，所以这条路由要重启才存在；在此之前 live 检查会把"每张印版都被送达"报成**一条失败**（并说明原因是重启），跳过各自的落墨断言。
 
 
 ## 点阵块：正文右上角、贴住右边界（装饰层 18c）
@@ -587,7 +587,7 @@ assets/logo/                皮肤自己的印版：3 个 SVG 源 + 生成的 4 
 - 代码：MIT。
 - 皮肤本体自带的东西，要么是本仓库自己画的，要么是开源的：`assets/logo/` 的四张印版由 `assets/logo/*.svg` 渲染（几何构件 + OFL 字体排版），`assets/fonts/` 是三个 OFL 字体（Jost / Michroma / JetBrains Mono），作为商业字体的**角色替代**。
 - 每个 `@font-face` 先声明 `local(...)`：装了原版字体就用原版，否则静默回落到开源替代。
-- `docs/design-reference/` 与 `assets/screenshots|ui-primitives|in-game-frames/` 是**设计研究引用**；宿主半边只路由 `assets/fonts/` 与 `assets/logo/`，这些目录不在任何路由下。
+- 设计参考集（截图 / 母题切片 / 实机帧，共 26 MB）**不在仓库里**：它们在本机 `E:\Workspace\tmp\endfield-refs\repo-assets\`，清单与重新抓取方式见 `assets/manifest.md`；`docs/design-reference/` 是纯文本的研究笔记，仍在仓库中。
 
 ## 已知限制
 

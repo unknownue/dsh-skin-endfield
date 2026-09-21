@@ -7,6 +7,13 @@ tmp/
 .cache/
 *.log
 
+# Locally restored reference sets. They are NOT part of the repository any more: the harvested
+# screenshots, primitive sheets and in-game frames came to 26 MB of the tree and 30 MB of history,
+# so they live outside it (assets/manifest.md says where, and how to re-harvest them). The entries
+# stay so that copying them back into place cannot be committed by accident.
+assets/screenshots/
+assets/ui-primitives/
+assets/in-game-frames/
 
 # smoke-test artifacts (page, context stub, screenshot, chrome profile)
 tests/out/

@@ -2,14 +2,20 @@
 
 **目录约定**
 
-- 本仓库内 `assets/` 只放**轻量、可直接入库**的参考件（截图、母题切片、素材清单）。
-- **大体积素材（视频、字体、全量官方素材）不入库**，缓存在本机：
-  `E:\Workspace\tmp\endfield-refs\`
-- 全量素材可用 `scripts/harvest/*.ps1` 复现（脚本按同一目录结构落盘）。
+- 仓库内 `assets/` 只放**轻量、可直接入库**的东西：字体（`fonts/`）、印版（`logo/`）、本清单。
+- **参考集不入库**：截图 / 母题切片 / 实机帧共 26 MB（占当时的 tracked 体积 94%）、`.git` 里约 30 MB，
+  已移出仓库并清出历史。它们现在在本机：
+  - 早期入库的那三组：`E:\Workspace\tmp\endfield-refs\repo-assets\{screenshots,ui-primitives,in-game-frames}\`
+  - 抓取的原始素材与视频：`E:\Workspace\tmp\endfield-refs\{raw,videos,frames2,...}\`
+- 全部可用 `scripts/harvest/*.ps1` 按同一目录结构重新抓取。
+
+> 下面第 1 节仍按原来的分组记录这批参考件（它们是这份设计的事实依据），但**这些文件已不在仓库里** ——
+> 路径按 `repo-assets\` 展开，例如 `screenshots/01-official-cn-home.png` 指
+> `repo-assets\screenshots\01-official-cn-home.png`。
 
 ---
 
-## 1. 本仓库内（`assets/`）
+## 1. 参考件（已移出仓库，见上）
 
 | 文件 | 说明 |
 |------|------|

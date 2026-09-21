@@ -66,13 +66,11 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 /** `lib/` -> package root; fonts and the decal plate are shipped under `assets/`. */
 const FONT_DIR = join(HERE, '..', 'assets', 'fonts')
 /**
- * The decal plate lives in its own directory rather than under a general `assets` route.
- *
- * `assets/screenshots`, `assets/in-game-frames` and `assets/ui-primitives` are design
- * REFERENCES: they exist so this skin's chrome could be measured against the game, and they are
- * explicitly not part of what the skin ships. A route that served `assets/` wholesale would put
- * them one URL away from every browser that loads the skin, so only the plate's own directory
- * is exposed — the compliance line in the README is worth exactly as much as this constant.
+ * The decal plates live in their own directory rather than under a general `assets` route, and the
+ * harvested reference sets (screenshots, primitive sheets, in-game frames) are not in the repository
+ * at all any more — they were 26 MB of the tree and about the same again in history, so they live
+ * outside it (assets/manifest.md). Between the two facts, the routes this plugin registers can stay
+ * a short, auditable list: fonts and plates, nothing else.
  */
 const LOGO_DIR = join(HERE, '..', 'assets', 'logo')
 export const FONT_ROUTE = '/skin-endfield/fonts'

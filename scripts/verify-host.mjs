@@ -132,8 +132,8 @@ await check('route serves the decal plate as an image', async () => {
 })
 
 await check('the logo route does not expose the design-reference directories', () => {
-  // assets/screenshots, assets/in-game-frames and assets/ui-primitives are research material
-  // that must stay out of what the skin serves; only assets/logo is routed.
+  // The reference sets used to live in assets/; they are outside the repository now, and this
+  // assertion keeps the route from ever growing into a general one.
   for (const url of ['/skin-endfield/logo/../screenshots/01-official-cn-home.png', '/skin-endfield/logo/../fonts/jost-latin.woff2']) {
     const res = new StubResponse()
     routeFor('/skin-endfield/logo').handler({ url }, res)
