@@ -229,8 +229,22 @@ export const PLATES = {
 export const MARK_PLATES = ['skin', ...Object.keys(PLATES)] as const
 export type MarkPlate = (typeof MARK_PLATES)[number]
 
-/** The page mark's own aspect ratio, measured from the rendered asset. */
-export const PAGE_MARK_ASPECT = 624 / 113
+/**
+ * The page mark's own aspect ratio, read from the PNG that actually ships.
+ *
+ * This is the one number the stylesheet needs and cannot derive: the box a mark is drawn in is its
+ * ratio applied to the long side. Each drawn plate carries its ratio next to its own rule; the page
+ * mark's lives here, because it is the CSS default and the base rule needs it before any class is
+ * armed.
+ *
+ * So this is a MIRROR of `assets/logo/endfield-decal.png`, and the asset check compares the two:
+ * `node scripts/make-decal.mjs --check` reads the dimensions back out of the PNG's IHDR. That guard
+ * earns its line because this file is no longer rendered from `endfield-decal.svg` -- it is composed
+ * from the two source plates by `scripts/compose-lockup.mjs`, and running the old `pnpm decal:render`
+ * would put the SVG's own 624x113 back. The ratio would then be wrong and the check fails, instead of
+ * the mark quietly printing in the wrong box.
+ */
+export const PAGE_MARK_ASPECT = 1344 / 357
 
 /** A plate's aspect ratio as a NUMBER, so the stylesheet can divide by it when it rotates. */
 export function plateAspect(plate: MarkPlate): number {

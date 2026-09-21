@@ -429,7 +429,7 @@ body [data-phase] [data-composer-seat][class] {
 
 ## 页面印版：正文面板上的一张图（装饰层 18b）
 
-页标现在就是**一张图**：四张随皮肤分发的自绘印版之一（默认 `endfield-decal.png`，完整锁定组合），或者**你自己上传的一张图**。设置页的旋钮：`Page mark`（总开关）、`Artwork`（哪张图）、`Custom image`（上传本地图片）、`Orientation`（横排 / 竖排）、`Position`（面板四角）、`Size`、`Opacity`。竖排即把图**转 90°**（几何是算出来的，不是手调偏移：绕中心旋转后，偏移要减去长短边差的一半）。
+页标现在就是**一张图**：四张可选印版之一（默认 `endfield-decal.png` —— 现在这张是由 `my-badge.png` + `my-wordmark.png` **合成**的锁定组合，见 `scripts/compose-lockup.mjs`），或者**你自己上传的一张图**。设置页的旋钮：`Page mark`（总开关）、`Artwork`（哪张图）、`Custom image`（上传本地图片）、`Orientation`（横排 / 竖排）、`Position`（面板四角）、`Size`、`Opacity`。竖排即把图**转 90°**（几何是算出来的，不是手调偏移：绕中心旋转后，偏移要减去长短边差的一半）。
 
 > **它曾经是一行竖排描边文字，而且"完全看不见"。** 两个原因都查实了：开关默认关；以及墨迹挂在 `[data-conversation-scroll]::after`（正文**滚动容器**）上，绝对定位的盒子被滚动偏移带着走 —— 真实会话永远停在末尾（实测 `scrollTop` 5645 / 最大 5645），墨迹被带到视野上方约 5600px 处。当时的"被 `overflow` 裁掉"是误判：把 `overflow: auto` 改成 `visible` 只是让它不再是滚动容器、`scrollTop` 归零，于是正文顶部连同墨迹回到视野 —— **治疗动作的副产物，不是病因**（`scripts/probe-mark-visibility.mjs` 把几何与逐滚动位置像素数拆开量）。文字渲染这一版后来被图片取代，几何（锚在面板、钉住不随滚动走）留了下来。
 
@@ -480,7 +480,7 @@ body [data-phase] [data-composer-seat][class] {
 字标要真字型，而 **CSS `background-image` 里的 SVG 不能加载 webfont** —— 所以印版在真浏览器里渲染成 PNG：
 
 ```sh
-pnpm decal:render     # assets/logo/endfield-decal.svg -> endfield-decal.png（2x，纯灰 + 透明）
+pnpm decal:render     # ⚠ 只用于自绘印版：它会从 endfield-decal.svg 重生成**旧的** 624×113 默认图（比例守卫会拦下来）
 pnpm decal:check      # 断言发货的 PNG 每个上色像素 R=G=B、有 alpha、体积合理
 ```
 
@@ -541,13 +541,13 @@ node scripts/make-decal.mjs --source your-logo.png --polarity dark --out tmp/x.p
 
 | 选项 | 源文件 | 构图 | 实测尺寸 |
 |---|---|---|---|
-| **Page mark**（默认） | `endfield-decal.svg` | 徽标 + 字标 + `// ENDFIELD INDUSTRIES` 的完整锁定组合 | 624×113 |
+| **Page mark**（默认） | **合成图**（`my-badge.png` + `my-wordmark.png`） | 徽标 + 字标，横排锁定组合，36px 间距、垂直居中 | 1344×357（8-bit 灰+alpha，159.5 kB） |
 | **Wordmark** | `wordmark.svg` | 只有字（Michroma 排字 + 45° 网纹填充 + 发丝线） | 1342×200 |
 | **Badge** | `badge.svg` | 倒三角图章：网纹渐隐 + 内层三角 + 轴向菱形 + 短线 + 题注 | 265×300 |
 | **Lockup** | 上面两张 | **两层 background** 合成（左徽标 + 右字标），不做位图编辑 | 4:1 |
 
 ```sh
-pnpm decal:render     # endfield-decal.svg -> endfield-decal.png
+pnpm decal:render     # ⚠ 同上：默认图现在是合成图，别再拿 SVG 覆盖它
 node scripts/make-decal.mjs --svg assets/logo/wordmark.svg --out assets/logo/plates/wordmark.png --height 200
 node scripts/make-decal.mjs --svg assets/logo/badge.svg    --out assets/logo/plates/badge.png    --height 300
 pnpm decal:check      # 断言每张已发货的图：上色像素 R=G=B、有 alpha、体积合理
@@ -604,6 +604,7 @@ assets/logo/                皮肤自己的印版：3 个 SVG 源 + 生成的 4 
 - 代码：MIT。
 - 皮肤本体自带的东西，要么是本仓库自己画的，要么是开源的：`assets/logo/` 的四张印版由 `assets/logo/*.svg` 渲染（几何构件 + OFL 字体排版），`assets/fonts/` 是三个 OFL 字体（Jost / Michroma / JetBrains Mono），作为商业字体的**角色替代**。
 - 每个 `@font-face` 先声明 `local(...)`：装了原版字体就用原版，否则静默回落到开源替代。
+- **默认页标是个例外，写在明处**：`assets/logo/endfield-decal.png` 现在不是 SVG 渲染出来的那张，而是由两张本机素材（`assets/logo/my-badge.png` + `my-wordmark.png`）合成的锁定组合，见 `scripts/compose-lockup.mjs`。这两张源图**没有入库**（`assets/logo/my-*.png` 未跟踪）。`assets/logo/plates/` 下另外三张印版仍是本仓库自绘。
 - 设计参考集（截图 / 母题切片 / 实机帧，共 26 MB）**不在仓库里**：它们在本机 `E:\Workspace\tmp\endfield-refs\repo-assets\`，清单与重新抓取方式见 `assets/manifest.md`；`docs/design-reference/` 是纯文本的研究笔记，仍在仓库中。
 
 ## 已知限制

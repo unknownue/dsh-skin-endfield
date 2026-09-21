@@ -27,6 +27,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { launchBrowser } from './cdp-pipe.mjs'
+import { PAGE_MARK_ASPECT } from '../src/settings.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const ASSET_DIR = join(ROOT, 'assets', 'logo')
@@ -452,11 +453,28 @@ async function checkShipped() {
       const png = readFileSync(path)
       const label = path.replace(ROOT + '\\', '')
       const report = await evaluate(INSPECT(`data:image/png;base64,${png.toString('base64')}`))
-      console.log(`${label} (${(png.length / 1024).toFixed(1)} kB)`)
+      console.log(`${label} (${(png.length / 1024).toFixed(1)} kB, ${report.width}x${report.height})`)
       console.log(assertGrey(report, label))
-      if (png.length > 160 * 1024) throw new Error(`${label} is ${(png.length / 1024).toFixed(0)} kB — too heavy for a page asset`)
+      // The page mark has a bigger budget than the drawn plates on purpose: it is a composed raster
+      // (scripts/compose-lockup.mjs), so it carries the two source plates' textures rather than flat
+      // fills, and it is stored as 8-bit grey+alpha to keep it near the drawn ones.
+      const budget = path === SHIPPED_PNG ? 200 * 1024 : 160 * 1024
+      if (png.length > budget) {
+        throw new Error(`${label} is ${(png.length / 1024).toFixed(0)} kB — over the ${(budget / 1024).toFixed(0)} kB budget for this asset`)
+      }
       if (report.width < 120 || report.height < 90) {
         throw new Error(`${label} is ${report.width}x${report.height} px — too small to print as a decal`)
+      }
+      if (path === SHIPPED_PNG) {
+        // The stylesheet's base rule needs the page mark's ratio before any class is armed, so it is
+        // a constant in src/settings.ts -- and a constant about a file is exactly the kind that
+        // drifts. Compare it with the file's real pixels.
+        const aspect = report.width / report.height
+        console.log(`page mark ratio: file ${aspect.toFixed(3)} vs PAGE_MARK_ASPECT ${PAGE_MARK_ASPECT.toFixed(3)}`)
+        if (Math.abs(aspect - PAGE_MARK_ASPECT) > 0.002) {
+          throw new Error(`assets/logo/endfield-decal.png is ${report.width}x${report.height} (ratio ${aspect.toFixed(3)}) but `
+            + `PAGE_MARK_ASPECT says ${PAGE_MARK_ASPECT.toFixed(3)} — the mark would print in the wrong box`)
+        }
       }
     }
   } finally {
