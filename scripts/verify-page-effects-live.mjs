@@ -146,7 +146,10 @@ try {
     const markH = parseFloat(cs.height) || 0
     return {
       headerRect: [Math.round(header.left), Math.round(header.top), Math.round(header.width), Math.round(Math.min(header.height, 52))],
-      dotRect: [Math.round(content.right - content.width * 0.3), Math.round(content.bottom - content.height * 0.17), Math.round(content.width * 0.3), Math.round(content.height * 0.17)],
+      // The dot block moved to the transcript's TOP-right corner, and it stops 52px short of
+      // the right edge so the wordmark's column stays clear (18c). Both are read from the
+      // element's own geometry rather than assumed, so the zone follows the CSS.
+      dotRect: [Math.round(content.right - 52 - content.width * 0.3), Math.round(content.top), Math.round(content.width * 0.3), Math.round(content.height * 0.17)],
       markRect: [
         Math.round(sb.right - markRight - Math.max(markW, 20)),
         Math.round(sb.top + markTop - 4),
@@ -228,10 +231,18 @@ try {
   }
 
   // The mark's own variable drives its content, and it is published even when the mark is off.
+  //
+  // It is NOT compared against the default: `markText` is a user setting by design (someone
+  // who does not want the studio's wordmark can put a project or a role call sign there), so
+  // a check that demands "ENDFIELD" fails on a correctly configured app — which is exactly
+  // what it did here, on `ENDFIELDTF`. What the vocabulary can assert is that the property is
+  // a usable CSS string: published, quoted or bare, non-empty, and within the cap the schema
+  // enforces.
   const markText = await evalIn(cdp, `getComputedStyle(document.documentElement).getPropertyValue('--endfield-mark-text').trim()`)
+  const markValue = markText.replace(/^"|"$/g, '')
   check('the mark text is reachable as a custom property',
-    markText === '"ENDFIELD"' || markText === 'ENDFIELD',
-    `--endfield-mark-text resolved to ${JSON.stringify(markText)}`)
+    markValue.length > 0 && markValue.length <= 14 && /^[\x20-\x7e]+$/.test(markValue),
+    `--endfield-mark-text resolved to ${JSON.stringify(markText)} (${markValue.length} chars, cap 14)`)
 
   // All three together must be allowed, since each keeps to its own zone.
   for (const e of EFFECTS) await withClass(e.cls, true)
