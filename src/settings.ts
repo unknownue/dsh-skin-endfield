@@ -97,10 +97,9 @@ export const SKIN_SETTINGS_DEFAULTS = {
   /**
    * Which plate prints.
    *
-   * `skin` is this repository's own drawing and the only one that ships. The official plates are
-   * conversions of artwork the USER supplies, built locally by `scripts/make-official-plates.mjs`
-   * into the gitignored `assets/logo/local/`; a fresh clone cannot have them, so the default must
-   * stay `skin` — a default that only exists on one machine is not a default.
+   * `skin` is the page mark the skin ships as its default (the full lockup); the other three are
+   * the same family drawn at other proportions — the lettering alone, the stamp, and the two
+   * composed. All four are this repository's own drawings.
    */
   decalPlate: 'skin' as DecalPlate,
 }
@@ -186,33 +185,37 @@ export const DECAL_URL = `${DECAL_ROUTE}/${DECAL_FILE}`
 export const DECAL_ASPECT_CSS = '624 / 113'
 
 /**
- * Locally built plates, from whatever official artwork the user has the right to use.
+ * The plate set: three drawings that ship with the skin, plus the mark they hang from.
  *
- * They are NOT in the repository (`.gitignore` keeps `assets/logo/local/` out) and not part of
- * any release: `scripts/make-official-plates.mjs` converts files the user supplies into the same
- * pure-grey, alpha-carrying form as the shipped plate, and the settings page offers them only to
- * the installation that has them. A missing file paints nothing — an empty decal, not an error.
+ * All of them are authored in this repository (`assets/logo/*.svg`) and rendered to PNG by
+ * `node scripts/make-decal.mjs --svg ... --height ...`, so they are covered by the same licence as
+ * the code and need no per-file notice. They differ in composition, not in subject: the page mark
+ * (`endfield-decal.svg`) is a full lockup, the wordmark is the lettering alone, the badge is the
+ * stamp, and the lockup composes badge and wordmark as two background layers.
  */
-export const LOCAL_PLATE_DIR = 'local'
-export const OFFICIAL_PLATES = {
-  'official-wordmark': { file: 'official-wordmark.png', label: 'Official wordmark (ENDFIELD)' },
-  'official-badge': { file: 'official-badge.png', label: 'Official badge (终末地)' },
-  'official-lockup': { file: 'official-badge.png', label: 'Official lockup (badge + wordmark)' },
+export const PLATE_DIR = 'plates'
+export const PLATES = {
+  wordmark: { files: ['wordmark.png'], label: 'Wordmark (wide)' },
+  badge: { files: ['badge.png'], label: 'Badge (stamp)' },
+  // The lockup is composed from the other two as two background layers, so it names both files:
+  // there is no third PNG, and pretending otherwise would mean raster editing we do not need.
+  lockup: { files: ['badge.png', 'wordmark.png'], label: 'Lockup (badge + wordmark)' },
 } as const
 
-/** The plates a user can pick: the shipped one, or one of the local official conversions. */
-export const DECAL_PLATES = ['skin', ...Object.keys(OFFICIAL_PLATES)] as const
+/** The plates a user can pick: the page mark that ships as the default, or one of the three. */
+export const DECAL_PLATES = ['skin', ...Object.keys(PLATES)] as const
 export type DecalPlate = (typeof DECAL_PLATES)[number]
 
-/** The URL of a locally built plate (the lockup composes the badge with the wordmark). */
-export function localPlateUrl(plate: DecalPlate): string | null {
+/** The artwork a plate paints: the page mark's own file, or the plate's first layer. */
+export function plateUrl(plate: DecalPlate): string | null {
   if (plate === 'skin') return null
-  const entry = OFFICIAL_PLATES[plate as keyof typeof OFFICIAL_PLATES]
-  return entry ? `${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${entry.file}` : null
+  const entry = PLATES[plate as keyof typeof PLATES]
+  return entry ? `${DECAL_ROUTE}/${PLATE_DIR}/${entry.files[0]}` : null
 }
 
-/** The wordmark file a lockup composes with, named here so the CSS and the builder agree. */
-export const LOCAL_WORDMARK_FILE = 'official-wordmark.png'
+/** The two files a lockup composes, named here so the stylesheet and the settings page agree. */
+export const PLATE_WORDMARK_FILE = PLATES.wordmark.files[0]
+export const PLATE_BADGE_FILE = PLATES.badge.files[0]
 
 /** Coerce a stored value into a known plate. An unknown plate falls back to the shipped one. */
 export function safeDecalPlate(value: unknown): DecalPlate {

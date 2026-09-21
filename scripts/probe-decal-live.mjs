@@ -254,20 +254,20 @@ try {
 
   // 3. The plates side by side, so "which artwork" is a picture and not a promise.
   //
-  // The official plates are LOCAL files (gitignored `assets/logo/local/`, built from artwork the
-  // user supplies) and they are served by the same host route as the shipped one — so before the
-  // host half has been restarted they are missing too. The probe injects them from disk as data
-  // URIs, which is the same seam `--endfield-decal-image` uses, and reports for each plate whether
-  // the route is actually delivering the file.
+  // All four are drawn in this repository (assets/logo/*.svg -> assets/logo/plates/*.png) and are
+  // served by the same host route as the page mark — so before the host half has been restarted
+  // none of them arrive. The probe injects them from disk as data URIs, which is the same seam
+  // `--endfield-decal-image` uses, and reports for each plate whether the route is delivering the
+  // file as well.
   await evalIn(cdp, `(() => {
-    const badge = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'local', 'official-badge.png')).toString('base64'))}
-    const wordmark = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'local', 'official-wordmark.png')).toString('base64'))}
+    const badge = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'plates', 'badge.png')).toString('base64'))}
+    const wordmark = ${JSON.stringify(readFileSync(join(LOGO_DIR, 'plates', 'wordmark.png')).toString('base64'))}
     const style = document.createElement('style')
     style.id = 'decal-probe-plates'
     style.textContent = [
-      'html.endfield-plate-official-wordmark [data-conversation-content]::before { background-image: url("data:image/png;base64,' + wordmark + '") !important; }',
-      'html.endfield-plate-official-badge [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '") !important; }',
-      'html.endfield-plate-official-lockup [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '"), url("data:image/png;base64,' + wordmark + '") !important; }',
+      'html.endfield-plate-wordmark [data-conversation-content]::before { background-image: url("data:image/png;base64,' + wordmark + '") !important; }',
+      'html.endfield-plate-badge [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '") !important; }',
+      'html.endfield-plate-lockup [data-conversation-content]::before { background-image: url("data:image/png;base64,' + badge + '"), url("data:image/png;base64,' + wordmark + '") !important; }',
     ].join('\\n')
     document.head.appendChild(style)
     return true
@@ -275,12 +275,12 @@ try {
 
   const PLATES = [
     { name: 'skin', cls: 'endfield-plate-skin', url: DECAL_URL, shot: 'decal-plate-skin.png' },
-    { name: 'official-badge', cls: 'endfield-plate-official-badge', url: `${DECAL_ROUTE}/local/official-badge.png`, shot: 'decal-plate-official-badge.png' },
-    { name: 'official-wordmark', cls: 'endfield-plate-official-wordmark', url: `${DECAL_ROUTE}/local/official-wordmark.png`, shot: 'decal-plate-official-wordmark.png' },
-    { name: 'official-lockup', cls: 'endfield-plate-official-lockup', url: `${DECAL_ROUTE}/local/official-badge.png`, shot: 'decal-plate-official-lockup.png' },
+    { name: 'wordmark', cls: 'endfield-plate-wordmark', url: `${DECAL_ROUTE}/plates/wordmark.png`, shot: 'decal-plate-wordmark.png' },
+    { name: 'badge', cls: 'endfield-plate-badge', url: `${DECAL_ROUTE}/plates/badge.png`, shot: 'decal-plate-badge.png' },
+    { name: 'lockup', cls: 'endfield-plate-lockup', url: `${DECAL_ROUTE}/plates/badge.png`, shot: 'decal-plate-lockup.png' },
   ]
   const PLATE_CLASSES = PLATES.map((p) => p.cls)
-  console.log('--- plates (shipped vs local official conversions) ---')
+  console.log('--- plates (the four drawings the skin ships) ---')
   await evalIn(cdp, `(() => { document.documentElement.style.setProperty('--endfield-decal-opacity', '0.12'); document.documentElement.style.setProperty('--endfield-decal-scale', '1'); return true })()`)
   for (const plate of PLATES) {
     await withClass(false)

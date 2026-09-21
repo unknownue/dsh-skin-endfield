@@ -7,10 +7,6 @@ tmp/
 .cache/
 *.log
 
-# Locally built decal plates (official artwork, personal use — see
-# docs/design-reference/06-logo-notes.md). The plate in assets/logo/ is this repository's own
-# drawing and IS committed; anything produced from someone else's artwork lands here instead.
-assets/logo/local/
 
 # smoke-test artifacts (page, context stub, screenshot, chrome profile)
 tests/out/

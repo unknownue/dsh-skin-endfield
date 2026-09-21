@@ -51,6 +51,9 @@ function parseArgs(argv) {
     else if (arg === '--source') { out.source = argv[++i]; out.mode = 'convert' }
     else if (arg === '--ink-mode') out.inkMode = argv[++i]
     else if (arg === '--normalize') out.normalize = true
+    else if (arg === '--svg') out.svg = argv[++i]
+    else if (arg === '--height') out.height = Number(argv[++i])
+    else if (arg === '--pad') out.pad = Number(argv[++i])
     else if (arg === '--out') out.out = argv[++i]
     else if (arg === '--scale') out.scale = Number(argv[++i])
     else if (arg === '--height') out.height = Number(argv[++i])
@@ -166,7 +169,8 @@ async function writePreview(evaluate, dataUrl, label, outPath) {
  * artwork, which means one code path produces both, and the ink is one colour by construction.
  */
 async function renderLockup(args) {
-  const svg = readFileSync(SOURCE_SVG, 'utf8')
+  const sourceSvg = args.svg ? resolve(args.svg) : SOURCE_SVG
+  const svg = readFileSync(sourceSvg, 'utf8')
   const fontFaces = [
     ['Michroma', 'michroma-latin.woff2'],
     ['JetBrains Mono', 'jetbrains-mono-latin.woff2'],
@@ -231,6 +235,9 @@ async function renderLockup(args) {
       }
       if (maxX < 0) return null
       const padPx = Math.round(${pad} * ${scale})
+      // A drawing that touches the canvas edge is a drawing being cut off by its own viewBox, and
+      // it looks fine in the preview until someone reads the missing letter. Reported, not guessed.
+      const clipped = minX <= 0 || minY <= 0 || maxX >= c.width - 1 || maxY >= c.height - 1
       const x0 = Math.max(0, minX - padPx), y0 = Math.max(0, minY - padPx)
       const x1 = Math.min(c.width, maxX + 1 + padPx), y1 = Math.min(c.height, maxY + 1 + padPx)
       const w = x1 - x0, h = y1 - y0
@@ -248,27 +255,57 @@ async function renderLockup(args) {
       return {
         dataUrl: out.toDataURL('image/png'), width: w, height: h,
         inkBox: { x: minX - x0, y: minY - y0, w: maxX - minX + 1, h: maxY - minY + 1 },
+        clipped,
         css: { width: Math.round(w / ${scale}), height: Math.round(h / ${scale}) },
       }
     })()`)
     if (plate === null) throw new Error('the render produced no ink — is the SVG empty or is its text failing to load a font?')
+    if (plate.clipped) {
+      console.log('[WARN] the ink touches the edge of the rendered canvas: the drawing is being cut off')
+      console.log('       by its own svg width/height (or viewBox). Widen the source; the plate below is clipped.')
+    }
 
-    const png = Buffer.from(plate.dataUrl.split(',')[1], 'base64')
-    const report = await evaluate(INSPECT(plate.dataUrl))
+    /**
+     * `--height` resamples the cropped plate to an exact pixel height.
+     *
+     * It exists so a plate can be drawn at whatever coordinate system is convenient and still land
+     * on the exact box the stylesheet expects: the three plates of the decal set are cut to fixed
+     * heights (200 and 300 px), and "the drawing happens to come out that size" is not a contract
+     * a stylesheet can rely on.
+     */
+    const resized = args.height
+      ? await evaluate(`(async () => {
+          const img = new Image()
+          img.src = ${JSON.stringify(plate.dataUrl)}
+          await img.decode()
+          const h = ${args.height}
+          const w = Math.max(1, Math.round(img.width * (h / img.height)))
+          const c = document.createElement('canvas')
+          c.width = w; c.height = h
+          const ctx = c.getContext('2d', { willReadFrequently: true })
+          ctx.imageSmoothingQuality = 'high'
+          ctx.drawImage(img, 0, 0, w, h)
+          return { dataUrl: c.toDataURL('image/png'), width: w, height: h }
+        })()`)
+      : null
+    const finalUrl = resized ? resized.dataUrl : plate.dataUrl
+    const finalBox = resized ?? { width: plate.css.width, height: plate.css.height }
+
+    const png = Buffer.from(finalUrl.split(',')[1], 'base64')
+    const report = await evaluate(INSPECT(finalUrl))
     const out = args.out ?? SHIPPED_PNG
     mkdirSync(dirname(out), { recursive: true })
     writeFileSync(out, png)
+    console.log(`source: ${sourceSvg.replace(ROOT + '\\', '')}`)
     console.log(`ink box (device px): ${plate.inkBox.w}x${plate.inkBox.h} at ${plate.inkBox.x},${plate.inkBox.y}`)
     console.log(`${out} — ${(png.length / 1024).toFixed(1)} kB`)
     console.log(assertGrey(report, 'lockup'))
-    if (out === SHIPPED_PNG) {
-      // The CSS sizes the decal from these numbers; print them so a changed source is noticed.
-      console.log(`css size: ${plate.css.width} x ${plate.css.height} px `
-        + `(aspect ${(plate.css.width / plate.css.height).toFixed(3)})`)
-    }
+    // The CSS sizes the decal from these numbers; print them so a changed source is noticed.
+    console.log(`css size: ${finalBox.width} x ${finalBox.height} px `
+      + `(aspect ${(finalBox.width / finalBox.height).toFixed(3)})`)
     if (args.preview) {
       mkdirSync(OUT_DIR, { recursive: true })
-      await writePreview(evaluate, plate.dataUrl, 'lockup', join(OUT_DIR, 'decal-preview.png'))
+      await writePreview(evaluate, finalUrl, 'lockup', join(OUT_DIR, 'decal-preview.png'))
     }
   } finally {
     browser.close()

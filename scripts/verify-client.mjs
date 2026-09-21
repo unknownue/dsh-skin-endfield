@@ -759,13 +759,16 @@ await check('the settings page exposes every field and commits to the scope', as
   assert(writes[1][1] === 'decal', `an unknown style must fall back to the plate, got ${writes[1][1]}`)
 
   const plateSelect = selects.find((n) => n !== styleSelect)
-  const plateValues = styleOptions.filter((v) => v === 'skin' || String(v).startsWith('official-'))
-  assert(plateValues.join(',') === 'skin,official-wordmark,official-badge,official-lockup',
-    `the plate list must run from the shipped mark to every official conversion, got ${plateValues.join(',')}`)
+  // The list is compared against the settings module rather than a literal, so adding a plate there
+  // without offering it in the page (or the reverse) fails here instead of drifting.
+  const { DECAL_PLATES } = await import(pathToFileURL(join(ROOT, 'src', 'settings.ts')).href)
+  const plateValues = styleOptions.filter((v) => DECAL_PLATES.includes(v))
+  assert(plateValues.join(',') === DECAL_PLATES.join(','),
+    `the plate list must run from the page mark to every plate that ships, got ${plateValues.join(',')}`)
   assert(plateSelect.props.value === 'skin', `a fresh install must select the shipped plate, got ${plateSelect.props.value}`)
   writes.length = 0
-  plateSelect.props.onChange({ target: { value: 'official-lockup' } })
-  assert(writes.length === 1 && writes[0][0] === 'decalPlate' && writes[0][1] === 'official-lockup',
+  plateSelect.props.onChange({ target: { value: 'lockup' } })
+  assert(writes.length === 1 && writes[0][0] === 'decalPlate' && writes[0][1] === 'lockup',
     `the plate must commit through the scope, got ${JSON.stringify(writes)}`)
   // A plate that no longer exists (a stale settings document) must fall back to the shipped one
   // rather than arming a class no rule matches.

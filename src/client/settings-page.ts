@@ -20,10 +20,11 @@ import {
   DECAL_ROUTE,
   DECAL_URL,
   HEX_COLOR,
-  LOCAL_PLATE_DIR,
-  LOCAL_WORDMARK_FILE,
   MARK_TEXT_MAX,
-  OFFICIAL_PLATES,
+  PLATES,
+  PLATE_BADGE_FILE,
+  PLATE_DIR,
+  PLATE_WORDMARK_FILE,
   SKIN_SETTINGS_DEFAULTS,
   safeAccent,
   safeDecalOpacity,
@@ -488,12 +489,12 @@ export function createSkinSection(React: ReactLike) {
      * wondering why the decal vanished.
      */
     const platePreview = (plate: DecalPlate, opacity: number) => {
-      const badge = `${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${OFFICIAL_PLATES['official-badge'].file}`
-      const wordmark = `${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${LOCAL_WORDMARK_FILE}`
-      const layers = plate === 'official-lockup'
+      const badge = `${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}`
+      const wordmark = `${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}`
+      const layers = plate === 'lockup'
         ? { backgroundImage: `url("${badge}"), url("${wordmark}")`, backgroundSize: 'auto 84%, auto 46%', backgroundPosition: 'left center, right center', backgroundRepeat: 'no-repeat, no-repeat' }
         : {
-            backgroundImage: `url("${plate === 'skin' ? DECAL_URL : plate === 'official-badge' ? badge : wordmark}")`,
+            backgroundImage: `url("${plate === 'skin' ? DECAL_URL : plate === 'badge' ? badge : wordmark}")`,
             backgroundSize: 'contain',
             backgroundPosition: 'left center',
             backgroundRepeat: 'no-repeat',
@@ -515,16 +516,15 @@ export function createSkinSection(React: ReactLike) {
     }
 
     /**
-     * Which plate prints, and where the non-shipped ones come from.
+     * Which plate prints.
      *
-     * `skin` is the only plate in the repository; the official ones are conversions of artwork
-     * the user supplies, built by `scripts/make-official-plates.mjs` into the gitignored
-     * `assets/logo/local/`. The hint says so, because "the option is there but nothing prints"
-     * has exactly one cause and it is worth naming before the user finds it.
+     * Four drawings of one idea: the page mark that ships as the default, the lettering alone, the
+     * stamp, and the two composed. They differ in composition, so the choice is about which shape
+     * suits the page rather than about which one is "the real" mark.
      */
     const decalPlateRow = row(
       'Plate',
-      'The decal\u2019s artwork. Only the skin\u2019s own mark ships with this repository; the official plates are conversions of files you supply (see docs/design-reference/06-logo-notes.md), built into assets/logo/local/ and kept out of git. An uninstalled plate prints nothing.',
+      'The decal\u2019s artwork: the page mark (a full lockup), the wordmark alone, the badge stamp, or the two composed as a lockup. All four are drawn in this repository.',
       [
         h('select', {
           key: 'sel',
@@ -544,9 +544,9 @@ export function createSkinSection(React: ReactLike) {
             opacity: draft.mark && draft.markStyle === 'decal' ? 1 : 0.5,
           },
         }, [
-          h('option', { key: 'skin', value: 'skin' }, 'Skin\u2019s own mark (ships)'),
-          ...Object.entries(OFFICIAL_PLATES).map(([value, entry]) =>
-            h('option', { key: value, value }, `${entry.label} — local`)),
+          h('option', { key: 'skin', value: 'skin' }, 'Page mark (full lockup)'),
+          ...Object.entries(PLATES).map(([value, entry]) =>
+            h('option', { key: value, value }, entry.label)),
         ]),
         platePreview(draft.decalPlate, draft.decalOpacity),
       ],

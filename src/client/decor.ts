@@ -26,9 +26,9 @@ import {
   DECAL_ROUTE,
   DECAL_URL,
   DECAL_WIDTH_SHARE,
-  LOCAL_PLATE_DIR,
-  LOCAL_WORDMARK_FILE,
-  OFFICIAL_PLATES,
+  PLATE_BADGE_FILE,
+  PLATE_DIR,
+  PLATE_WORDMARK_FILE,
 } from '../settings.ts'
 
 export const endfieldDecor = `
@@ -1675,34 +1675,32 @@ html.endfield-mark-decal [data-conversation-content]::before {
   user-select: none;
 }
 
-/* ── 18b-iii. the official plates, as local files ───────────────────────── */
-/* Same plate, three other sources: conversions of official artwork the USER supplied, built by
-   scripts/make-official-plates.mjs into the gitignored assets/logo/local/. They are options
-   rather than the default because a fresh clone cannot have them -- and because shipping
-   Hypergryph's artwork with a skin is not this repository's call to make (README, 授权与合规).
+/* ── 18b-iii. the plate set: three more drawings of the same page mark ──── */
+/* The page mark above is the full lockup and the default. These are the same family at other
+   proportions, all authored in this repository as SVG (assets/logo/wordmark.svg, badge.svg) and
+   rendered by "node scripts/make-decal.mjs --svg ...": the lettering alone, the stamp, and the two
+   composed as two background layers (badge left, wordmark right) so no raster editing is involved.
 
-   Geometry follows the source: the official wordmark is 1143x200 (a wide band, so it prints
-   where the shipped plate does), the badge is 347x300 and near-square (a stamp, so it is set
-   smaller and lower), and the "lockup" is the two composed as two background layers -- badge
-   left, wordmark right -- which is how the game's own lockup is arranged without any raster
-   editing. A missing file simply paints nothing: an empty decal, not a broken page. */
-html.endfield-plate-official-wordmark [data-conversation-content]::before {
-  background-image: url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${LOCAL_WORDMARK_FILE}');
-  aspect-ratio: 1143 / 200;
+   Geometry follows each drawing's own aspect: the wordmark is wide and prints where the page mark
+   does, the badge is a near-square stamp so it is set smaller and lower. Every plate hangs off the
+   same ::before, and the settings path guarantees exactly one is armed. */
+html.endfield-plate-wordmark [data-conversation-content]::before {
+  background-image: url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}');
+  aspect-ratio: 1342 / 200;
 }
 
-html.endfield-plate-official-badge [data-conversation-content]::before {
-  background-image: url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${OFFICIAL_PLATES['official-badge'].file}');
-  aspect-ratio: 347 / 300;
-  width: calc(19% * var(--endfield-decal-scale, 1));
+html.endfield-plate-badge [data-conversation-content]::before {
+  background-image: url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}');
+  aspect-ratio: 265 / 300;
+  width: calc(15% * var(--endfield-decal-scale, 1));
   right: 56px;
   top: 268px;
 }
 
-html.endfield-plate-official-lockup [data-conversation-content]::before {
+html.endfield-plate-lockup [data-conversation-content]::before {
   background-image:
-    url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${OFFICIAL_PLATES['official-badge'].file}'),
-    url('${DECAL_ROUTE}/${LOCAL_PLATE_DIR}/${LOCAL_WORDMARK_FILE}');
+    url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_BADGE_FILE}'),
+    url('${DECAL_ROUTE}/${PLATE_DIR}/${PLATE_WORDMARK_FILE}');
   background-size: auto 84%, auto 46%;
   background-position: left center, right center;
   background-repeat: no-repeat, no-repeat;

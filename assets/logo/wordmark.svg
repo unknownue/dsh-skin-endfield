@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1620" height="260" viewBox="0 0 1620 260">
+  <!--
+    A wide wordmark plate: the skin's own lettering, drawn here and rendered to
+    assets/logo/plates/wordmark.png by `node scripts/make-decal.mjs --svg ... --height 200`.
+
+    Everything in it is this repository's own: the letters are set in **Michroma** (SIL OFL,
+    vendored in assets/fonts), the texture inside them is a plain 45-degree screen, and the rule
+    underneath is the same hairline the rest of the skin's chrome uses. Nothing is traced from
+    anyone's logotype.
+
+    The texture is the point of the plate: the letter bodies sit at part strength and the screen
+    over them at full, so the plate reads as printed rather than as flat type. On a grey plate the
+    difference between the two is alpha, which is what the rasteriser's luminance -> alpha step
+    turns into ink.
+  -->
+  <defs>
+    <pattern id="screen-45" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="9" stroke="#FFFFFF" stroke-width="1.5" />
+    </pattern>
+    <pattern id="screen-45-body" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect x="0" y="0" width="9" height="9" fill="#FFFFFF" fill-opacity="0.62" />
+      <line x1="0" y1="0" x2="0" y2="9" stroke="#FFFFFF" stroke-width="1.5" />
+    </pattern>
+  </defs>
+
+  <text
+    x="0" y="192"
+    font-family="Michroma" font-size="196" letter-spacing="26"
+    fill="url(#screen-45-body)">ENDFIELD</text>
+
+  <!-- the bearing column: a second, offset pass keeps the mark from looking like plain type -->
+  <g opacity="0.5">
+    <rect x="6" y="0" width="3" height="196" fill="#FFFFFF" />
+    <rect x="20" y="0" width="1.4" height="196" fill="#FFFFFF" />
+  </g>
+
+  <rect x="6" y="222" width="1608" height="2" fill="url(#screen-45)" />
+  <rect x="6" y="236" width="118" height="2" fill="#FFFFFF" />
+</svg>

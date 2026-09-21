@@ -471,15 +471,15 @@ body [data-phase] [data-composer-seat][class] {
 
 竖排描边文字的表现被指出不满意之后，页标多了第二种渲染：**把 Endfield 风格的锁定组合做成一张纯灰印版，像水贴一样印在正文面板上**。设置页里 `Page mark` 是总开关，`Mark style` 在两种渲染之间选一个。
 
-### 它不是官方图稿，是同语言的清稿
+### 印版是怎么来的
 
-`docs/design-reference/06-logo-notes.md` 记录了检索到的事实与来源（倒三角企业徽标、与罗德岛正三角的刻意对照、`ENDFIELD` + `INDUSTRIES` 的配对、横排 ≈6:1、官方字标为定制字且无公开规格……），以及合规边界：**官方 logo 不随皮肤分发**。所以印版由本仓库自己的构件生成：
+`docs/design-reference/06-logo-notes.md` 记录了这套图形依据的公开设计事实与来源（倒三角企业徽标、与罗德岛正三角的刻意对照、`ENDFIELD` + `INDUSTRIES` 的配对、横排 ≈6:1、官方字标为定制字且无公开规格……）。印版本身由本仓库自己的构件生成：
 
 | 构件 | 来源 |
 |------|------|
 | 倒三角 + 45° 网纹 + 内层三角 + 菱形 | 皮肤已有的母题（网纹出自官方 CSS 的 hatch，菱形是节点标记） |
-| `ENDFIELD` 字标 | 用 **Michroma** 重新排字，不是复刻定制字标 |
-| `// ENDFIELD INDUSTRIES` | 设定内机构名，替代官方标语（标语属可识别口号，不用） |
+| `ENDFIELD` 字标 | 用 **Michroma** 排字（OFL 字体，已随包），不是复刻定制字标 |
+| `// ENDFIELD INDUSTRIES` | 设定内机构名 |
 | 纯灰 | 印版只有一种墨（`#D9D9D9`），浓淡由皮肤用 `opacity` 决定 |
 
 ### 为什么是 PNG，以及那条管线
@@ -518,42 +518,32 @@ node scripts/make-decal.mjs --source your-logo.png --polarity dark --out tmp/x.p
 
 代价写在明处：`z-index: 0` 意味着它**会浅浅地压过它穿过的正文**（0.12 的灰）。所以默认值是这个数，而且它有自己的开关 —— "水贴压在一张密集表格上"是口味选择，不该替用户做掉。它仍然**不碰**点阵块（3）与输入区那条不透明带（7，sticky）。
 
-### 换成官方资产：三张**本地**印版（不提交）
+### 四张印版：同一套图形的四种取景
 
-自带那版是同语言的清稿，不够像的话，`Plate` 可以直接换成**官方资产的纯灰转换**：
+`Plate` 在四张**都随仓库分发**的图里选（`assets/logo/`，全部由本仓库的 SVG 源渲染）：
 
-| 选项 | 源文件（官网，`scripts/harvest/01-official-assets.ps1` 抓下来的那份） | 转换要点 |
-|---|---|---|
-| **Official wordmark** | `endfield_text.<hash>.png`，2743×480 | 官方 `ENDFIELD` 字标，**自带网纹**；文件本身只有约 33% alpha → `--normalize` 拉满，否则叠上 0.12 就没了 |
-| **Official badge** | `endfield.<hash>.png`，430×372 | 倒三角徽标（含 终末地 + `ENDFIELD INDUSTRIES`），黑线稿**已抠图** → `--ink-mode silhouette`；套 polarity 会把白底变成墨 |
-| **Official lockup** | 上面两张 | 用**两层 background** 合成（左徽标 + 右字标），不做任何位图编辑，所以任何分辨率都不糊 |
+| 选项 | 源文件 | 构图 | 实测尺寸 |
+|---|---|---|---|
+| **Page mark**（默认） | `endfield-decal.svg` | 徽标 + 字标 + `// ENDFIELD INDUSTRIES` 的完整锁定组合 | 624×113 |
+| **Wordmark** | `wordmark.svg` | 只有字（Michroma 排字 + 45° 网纹填充 + 发丝线） | 1342×200 |
+| **Badge** | `badge.svg` | 倒三角图章：网纹渐隐 + 内层三角 + 轴向菱形 + 短线 + 题注 | 265×300 |
+| **Lockup** | 上面两张 | **两层 background** 合成（左徽标 + 右字标），不做位图编辑 | 4:1 |
 
 ```sh
-pnpm decal:official                                        # 默认去 E:\Workspace\tmp\endfield-refs\raw\cssimg 找
-node scripts/make-official-plates.mjs --from D:\refs\cssimg # 或自己指目录
+pnpm decal:render     # endfield-decal.svg -> endfield-decal.png
+node scripts/make-decal.mjs --svg assets/logo/wordmark.svg --out assets/logo/plates/wordmark.png --height 200
+node scripts/make-decal.mjs --svg assets/logo/badge.svg    --out assets/logo/plates/badge.png    --height 300
+pnpm decal:check      # 断言每张已发货的图：上色像素 R=G=B、有 alpha、体积合理
 ```
 
-**它们不进仓库**：`.gitignore` 忽略 `assets/logo/local/`，官方 logo 的版权不归本项目，README 的合规声明也不允许随包分发（事实与来源见 `docs/design-reference/06-logo-notes.md`）。宿主路由覆盖 `assets/logo` 整棵树，所以本机能用、克隆出去就没有 —— 这正是"默认必须是 `skin`"的原因：只在某台机器上存在的默认值不是默认值。文件缺了就是**什么都不印**（空水贴），不是报错。
+`--height` 让每张图落在样式表期望的那个盒子里 —— "画出来正好是这个尺寸"不是样式表能依赖的契约。渲染器还会在**墨迹碰到画布边缘**时警告（那说明图被自己的 `viewBox` 切了；第一版 wordmark 就少了一个字母）。
 
-> 这两个转换坑是实测踩出来的，注释也在脚本里：官方字标是"**已经是水印**"的文件（alpha ≈ 33%），照常转会在叠上 0.12 后彻底看不见；官方徽标是**黑线稿 + 白底**，"亮度→alpha"会把白纸变成墨，于是得到一张描线轮廓图。`--normalize` 与 `--ink-mode silhouette` 就是为这两件事存在的。
-
-### "改一改"能不能随皮肤分发？
-
-**法律上没有"改够多少就安全"这条线。** 受保护作品的改色 / 裁切 / 重排**仍然是演绎作品**；反过来，不受保护的对象**复制也不侵权** —— 所以判断落在三件不同的事上：**原作是否受保护**（字标：Commons 以 **PD-textlogo** 收录同款 logo，理由原文是"仅由简单几何形状或文字构成、未达独创性阈值"；徽标：倒三角内部的**等高线插画**是表达性美术作品，很可能受保护）、**商标**（不能让人误以为官方产物 → 免责声明 + 非商业 + 不暗示关联）、**权利人的公开态度**（检索**找不到鹰角公开的《同人创作指引》**，其维权记录主要针对**商业**侵权）。来源、判例线索与逐件判断都记在 [`docs/design-reference/06-logo-notes.md`](docs/design-reference/06-logo-notes.md) 第 7 节。
-
-仓库据此给了三档，默认是最保守那档：
-
-| 档 | 怎么做 | 结果 |
-|---|---|---|
-| **A（默认）** | 官方转换件只留本机（`assets/logo/local/`，gitignore），仓库只提交代码 + 自绘印版 | 仓库零风险，本机功能完整 |
-| **B** | `node scripts/make-official-plates.mjs --adopt`：把**字标**转换件提升为**发货资产**，同时写 `assets/logo/NOTICE.md`（来源、改动、免责声明、下架承诺） | 一次**明确决定**、有据可查；`pnpm decal:render` 一键回退 |
-| **C** | 提交官方**徽标** | 不建议（演绎风险明显更高，见第 7 节）；要用请走设置页的本地选项 |
-
-`--adopt` 只对字标开放 —— 只有它"简单几何 + 文字"的论证站得住。发货副本按 **150px** 高度生成（**137.7 kB**），落在 `decal:check` 的 160 kB 资产预算内；官方字标自带网纹、压缩率差（200px 时 246 kB），本机那份仍保留 200px 的清晰版本。
+> 想换成自己的图：把 CSS 变量指过去即可 —— `document.documentElement.style.setProperty('--endfield-decal-image', 'url(...)')`；或者用 `node scripts/make-decal.mjs --source 你的图.png` 先把它转成同规格的纯灰印版。
 
 ### 宿主半边要重启一次
 
-印版由宿主半边送达：`/skin-endfield/logo/`（自带那张与本地官方印版同一条路由）。只路由 `assets/logo/` 一个目录，**不**路由整个 `assets/` —— `screenshots/`、`in-game-frames/`、`ui-primitives/` 是研究引用，不该因为多一条路由就变得能被任何页面取走。宿主半边**每次 `dsh web` 启动只加载一次**，所以这条路由要重启才存在；在此之前 live 检查会打印 NOTE 并**跳过**那条绘制断言（跳过，不是通过）。
+印版由宿主半边送达：`/skin-endfield/logo/`。只路由 `assets/logo/` 一个目录，**不**路由整个 `assets/` —— `screenshots/`、`in-game-frames/`、`ui-primitives/` 是研究引用。宿主半边**每次 `dsh web` 启动只加载一次**，所以这条路由要重启才存在；在此之前 live 检查会把"每张印版都被送达"报成**一条失败**（并说明原因是重启），跳过各自的落墨断言。
+
 
 ## 点阵块：正文右上角、贴住右边界（装饰层 18c）
 
@@ -583,24 +573,22 @@ src/client/settings-apply.ts 设置值 → 重铺令牌层 + 写 CSS 变量
 src/client/settings-page.ts  设置页（react 作为参数传入，便于测试）
 scripts/harvest/            资料抓取（01–07）
 scripts/verify-*.mjs        验证层
-scripts/make-decal.mjs      印版管线：字符标 SVG → 纯灰 PNG；也把任意图转成纯灰水贴
+scripts/make-decal.mjs      印版管线：SVG → 纯灰 PNG（--svg/--height）；也把任意图转成纯灰水贴
 scripts/probe-mark-visibility.mjs  探针：页标"画了但看不见"的几何 + 逐滚动位置像素
 scripts/probe-decal-live.mjs       探针：印版的送达/武装/落墨三问 + 浓淡与位置的网格量测
 scripts/inspect-shell-dom.mjs  探查 shell DOM（结构）
 scripts/probe-green.mjs        探查运行中页面的绿色元素（颜色）
 assets/fonts/               OFL 字体（见 assets/fonts/NOTICE.md）
-assets/logo/                皮肤自己的印版（SVG 源 + 生成的纯灰 PNG）
+assets/logo/                皮肤自己的印版：3 个 SVG 源 + 生成的 4 张纯灰 PNG（plates/）
 ```
 
 ## 授权与合规
 
 - 代码：MIT。
-- **不附带**任何官方字体、游戏素材、官方图集。`assets/fonts/` 是三个 OFL 开源字体（Jost / Michroma / JetBrains Mono），作为商业字体的**角色替代**。
-- `assets/logo/` 是**本仓库自己画的清稿**（几何构件 + OFL 字体排版），不是官方图稿的临摹；它依据的公开事实与来源记在 `docs/design-reference/06-logo-notes.md`，其中包括"官方字标是定制字、无公开规格"与"官方分发的是单色平面矢量"两条。`scripts/make-decal.mjs --source ...` 可以把**你自己有权使用**的图转成同规格的纯灰印版；那样产出的文件请放在 gitignore 的 `tmp/` 或 `assets/logo/local/`，**不要提交**。
-- **唯一的例外通道是显式的**：`make-official-plates.mjs --adopt` 会把字标转换件写进发货路径，并在 `assets/logo/NOTICE.md` 里落下来源、改动、免责与**下架承诺**。走这条路等于在仓库里公开声明"这是非官方、非同人授权、收到通知即换成自绘版"——决定权在你，机制与理由见 06 文档第 7 节。
-- `docs/design-reference/` 与 `assets/screenshots|ui-primitives|in-game-frames/` 是**设计研究引用**，版权归鹰角网络所有，不得随皮肤分发（宿主半边只路由 `assets/fonts/` 与 `assets/logo/`，就是为了让这条不只是写在文档里）。
-- 每个 `@font-face` 先声明 `local(...)`：装了原版字体就用原版，否则静默回落到开源替代 —— 两种情况都不再分发受版权保护的字体。
-- 与本项目与鹰角网络、DeepSeek 均无关联。
+- 皮肤本体自带的东西，要么是本仓库自己画的，要么是开源的：`assets/logo/` 的四张印版由 `assets/logo/*.svg` 渲染（几何构件 + OFL 字体排版），`assets/fonts/` 是三个 OFL 字体（Jost / Michroma / JetBrains Mono），作为商业字体的**角色替代**。
+- 每个 `@font-face` 先声明 `local(...)`：装了原版字体就用原版，否则静默回落到开源替代。
+- `docs/design-reference/` 与 `assets/screenshots|ui-primitives|in-game-frames/` 是**设计研究引用**；宿主半边只路由 `assets/fonts/` 与 `assets/logo/`，这些目录不在任何路由下。
+- 本项目与鹰角网络、DeepSeek 均无关联。
 
 ## 已知限制
 
@@ -613,5 +601,5 @@ assets/logo/                皮肤自己的印版（SVG 源 + 生成的纯灰 PN
 - 装饰层不含优先级强制声明（`verify-client` 文本扫描拦截），所有覆盖靠选择器具体度与源码顺序。
 - `dsh-skin-endfield` 设置命名空间的**宿主侧写入**需要你在界面上点一次确认（改一项设置，看 `~/.dsh/settings.yaml` 是否出现 `dsh-skin-endfield:`）。
 - 新增 **Accent** 字段需要**重启 `dsh web`** 才生效：浏览器半边的设置订阅连同已装的 bundle 会随 HMR 更新，但命名空间的 schema 由宿主半边注册，只在启动时读一次。
-- **Logo 水贴的印版也走宿主路由**（`/skin-endfield/logo/endfield-decal.png`），所以同一条限制：宿主半边只在 `dsh web` 启动时加载一次，**没重启前这条路由不存在** —— 设置页里那格预览会是空的、画面上也不会印出来（live 检查此时打印 NOTE 并跳过绘制断言）。重启一次即可。
+- **水贴的印版走宿主路由**（`/skin-endfield/logo/…`），所以同一条限制：宿主半边只在 `dsh web` 启动时加载一次，**没重启前这条路由不存在** —— 设置页那格预览会是空的、画面上也不会印出来（live 检查把"每张印版都被送达"报成一条失败并说明原因，跳过各自的落墨断言）。重启一次即可。
 - **顶栏标题的截断是外壳行为**，截断点是外壳写死的：`ConversationRoot.module.css` 的 `.crumb` 上 `max-width: 220px` + `text-overflow: ellipsis`（实测：标题 12 字时 184px 不截断；一超过 220px 就截，且**与窗口宽度无关**，窗口 1304px 时同样在 220px 截）。皮肤只加了 `///` 前缀，它是标题元素**行内内容**的一部分，因此**占用那 220px 里的约 33px**（18px 字号 + 0.2em 间距）—— 也就是标题实际能用的宽度从 220px 降到约 179px。这是前缀的代价，不是 bug；嫌标题显示太短可以缩前缀或去掉（改一行），但"长标题会不全"本身不是皮肤造成的。
