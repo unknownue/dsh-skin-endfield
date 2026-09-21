@@ -515,6 +515,26 @@ await check('decor does not fight the theme with !important', () => {
   return 'no !important'
 })
 
+// The tool-block banner prefix is a LABEL treatment, so it belongs on the banner
+// rows only. The terminal block is excluded on purpose: its first row is the
+// shell's own RUN HEADER (run-state label + state dot + "$ cwd command"), and a
+// "//" there lands immediately left of that indicator and reads as a competing
+// state marker. Pinned here because the live check cannot see a real terminal
+// block without running a command in a session.
+await check('banner prefix covers read/search/diff/web but not the terminal run header', () => {
+  const sheet = styles.map((s) => s.textContent ?? '').join('\n').replace(/\/\*[\s\S]*?\*\//g, '')
+  const rules = [...sheet.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(
+    (m) => /--endfield-prefix/.test(m[2]) && /first-child/.test(m[1]),
+  )
+  assert(rules.length === 1, `expected exactly one banner-prefix rule, found ${rules.length}`)
+  const selector = rules[0][1].replace(/\s+/g, ' ').trim()
+  assert(!/data-terminal/.test(selector), `the terminal run header must not carry the // prefix: ${selector}`)
+  for (const block of ['data-read', 'data-search', 'data-diff', 'data-web']) {
+    assert(selector.includes(block), `banner prefix no longer covers ${block}: ${selector}`)
+  }
+  return 'terminal run header excluded, banner rows keep //'
+})
+
 // The decor stylesheet is one TS template literal, so a backtick typed inside a
 // comment closes the literal early and tsdown fails with "Cannot assign to this
 // expression" pointing at the line AFTER the real mistake. That cost several

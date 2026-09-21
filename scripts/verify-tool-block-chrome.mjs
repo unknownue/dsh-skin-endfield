@@ -82,9 +82,17 @@ try {
     check(px(b.afterBorderBottom) === 2 && px(b.afterBorderRight) === 2, `::after edges bottom=${b.afterBorderBottom} right=${b.afterBorderRight}`)
     // getComputedStyle serialises a content string with its quotes: `"//"`.
     // Strip them before comparing, or the assertion fails on a correct rule.
+    // The banner rows (read / diff) keep the // marker. The TERMINAL block must
+    // NOT have one: its first row is the shell's own run header, which already
+    // carries the state dot + run-state label there. `none` on a banner is also
+    // legal -- that is the labelPrefix setting turned off.
     const unquote = (v) => (typeof v === 'string' ? v.replace(/^"|"$/g, '') : v)
     const prefix = unquote(b.headerPrefix)
-    check(prefix === '//' || prefix === 'none', `header prefix content=${JSON.stringify(b.headerPrefix)}`)
+    if (b.label === 'terminal') {
+      check(prefix === 'none', `run header carries no prefix (content=${JSON.stringify(b.headerPrefix)})`)
+    } else {
+      check(prefix === '//' || prefix === 'none', `banner prefix content=${JSON.stringify(b.headerPrefix)}`)
+    }
     // The header must NOT be force-uppercased: a first row is often a command
     // line or a path, and an earlier version shouted those (it has been removed).
     check(b.headerTransform === 'none', `header transform ${b.headerTransform} (must stay as typed)`)
