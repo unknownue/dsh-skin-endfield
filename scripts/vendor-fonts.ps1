@@ -1,7 +1,7 @@
 # Re-fetch the vendored OFL fonts used by the skin.
 #
-# The skin must work offline and must not redistribute the licensed game faces,
-# so it ships three open-source stand-ins (see assets/fonts/NOTICE.md). This
+# The skin ships three open-source stand-ins for its type roles (see assets/fonts/NOTICE.md),
+# so that it also works offline. This
 # script pulls only the `latin` unicode-range subset from the Google Fonts CSS
 # API, which is exactly what the browser would have downloaded anyway.
 #

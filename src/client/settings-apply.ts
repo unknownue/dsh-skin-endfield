@@ -133,11 +133,10 @@ export const DECAL_SCALE_VAR = '--endfield-decal-scale'
 /**
  * Which plate prints, as one class per plate.
  *
- * The shipped plate is the CSS default; the official ones are local conversions of artwork the
- * user supplies (they live in the gitignored `assets/logo/local/`, see make-official-plates), so
- * the class names carry the choice and the stylesheet carries the URL. Exactly one is armed at a
- * time, and only while the decal rendering is the one selected. The names themselves live in
- * `settings.ts`, because the live check arms them by hand too.
+ * The page mark is the CSS default; the other three are alternatives, so the class names carry the
+ * choice and the stylesheet carries the URL. Exactly one is armed at a time, and only while the
+ * decal rendering is the one selected. The names themselves live in `settings.ts`, because the
+ * live check arms them by hand too.
  */
 export { DECAL_PLATE_CLASSES, decalPlateClass }
 
@@ -218,9 +217,9 @@ export function applySkinSettings(
   // half-armed, and switching style is one idempotent call rather than a remove-then-add.
   root.classList.toggle(MARK_DECAL_CLASS, settings.mark && settings.markStyle === 'decal')
   root.classList.toggle(MARK_TEXT_CLASS, settings.mark && settings.markStyle === 'text')
-  // One plate class at a time: the shipped plate (which needs none — it is the CSS default) or
-  // one local official conversion. Armed only while the decal is the rendering in use, so the
-  // plate choice cannot leak into the wordmark's rule.
+  // One plate class at a time: the page mark (which needs none — it is the CSS default) or one of
+  // the alternatives. Armed only while the decal is the rendering in use, so the plate choice
+  // cannot leak into the wordmark's rule.
   for (const plate of DECAL_PLATES) {
     root.classList.toggle(decalPlateClass(plate), settings.mark && settings.markStyle === 'decal' && settings.decalPlate === plate)
   }

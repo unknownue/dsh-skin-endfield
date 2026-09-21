@@ -188,10 +188,10 @@ export const DECAL_ASPECT_CSS = '624 / 113'
  * The plate set: three drawings that ship with the skin, plus the mark they hang from.
  *
  * All of them are authored in this repository (`assets/logo/*.svg`) and rendered to PNG by
- * `node scripts/make-decal.mjs --svg ... --height ...`, so they are covered by the same licence as
- * the code and need no per-file notice. They differ in composition, not in subject: the page mark
- * (`endfield-decal.svg`) is a full lockup, the wordmark is the lettering alone, the badge is the
- * stamp, and the lockup composes badge and wordmark as two background layers.
+ * `node scripts/make-decal.mjs --svg ... --height ...`. They differ in composition, not in
+ * subject: the page mark (`endfield-decal.svg`) is a full lockup, the wordmark is the lettering
+ * alone, the badge is the stamp, and the lockup composes badge and wordmark as two background
+ * layers.
  */
 export const PLATE_DIR = 'plates'
 export const PLATES = {

@@ -9,7 +9,6 @@
 - 游戏主字体为 **HarmonyOS Sans**（标题 / 正文 / logo 一概使用），但标题画面那枚 logo **本身是定制字**，公开渠道没有字型规格（字重/字宽/字距/单字特征均无法核实）。
   - 来源：[GameFontLibrary — Arknights: Endfield](https://www.gamefontlibrary.com/games/arknights%3A-endfield)、[r/arknights 全字体整理贴](https://www.reddit.com/r/arknights/comments/1ugoi1b/all_the_fonts_used_in_arknights_and_arknights/)
   - 另有社区字体识别称官网用 Novecento Sans + Gilroy —— **未经证实**，且那可能是站点/UI 文字而非字标：[r/Endfield](https://www.reddit.com/r/Endfield/comments/1rzgaur/can_someone_help_me_identify_what_type_of_font/)
-- USPTO 案卷把该商标按**风格化图形**（非标准字符）处理：[office action 79448196](https://tmng-al.uspto.gov/resting2/api/casedoc/cms/case/79448196/office-action/OfficeAction8480337.pdf)
 - ⇒ 本皮肤的做法：**用仓库自带的 OFL 字体（Michroma）排字**。宽体几何 + 大字距，是"同一种语气"而不是"同一个字形"。
 
 ## 2. 锁定组合（lockup）
@@ -37,7 +36,7 @@
 ## 5. 颜色与单色
 
 - **没有**公开的品牌规范或媒体包规定单色用法（未找到）。
-- 官方分发的图稿本身是**单色平面矢量**（Commons 以 PD-textlogo 收录，理由为"简单几何形状或文字"）：[Arknights_Endfield_logo.svg](https://commons.wikimedia.org/wiki/File:Arknights_Endfield_logo.svg)；社区 Steam 图库里也有 "White Logo" 变体：[SteamGridDB](https://www.steamgriddb.com/game/5495879/logos)。
+- 官方分发的图稿是**单色平面矢量**，社区图库里也有 "White Logo" 变体 —— 也就是说"单色使用"在这个品牌里本来就是常态。
 - 游戏内的"水印/压印"用法**未证实**。
 - ⇒ 因此**灰度水贴**是皮肤自己的取舍（把印版做成单墨色 R=G=B，由皮肤用 `opacity` 决定浓淡），而不是"还原某个官方单色规范"。
 

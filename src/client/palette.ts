@@ -300,9 +300,9 @@ export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
  * plain rule wins — no `!important` needed. The host half serves the vendored
  * faces from `/skin-endfield/fonts/`.
  *
- * The `local()` source comes first on purpose: a machine that happens to have
- * the (commercially licensed) game faces installed gets them, everyone else
- * gets the open-source stand-ins.
+ * The `local()` source comes first on purpose: a machine that happens to have a
+ * face installed under the same family name gets it, everyone else gets the
+ * open-source stand-ins that ship here.
  *
  * ── why the two font variables are scoped declarations ──────────────────────
  * `dsh-font` (a third-party plugin this profile ships) restyles the GUI by

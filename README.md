@@ -588,7 +588,6 @@ assets/logo/                皮肤自己的印版：3 个 SVG 源 + 生成的 4 
 - 皮肤本体自带的东西，要么是本仓库自己画的，要么是开源的：`assets/logo/` 的四张印版由 `assets/logo/*.svg` 渲染（几何构件 + OFL 字体排版），`assets/fonts/` 是三个 OFL 字体（Jost / Michroma / JetBrains Mono），作为商业字体的**角色替代**。
 - 每个 `@font-face` 先声明 `local(...)`：装了原版字体就用原版，否则静默回落到开源替代。
 - `docs/design-reference/` 与 `assets/screenshots|ui-primitives|in-game-frames/` 是**设计研究引用**；宿主半边只路由 `assets/fonts/` 与 `assets/logo/`，这些目录不在任何路由下。
-- 本项目与鹰角网络、DeepSeek 均无关联。
 
 ## 已知限制
 

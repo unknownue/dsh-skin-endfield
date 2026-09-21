@@ -13,10 +13,9 @@
  *      not assumed, because the whole point of a decal is that it carries no colour of its own
  *      (it is the theme that decides how it reads, through opacity on the canvas beneath it).
  *
- * It also converts other people's artwork into a decal, which is the other half of the job:
- * `--source` takes any image (a PNG of a logo you are allowed to use, a scan, a screenshot),
- * takes its LUMINANCE as the alpha channel and re-inks it in the plate grey, so an image that
- * was artwork on a dark background becomes a 217-grey decal that drops onto the canvas.
+ * --source takes any image (a PNG, a scan, a screenshot), takes its LUMINANCE as the alpha
+ * channel and re-inks it in the plate grey, so an image that was artwork on a dark ground
+ * becomes a 217-grey decal that drops onto the canvas.
  *
  * Usage:
  *   node scripts/make-decal.mjs                       # re-render the lockup -> assets/logo/
@@ -165,8 +164,8 @@ async function writePreview(evaluate, dataUrl, label, outPath) {
  * browser-version detail away from silently producing a white-backed plate, and a white box
  * behind the decal is exactly the failure this asset must not have. So the plate is rendered
  * white-on-black and then re-inked in the page: luminance becomes alpha, the ink becomes the
- * plate grey. That is the same transform the `--source` mode applies to other people's
- * artwork, which means one code path produces both, and the ink is one colour by construction.
+ * plate grey. That is the same transform the `--source` mode applies to a supplied image, which
+ * means one code path produces both, and the ink is one colour by construction.
  */
 async function renderLockup(args) {
   const sourceSvg = args.svg ? resolve(args.svg) : SOURCE_SVG
@@ -352,7 +351,7 @@ async function convertSource(args) {
       /**
        * The source's own statistics, read before anything is converted.
        *
-       * Picking the polarity by eye is how the first pass at the official badge came out as
+       * Picking the polarity by eye is how the first pass at a cut-out mark came out as
        * contour outlines: the artwork is black line work on a WHITE ground, so "luminance ->
        * alpha" made the paper the ink. The corner and the mean settle it: an opaque white
        * corner means the polarity is dark (the ground must go), a transparent corner means the
@@ -386,10 +385,10 @@ async function convertSource(args) {
        *   luma-alpha  — luminance IS the ink (white lettering on black, a screenshot, a scan).
        *
        * normalize then rescales alpha so the brightest painted pixel reaches full strength.
-       * It exists because some official files are ALREADY watermarks: the ENDFIELD wordmark
-       * ships at about 33% alpha, which multiplied by the decal's own 0.12 opacity would be
-       * invisible. Normalising keeps the relative levels (the hatch stays lighter than the
-       * letter body) while putting the plate back at full ink.
+       * It exists because some sources are ALREADY watermarks: a mark that ships at low alpha
+       * would be multiplied by the decal's own 0.12 opacity and disappear. Normalising keeps the
+       * relative levels (the screen stays lighter than the letter body) while putting the plate
+       * back at full ink.
        */
       const inkMode = ${JSON.stringify(args.inkMode ?? 'luma-alpha')}
       const normalize = ${args.normalize === true}

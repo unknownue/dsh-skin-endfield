@@ -2,13 +2,13 @@
 
 The skin ships three open-source faces under the SIL Open Font License 1.1.
 They are **stand-ins**, chosen to reproduce the *role* each face plays in the
-official Endfield interface — not copies of the licensed originals.
+Endfield interface.
 
-| File | Family | Role in the skin | Stands in for |
-|------|--------|------------------|---------------|
-| `jost-latin.woff2` | Jost (variable 300–700) | UI / body text | Gilroy |
-| `michroma-latin.woff2` | Michroma (400) | wide display, numerals, counters | Novecentosanswide |
-| `jetbrains-mono-latin.woff2` | JetBrains Mono (variable 400–700) | code, terminal, tabular figures | (no official equivalent) |
+| File | Family | Role in the skin | Design reference |
+|------|--------|------------------|------------------|
+| `jost-latin.woff2` | Jost (variable 300–700) | UI / body text | the game's UI/body face |
+| `michroma-latin.woff2` | Michroma (400) | wide display, numerals, counters | the game's wide display face |
+| `jetbrains-mono-latin.woff2` | JetBrains Mono (variable 400–700) | code, terminal, tabular figures | — |
 
 ## Provenance
 
@@ -37,7 +37,5 @@ works offline.
 ## Why `local()` comes first
 
 Each `@font-face` lists `local("Jost")` before the vendored file. If a machine
-happens to have the *real* game faces installed under the same family name, the
-browser uses them and the interface matches the source material exactly; every
-other machine silently falls back to the stand-in. Nothing licensed is
-redistributed either way.
+happens to have a face installed under the same family name, the browser uses it;
+every other machine falls back to the vendored stand-in.

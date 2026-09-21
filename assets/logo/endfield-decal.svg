@@ -1,13 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="140" viewBox="0 0 720 140">
   <!--
-    The Endfield-style page decal: an ORIGINAL mark drawn in the game's design language
-    (industrial signage + engineering drawing), not a copy of Hypergryph's artwork.
+    The page decal: the skin's mark in the game's design language (industrial signage +
+    engineering drawing).
 
     Rules this file obeys, because the shipped asset is generated from it:
       * every colour is a pure grey (R = G = B) -- the decal is a monochrome printing plate,
         and scripts/make-decal.mjs fails the build if a rendered pixel is tinted;
-      * type is set in the vendored open-source faces (Michroma / JetBrains Mono, OFL), so the
-        rasterised PNG carries no dependency on a commercial logotype;
+      * type is set in the vendored open-source faces (Michroma / JetBrains Mono, OFL);
       * the emblem is constructed here from primitives (an inverted triangle, a 45 degree
         hatch, a nested triangle, a diamond) -- the same vocabulary the skin's chrome uses.
 
