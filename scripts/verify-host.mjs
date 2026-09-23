@@ -289,20 +289,25 @@ await check('no settings provider -> no namespace registered, no throw', () => {
   return 'namespace left unregistered'
 })
 
-await check('a composed settings provider gets the namespace and schema', () => {
+await check('a composed settings provider gets the presentation policy', () => {
+  // 0.1.7：插件导出 `Config`（字段标 `.volatile()`），entry id 即 namespace，
+  // 用 `configure({ auto: false })` 声明自己渲染设置页。`register` 已删除。
+  const configured = []
   const withSettings = {
     ...host,
     settings: {
-      register(ns, schema) { registered.push({ ns, schema }) },
-      get() { return undefined },
+      configure(presentation, owner) {
+        configured.push({ presentation, owner })
+        return () => {}
+      },
     },
   }
   module.apply(withSettings)
-  assert(registered.length === 1, `expected 1 registration, got ${registered.length}`)
-  const [entry] = registered
-  assert(entry.ns === 'dsh-skin-endfield', `unexpected namespace: ${entry.ns}`)
-  assert(entry.schema !== undefined && entry.schema !== null, 'schema not passed')
-  return `${entry.ns} registered`
+  assert(configured.length === 1, `expected 1 configure call, got ${configured.length}`)
+  assert(configured[0].presentation?.auto === false,
+    'the skin renders its own settings page, so auto must be false')
+  assert(module.Config !== undefined, 'the host half exports no Config, so the entry has no volatile fields')
+  return 'configure({ auto: false }) called, Config exported'
 })
 
 await check('disposers remove the route', () => {

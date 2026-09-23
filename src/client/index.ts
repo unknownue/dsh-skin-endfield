@@ -34,11 +34,15 @@ export const name = 'dsh-skin-endfield'
 
 /**
  * Cordis services this bundle waits for. `slots` is the ledger the Skin settings
- * page registers into and `settingsScope` is the durable namespace binding;
- * `theme` provides `ctx.theme`. All three are shipped by the shell's own
- * composition, so listing them is a wiring statement, not a new dependency.
+ * page registers into, `configForms` is the settings-form service the palette
+ * reads its stored values from, and `theme` provides `ctx.theme`. All three are
+ * shipped by the shell's own composition, so listing them is a wiring statement,
+ * not a new dependency.
+ *
+ * 0.1.7 用 `configForms` 取代了已删除的 `settingsScope`；名字不换的话这个 entry
+ * 会永远 pending，而一个 pending 的 client entry 就让整个 web boot 拒绝挂载。
  */
-export const inject = ['theme', 'slots', 'settingsScope']
+export const inject = ['theme', 'slots', 'configForms']
 
 const PLUGIN_ID = 'dsh-skin-endfield'
 
@@ -72,11 +76,10 @@ export function apply(ctx: ClientContext): void {
   // is created before the page so the first paint already carries the stored
   // colours instead of flashing the defaults.
   //
-  // The scope binding is guarded: a deployment without a settings service must
-  // still render the skin, so that case applies the defaults once.
-  const scope = ctx.settingsScope?.bind({ namespace: SKIN_SETTINGS_NAMESPACE }) as
-    | import('../types.ts').SettingsScope
-    | undefined
+  // The form is optional: a deployment without a settings service must still
+  // render the skin, so that case applies the defaults once. `get()` returns the
+  // entry's form by Host entry id, which is also the settings namespace.
+  const scope = ctx.configForms?.get(SKIN_SETTINGS_NAMESPACE)
 
   const applySection = (section: unknown) => applySkinSettings(section, ctx.theme)
 

@@ -15,6 +15,11 @@ declare module '@deepseek-ai/schemastery' {
   /** A schema node; the real one is callable and carries validation metadata. */
   interface SchemaNode<T = unknown> {
     default(value: T): SchemaNode<T>
+    /**
+     * Mark the field as settings-backed (dsh 0.1.7): `dsh-settings` refuses to write
+     * an entry whose schema has no volatile form, and only these fields persist.
+     */
+    volatile(): SchemaNode<T>
   }
 
   interface ObjectSchema<T> {

@@ -28,16 +28,24 @@ export interface ThemeRuntime {
  * Subset of the Cordis context available inside a browser-half `apply(ctx)`.
  * `effect` returns a disposer registration; the harness calls it on unload/HMR.
  *
- * `slots` and `settingsScope` resolve only because the client half declares them
+ * `slots` and `configForms` resolve only because the client half declares them
  * in `inject`; `@deepseek-ai/dsh-client-modules` rejects any dynamic bundle that
  * requires a package outside the platform baseline, so the slot ledger and the
- * settings scope are reached as *services* and never as `require()` calls.
+ * settings form are reached as *services* and never as `require()` calls.
  */
 export interface ClientContext {
   theme: ThemeRuntime
   effect(callback: () => void | (() => void), label?: string): void
   slots?: SlotService
-  settingsScope?: { bind(spec: unknown): SettingsScope }
+  /**
+   * The shell's settings-form service (`dsh-client-ui-settings`).
+   *
+   * 0.1.7 用 `configForms.get(entryId)` 取代了已删除的 `settingsScope.bind()`；
+   * entry id 即 settings namespace，返回对象仍提供 getSnapshot/subscribe/set。
+   * 注意 `settingsScope` 留在 `inject` 里会让 client entry 永远 pending，
+   * 而一个 pending entry 就让整页拒绝挂载。
+   */
+  configForms?: { get(entryId: string): SettingsScope }
   logger?: {
     info?(message: string): void
     warn?(message: string): void
@@ -66,7 +74,8 @@ export interface SlotService {
  * edit to the settings document — so the page and the painted CSS stay in step.
  */
 export interface SettingsScope {
-  getSnapshot(): { value: unknown; writable?: boolean }
+  /** `value` is undefined until `status` is `ready` — the "use defaults" case. */
+  getSnapshot(): { value: unknown; writable?: boolean; status?: string }
   subscribe(listener: () => void): () => void
   set(path: string, value: unknown): unknown
 }
@@ -87,11 +96,16 @@ export interface HostContext {
    * nested `inject(["settings"], ...)` callback — reading `ctx.settings` outside
    * that inject throws rather than yielding `undefined`, so the optionality is
    * expressed by the inject, not by a check on the value.
+   *
+   * 0.1.7 只剩 `configure`：可持久化字段由插件导出的 `Config`（字段标 `.volatile()`）
+   * 声明，entry id 即 namespace。
    */
-  settings?: {
-    register(name: string, schema: unknown): unknown
-    get(name: string): unknown
+  settings: {
+    /** Declare this instance's settings-page policy; `auto: false` means "I render my own page". */
+    configure(presentation: { auto?: boolean }, owner?: unknown): () => void
   }
+  /** This plugin instance's fiber, used as the `configure` owner. */
+  fiber?: unknown
   /** Run `callback` on a child context once every named service is composed. */
   inject(names: string[], callback: (ctx: HostContext) => void): void
   effect?(callback: () => void | (() => void), label?: string): void

@@ -27,7 +27,6 @@ import {
   MARK_ORIENTATIONS,
   MARK_PLATES,
   SKIN_SETTINGS_DEFAULTS,
-  SKIN_SETTINGS_NAMESPACE,
   UPLOAD_MAX_BYTES,
   UPLOAD_TYPES,
   USER_DIR_NAME,
@@ -60,23 +59,43 @@ export const inject = ['webServer']
  * section and compares every field with that constant, so the two cannot drift
  * silently — a split would make a fresh install look different from a stored one.
  */
-export const SkinSettingsSchema = z.object({
-  accent: z.string().default(SKIN_SETTINGS_DEFAULTS.accent),
-  tint: z.string().default(SKIN_SETTINGS_DEFAULTS.tint),
-  surfaceFill: z.boolean().default(SKIN_SETTINGS_DEFAULTS.surfaceFill),
-  bloom: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.bloom),
-  cornerRadius: z.number().min(0).max(24).default(SKIN_SETTINGS_DEFAULTS.cornerRadius),
-  labelPrefix: z.boolean().default(SKIN_SETTINGS_DEFAULTS.labelPrefix),
-  headerLight: z.boolean().default(SKIN_SETTINGS_DEFAULTS.headerLight),
-  mark: z.boolean().default(SKIN_SETTINGS_DEFAULTS.mark),
-  dotBlock: z.boolean().default(SKIN_SETTINGS_DEFAULTS.dotBlock),
-  markOrientation: z.union(MARK_ORIENTATIONS.map((value) => z.const(value))).default(SKIN_SETTINGS_DEFAULTS.markOrientation),
-  markAnchor: z.union(MARK_ANCHORS.map((value) => z.const(value))).default(SKIN_SETTINGS_DEFAULTS.markAnchor),
-  markOpacity: z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.markOpacity),
-  markScale: z.number().min(0.4).max(1.8).default(SKIN_SETTINGS_DEFAULTS.markScale),
-  markPlate: z.union(MARK_PLATES.map((plate) => z.const(plate))).default(SKIN_SETTINGS_DEFAULTS.markPlate),
-  markImage: z.string().default(SKIN_SETTINGS_DEFAULTS.markImage),
-})
+export const SkinSettingsSchema = z.object(skinFields(false))
+
+/**
+ * The settings-backed schema the Host persists.
+ *
+ * dsh 0.1.7 reads an entry's persistable fields off the plugin's own exported
+ * `Config`, and rejects any entry whose schema has no volatile form. `.volatile()`
+ * also changes what `schema({})` resolves to outside a Host (an empty document
+ * yields `{}`, not the defaults), which is why the non-volatile
+ * `SkinSettingsSchema` above still exists for the parity check.
+ *
+ * Both come from the same field map, so they cannot drift.
+ */
+export const Config = z.object(skinFields(true))
+
+/** The skin's fields, spelled once. `volatile` decides whether the Host persists them. */
+function skinFields(volatile: boolean) {
+  const field = <T>(node: T): T =>
+    volatile ? (node as unknown as { volatile(): T }).volatile() : node
+  return {
+    accent: field(z.string().default(SKIN_SETTINGS_DEFAULTS.accent)),
+    tint: field(z.string().default(SKIN_SETTINGS_DEFAULTS.tint)),
+    surfaceFill: field(z.boolean().default(SKIN_SETTINGS_DEFAULTS.surfaceFill)),
+    bloom: field(z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.bloom)),
+    cornerRadius: field(z.number().min(0).max(24).default(SKIN_SETTINGS_DEFAULTS.cornerRadius)),
+    labelPrefix: field(z.boolean().default(SKIN_SETTINGS_DEFAULTS.labelPrefix)),
+    headerLight: field(z.boolean().default(SKIN_SETTINGS_DEFAULTS.headerLight)),
+    mark: field(z.boolean().default(SKIN_SETTINGS_DEFAULTS.mark)),
+    dotBlock: field(z.boolean().default(SKIN_SETTINGS_DEFAULTS.dotBlock)),
+    markOrientation: field(z.union(MARK_ORIENTATIONS.map((value) => z.const(value))).default(SKIN_SETTINGS_DEFAULTS.markOrientation)),
+    markAnchor: field(z.union(MARK_ANCHORS.map((value) => z.const(value))).default(SKIN_SETTINGS_DEFAULTS.markAnchor)),
+    markOpacity: field(z.number().min(0).max(1).default(SKIN_SETTINGS_DEFAULTS.markOpacity)),
+    markScale: field(z.number().min(0.4).max(1.8).default(SKIN_SETTINGS_DEFAULTS.markScale)),
+    markPlate: field(z.union(MARK_PLATES.map((plate) => z.const(plate))).default(SKIN_SETTINGS_DEFAULTS.markPlate)),
+    markImage: field(z.string().default(SKIN_SETTINGS_DEFAULTS.markImage)),
+  }
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 /** `lib/` -> package root; fonts and the decal plate are shipped under `assets/`. */
@@ -214,37 +233,27 @@ function serveFrom(dir: string, route: string, rawUrl: string | undefined, res: 
 }
 
 /**
- * Register the durable settings namespace when a settings service is composed.
+ * Declare this plugin's settings presentation.
  *
- * `settings` is reachable only through a nested `inject`: reading an undeclared
- * service off the context does not yield `undefined`, it throws
- * (`cannot get property "settings" without inject`), so a defensive
- * `if (ctx.settings === undefined)` is itself the crash. The nested inject is
- * what makes the service optional in the way this plugin wants — the callback
- * runs once a provider is composed and simply never runs otherwise, leaving the
- * skin on its built-in defaults.
+ * dsh 0.1.7 删掉了 `settings.register(namespace, schema)`：现在由插件导出 `Config`
+ * （字段标 `.volatile()`，entry id 即 namespace），再用 `configure({ auto: false })`
+ * 说明这一页自己渲染 —— 与 `dsh-client-ui-theme` 同一写法。
  *
- * This is the pattern the harness's own `dsh-client-ui-theme` uses for the same
- * seam (`ctx.inject(["settings"], settingsCtx => settingsCtx.settings.register(...))`).
+ * `settings` 只能经嵌套 `inject` 取（直接读未声明的服务会抛
+ * `cannot get property "settings" without inject`），这也让它是可选的：
+ * 没有 provider 时回调不跑，皮肤照旧用内置默认值。
  */
-function registerSkinSettings(ctx: HostContext): void {
+function configureSkinSettings(ctx: HostContext): void {
   ctx.inject(['settings'], (settingsCtx) => {
-    try {
-      settingsCtx.settings?.register(SKIN_SETTINGS_NAMESPACE, SkinSettingsSchema)
-      settingsCtx.logger?.info?.(`dsh-skin-endfield: settings namespace "${SKIN_SETTINGS_NAMESPACE}" registered`)
-    } catch (error) {
-      // A schema the Host refuses must not take the whole plugin (and with it the
-      // font route and the skin) down; report it and keep running on defaults.
-      settingsCtx.logger?.warn?.(
-        `dsh-skin-endfield: settings registration failed (${error instanceof Error ? error.message : String(error)}) — `
-        + 'the skin continues on its built-in defaults.',
-      )
-    }
+    settingsCtx.effect?.(
+      () => settingsCtx.settings.configure({ auto: false }, ctx.fiber),
+      'dsh-skin-endfield: settings presentation',
+    )
   })
 }
 
 export function apply(ctx: HostContext): void {
-  registerSkinSettings(ctx)
+  configureSkinSettings(ctx)
 
   if (ctx.webServer === undefined) {
     ctx.logger?.warn?.(

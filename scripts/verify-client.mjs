@@ -662,7 +662,7 @@ await check('effects dispose cleanly (unload/HMR leaves no stylesheet behind)', 
  * subscribe -> set -> notify) and asserts the tokens moved with it, in both
  * directions, and that the ink on an accent fill was derived rather than assumed.
  */
-await check('a changed accent re-lays the token layer (theme path follows settings)', () => {
+await check('a changed accent re-lays the token layer (theme path follows settings)', async () => {
   const boundTo = []
   let listener = null
   let snapshot = { value: { accent: '#4D6BFE' } }
@@ -676,7 +676,9 @@ await check('a changed accent re-lays the token layer (theme path follows settin
 
   const scopedCtx = {
     theme: themeStub,
-    settingsScope: { bind(spec) { boundTo.push(spec.namespace); return scope } },
+    // 0.1.7 的接缝：`configForms.get(entryId)`（entry id 即 namespace），
+    // 取代了已删除的 `settingsScope.bind({ namespace })`。
+    configForms: { get(id) { boundTo.push(id); return scope } },
     effect(callback, label) {
       effects.push({ label })
       const disposer = callback()
@@ -685,8 +687,10 @@ await check('a changed accent re-lays the token layer (theme path follows settin
   }
   registration.factory(requireStub).apply(scopedCtx)
 
-  assert(overrideCalls.length > callCountBefore, 'applying with a settings scope laid no token layer')
-  assert(boundTo.length === 1 && boundTo[0] === PACKAGE_NAME, `bound namespace is ${JSON.stringify(boundTo)}`)
+  const { SKIN_SETTINGS_NAMESPACE } = await import(pathToFileURL(join(ROOT, 'src', 'settings.ts')).href)
+  assert(overrideCalls.length > callCountBefore, 'applying with a settings form laid no token layer')
+  assert(boundTo.length === 1 && boundTo[0] === SKIN_SETTINGS_NAMESPACE,
+    `bound namespace is ${JSON.stringify(boundTo)}, expected "${SKIN_SETTINGS_NAMESPACE}"`)
 
   const before = tokensOf()
   assert(before['--dsw-alias-state-business-primary']?.dark === '#B4C0FF',

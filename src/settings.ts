@@ -1,16 +1,24 @@
 /**
  * Durable settings schema for the skin, shared by both halves.
  *
- * The Host half registers this schema as the namespace that backs the Skin
- * settings page; the browser half reads the same resolved section through
- * `ctx.settingsScope`, so there is exactly one definition of the shape and the
- * default values cannot drift between the two.
+ * The Host half exports it as `Config` (every field `.volatile()`), which is what
+ * makes the entry settings-backed in dsh 0.1.7; the browser half reads the same
+ * resolved section through `ctx.configForms.get(namespace)`. One definition, so
+ * the two cannot drift.
  *
  * `settings` is a plain module with no dependencies so the browser bundle can
  * import it without pulling anything Node-only into the client closure.
  */
 
-export const SKIN_SETTINGS_NAMESPACE = 'dsh-skin-endfield'
+/**
+ * The Host settings namespace this skin owns.
+ *
+ * Must equal the profile entry id (dsh-settings keys sections by `entry.options.id`,
+ * and the bundle patch declares this plugin's row as `- id: skin-endfield`).
+ * The old `dsh-skin-endfield` value was the package name, which only worked under
+ * 0.1.6's section-merge document.
+ */
+export const SKIN_SETTINGS_NAMESPACE = 'skin-endfield'
 
 /**
  * The values the skin ships with. Any schema default below must match one.
