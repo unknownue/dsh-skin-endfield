@@ -76,7 +76,9 @@
     "inspect:bars": "node scripts/inspect-bars.mjs",
     "verify:topbars": "node scripts/verify-top-bars-live.mjs",
     "verify:topbar-panels": "node scripts/verify-topbar-panels-live.mjs",
+    "verify:file-preview": "node scripts/verify-file-preview-live.mjs",
     "probe:topbar-panels": "node scripts/probe-topbar-panels.mjs",
+    "probe:hover-surfaces": "node scripts/probe-hover-surfaces.mjs",
     "verify:header-tabs": "node scripts/verify-header-tabs-live.mjs"
   },
   "keywords": [

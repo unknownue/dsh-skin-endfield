@@ -49,6 +49,30 @@ const READ_SURFACE = `(sel) => {
     afterBorder: after.borderRightWidth + '/' + after.borderBottomWidth + ' ' + after.borderRightColor,
     overflow: cs.overflow, overscroll: cs.overscrollBehaviorY, gutter: cs.scrollbarGutter,
     menuToken: root.getPropertyValue('--dsw-specific-menu').trim(),
+    l1Token: root.getPropertyValue('--dsw-alias-border-l1').trim(),
+    l3Token: root.getPropertyValue('--dsw-alias-border-l3').trim(),
+    radiusLg: cs.getPropertyValue('--dsw-radius-lg').trim(),
+    radiusSm: cs.getPropertyValue('--dsw-radius-sm').trim(),
+  }
+}`
+
+/** The same reading, for an element already in hand (the job list is found by structure). */
+const READ_EL = `(el) => {
+  if (!el) return null
+  const cs = getComputedStyle(el)
+  const before = getComputedStyle(el, '::before')
+  const after = getComputedStyle(el, '::after')
+  const r = el.getBoundingClientRect()
+  const root = getComputedStyle(document.body)
+  return {
+    box: [Math.round(r.width), Math.round(r.height)],
+    fill: cs.backgroundColor, radius: cs.borderTopLeftRadius, shadow: cs.boxShadow,
+    borderTop: cs.borderTopWidth + ' ' + cs.borderTopColor,
+    beforeFill: before.backgroundColor, beforeBorder: before.borderTopWidth + '/' + before.borderLeftWidth + ' ' + before.borderTopColor,
+    afterBorder: after.borderRightWidth + '/' + after.borderBottomWidth + ' ' + after.borderRightColor,
+    overflow: cs.overflow, overscroll: cs.overscrollBehaviorY, gutter: cs.scrollbarGutter,
+    menuToken: root.getPropertyValue('--dsw-specific-menu').trim(),
+    l1Token: root.getPropertyValue('--dsw-alias-border-l1').trim(),
     l3Token: root.getPropertyValue('--dsw-alias-border-l3').trim(),
     radiusLg: cs.getPropertyValue('--dsw-radius-lg').trim(),
     radiusSm: cs.getPropertyValue('--dsw-radius-sm').trim(),
@@ -369,8 +393,158 @@ try {
     }
   }
 
+  // ── the background-job popover (19e) ───────────────────────────────────
+  console.log('\n=== the background-job popover ===')
+  const JOBS_HOOK = `button[aria-expanded]:not([aria-haspopup])`
+  let jobs = null
+  let jobsIdle = null
+  for (const i of rows) {
+    await cdp.evalIn(`(() => { const r = document.querySelectorAll('[class*=sessionRow]')[${i}]
+      if (r) r.click(); return !!r })()`)
+    await sleep(3200)
+    const at = await cdp.evalIn(`(() => {
+      const header = document.querySelector('header[class*="_header"]')
+      if (!header) return null
+      const b = header.querySelector(${JSON.stringify(JOBS_HOOK)})
+      if (!b) return null
+      const r = b.getBoundingClientRect()
+      const cs = getComputedStyle(b)
+      return { at: [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)],
+        box: [Math.round(r.width), Math.round(r.height)], top: Math.round(r.top),
+        shadow: cs.boxShadow, transform: cs.textTransform, expanded: b.getAttribute('aria-expanded'),
+        hookCount: header.querySelectorAll(${JSON.stringify(JOBS_HOOK)}).length,
+        expandedButtons: [...header.querySelectorAll('button[aria-expanded]')].map((x) => x.getAttribute('aria-haspopup')),
+        listsInHeader: header.querySelectorAll('ul').length,
+        listsOnPage: document.querySelectorAll('ul').length } })()`)
+    if (at === null) continue
+    await cdp.mouse('mouseMoved', 5, 880); await sleep(700)
+    jobsIdle = await cdp.evalIn(`(() => {
+      const b = document.querySelector('header[class*="_header"] ${JOBS_HOOK}')
+      const cs = getComputedStyle(b); const r = b.getBoundingClientRect()
+      return { shadow: cs.boxShadow, box: [Math.round(r.width), Math.round(r.height)], top: Math.round(r.top),
+        transform: cs.textTransform, expanded: b.getAttribute('aria-expanded') } })()`)
+    // It opens on CLICK (and dismisses on an outside pointer), so a hover would measure nothing.
+    await cdp.mouse('mouseMoved', at.at[0], at.at[1]); await sleep(400)
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: at.at[0], y: at.at[1], button: 'left', buttons: 1, clickCount: 1 })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.at[0], y: at.at[1], button: 'left', buttons: 0, clickCount: 1 })
+    await sleep(1800)
+    const dump = await cdp.evalIn(`(() => {
+      const read = ${READ_EL}
+      const header = document.querySelector('header[class*="_header"]')
+      const trigger = header.querySelector(${JSON.stringify(JOBS_HOOK)})
+      const wrapper = trigger.parentElement
+      const menu = wrapper.querySelector(':scope > ul')
+      const out = { hookCount: header.querySelectorAll('button[aria-expanded]:not([aria-haspopup]):not(ul *)').length,
+        hookCountLoose: header.querySelectorAll(${JSON.stringify(JOBS_HOOK)}).length,
+        haspopups: [...header.querySelectorAll('button[aria-expanded]')].map((x) => x.getAttribute('aria-haspopup')),
+        listsInHeader: header.querySelectorAll('ul').length, listsOnPage: document.querySelectorAll('ul').length,
+        anchored: header.querySelectorAll(':scope > ul').length,
+        wrapper: wrapper.tagName.toLowerCase(), wrapperCls: String(wrapper.className || '').slice(0, 40),
+        triggerNow: (() => { const cs = getComputedStyle(trigger); const r = trigger.getBoundingClientRect()
+          return { shadow: cs.boxShadow, box: [Math.round(r.width), Math.round(r.height)], top: Math.round(r.top),
+            expanded: trigger.getAttribute('aria-expanded'), radius: cs.borderTopLeftRadius } })(),
+        menu: menu ? read(menu) : null }
+      if (menu) {
+        const items = [...menu.querySelectorAll(':scope > li')]
+        const headers = items.map((li, index) => ({ li, index })).filter(({ li }) =>
+          li.getAttribute('aria-hidden') === 'true' || li.querySelector(':scope > button'))
+        out.sectionHeaders = headers.map(({ li, index }) => { const cs = getComputedStyle(li)
+          return { index, transform: cs.textTransform, tracking: cs.letterSpacing,
+            border: cs.borderTopWidth + ' ' + cs.borderTopColor,
+            ariaHidden: li.getAttribute('aria-hidden'), text: (li.textContent || '').trim().slice(0, 20) } })
+        // A job row's controls are only rendered for a LIVE job (a settled row is a static span),
+        // so both of these are legitimately absent when everything has finished.
+        const stop = menu.querySelector('[data-kill-state]')
+        out.stop = stop ? { border: getComputedStyle(stop).borderTopWidth + ' ' + getComputedStyle(stop).borderTopColor,
+          radius: getComputedStyle(stop).borderTopLeftRadius } : null
+        const chevron = [...menu.querySelectorAll('button > span')].find((s) => s.querySelector(':scope > svg'))
+        out.chevron = chevron ? { border: getComputedStyle(chevron).borderTopWidth + ' ' + getComputedStyle(chevron).borderTopColor,
+          radius: getComputedStyle(chevron).borderTopLeftRadius, box: (() => { const r = chevron.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)] })() } : null
+        out.rows = items.length
+        out.liveRows = menu.querySelectorAll('[data-kill-state]').length
+        // The leak this file found once: with the list open, every fold inside it also matched the
+        // loose trigger hook and drew the yellow line. Counted by the MARK itself (an inset shadow
+        // in the brand yellow), not by recall, and reported with the element that carries it.
+        out.popoverLeak = [...menu.querySelectorAll('button')]
+          .map((b) => ({ cls: String(b.className).slice(0, 30), shadow: getComputedStyle(b).boxShadow }))
+          .filter((entry) => /inset/.test(entry.shadow) && /255,\s*250,\s*0/.test(entry.shadow))
+      }
+      return out
+    })()`)
+    if (dump.menu === null) { note(`session row ${i}: the job popover did not open`); continue }
+    jobs = { ...dump, idle: jobsIdle, at }
+    break
+  }
+
+  if (jobs === null) {
+    note('no session in this sidebar showed a background-job trigger, so 19e did NOT run — that is a skip, not a pass')
+  } else {
+    const menu = jobs.menu
+    console.log(`  trigger idle=${JSON.stringify(jobsIdle)} open=${JSON.stringify(jobs.triggerNow)}`)
+    console.log(`  hook matches in the band: ${jobs.hookCount} (${jobs.hookCountLoose} without the list exclusion); other aria-expanded buttons carry ${JSON.stringify(jobs.haspopups)}`)
+    console.log(`  menu ${menu.box.join('x')} fill=${menu.fill} radius=${menu.radius} shadow=${menu.shadow} border=${menu.borderTop}`)
+    console.log(`     ::before border=${menu.beforeBorder}   ::after border=${menu.afterBorder}   radius family lg=${menu.radiusLg} sm=${menu.radiusSm}`)
+    console.log(`  lists in the band: ${jobs.listsInHeader} (on the page: ${jobs.listsOnPage}); section headers: ${JSON.stringify(jobs.sectionHeaders)}`)
+    console.log(`  stop=${JSON.stringify(jobs.stop)} chevron=${JSON.stringify(jobs.chevron)} rows=${jobs.rows}`)
+    writeFileSync(join(OUT, 'topbar-panels-jobs.json'), JSON.stringify(jobs, null, 2))
+    writeFileSync(join(OUT, 'skinned-jobs-menu.png'), Buffer.from(await cdp.screenshot(), 'base64'))
+
+    check(jobs.hookCount === 1,
+      `the job trigger is the band's only aria-expanded button without aria-haspopup (${jobs.hookCount} match; the open list's own folds are excluded)`,
+    )
+    check(jobs.popoverLeak.length === 0,
+      `no button inside the open list drew the trigger's yellow line (${JSON.stringify(jobs.popoverLeak)})`,
+    )
+    check(alphaOf(menu.fill) === 1 && sameColour(menu.fill, menu.menuToken),
+      `the list paints the palette's own opaque menu fill (${menu.fill} vs ${menu.menuToken})`)
+    check(menu.shadow === 'none', `the shell's elevation is gone (${menu.shadow})`)
+    check(menu.radius === '0px', `the list is square (${menu.radius})`)
+    check(parseFloat(menu.radiusLg) === 0 && parseFloat(menu.radiusSm) === 0,
+      `and the radius family is re-declared on it, so its rows and controls follow (lg=${menu.radiusLg} sm=${menu.radiusSm})`)
+    check(widthOf(menu.borderTop) === 1 && sameColour(colourIn(menu.borderTop), menu.l3Token),
+      `one hairline frames it, in the visible step (${menu.borderTop} vs ${menu.l3Token})`)
+    check(widthOf(menu.beforeBorder) === 2 && sameColour(colourIn(menu.beforeBorder), '#FFFA00')
+      && widthOf(menu.afterBorder) === 2 && sameColour(colourIn(menu.afterBorder), '#FFFA00'),
+      `both brackets are drawn on a list that has no role for section 6 (${menu.beforeBorder} / ${menu.afterBorder})`)
+    check(jobs.listsInHeader === 1,
+      `the list is the band's only list while it is open, which is what the anchor keys on (${jobs.listsInHeader})`)
+    check(jobs.idle.expanded === 'false' && jobs.triggerNow.expanded === 'true'
+      && jobs.triggerNow.box[1] === jobs.idle.box[1] && jobs.triggerNow.top === jobs.idle.top,
+      `the trigger keeps its box and position between closed and open (${jobs.idle.box} -> ${jobs.triggerNow.box}, top ${jobs.idle.top} -> ${jobs.triggerNow.top})`)
+    check(/inset/.test(jobs.triggerNow.shadow ?? '') && /2px/.test(jobs.triggerNow.shadow ?? ''),
+      `the open list is marked by the unit row's line (${jobs.triggerNow.shadow})`)
+    check(jobs.idle.transform === 'none',
+      `the trigger keeps its text case: its label is a live count, not a fixed label word (${jobs.idle.transform})`)
+    check((jobs.sectionHeaders ?? []).length > 0
+      && jobs.sectionHeaders.every((h) => h.transform === 'uppercase' && parseFloat(h.tracking) > 0),
+      `the list's section headers take the caption voice (${JSON.stringify(jobs.sectionHeaders?.map((h) => h.transform + ' ' + h.tracking))})`)
+    // The section rule is state-dependent: the list only HAS a running section when something is
+    // running, and the shell draws no rule above the first section. So the claim is "a header that
+    // is not the first carries the hairline, the first one does not" -- and when the list holds a
+    // single section the second half is all there is to check.
+    const headers = jobs.sectionHeaders ?? []
+    const later = headers.filter((h) => h.index > 0)
+    const first = headers.filter((h) => h.index === 0)
+    check(later.every((h) => widthOf(h.border) === 1 && sameColour(colourIn(h.border), menu.l1Token))
+      && first.every((h) => widthOf(h.border) === 0),
+      `a section header that is not the first carries one border-l1 hairline, the first carries none (l1 ${menu.l1Token}; measured ${JSON.stringify(headers.map((h) => h.index + ':' + h.border))})`)
+    if (later.length === 0) note(`only ${headers.length} section(s) were present, so the rule BETWEEN sections was not exercised`)
+    if (jobs.stop !== null) {
+      check(widthOf(jobs.stop.border) === 1 && sameColour(colourIn(jobs.stop.border), menu.l3Token),
+        `the stop control is re-stroked in the visible step, not the fill's own colour (${jobs.stop.border} vs ${menu.l3Token})`)
+    } else {
+      note('no live job row was present, so the stop control stroke was not measured')
+    }
+    if (jobs.chevron !== null) {
+      check(widthOf(jobs.chevron.border) === 1 && sameColour(colourIn(jobs.chevron.border), menu.l3Token),
+        `and so is the row's chevron box (${jobs.chevron.border})`)
+    } else {
+      note('no chevron box was found in the list')
+    }
+  }
+
   console.log(failures.length === 0
-    ? '\nOK: both top-bar hover panels wear the skin'
+    ? '\nOK: the band\'s popovers wear the skin'
     : `\n${failures.length} check(s) failed`)
   process.exitCode = failures.length === 0 ? 0 : 1
 } finally {
