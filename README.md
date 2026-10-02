@@ -14,7 +14,8 @@
 | Step 4 — 皮肤设置页 | ✅ 五项可调，写入 Harness 设置文档 |
 | Step 5 — 绿色改为可配置 | ✅ Accent 设置驱动品牌/状态族，跨色相推导 + 对比度验证 |
 | Step 6 — 适配 dsh 0.2 的两个顶栏悬浮面板 | ✅ 装饰层第 19 节 + `verify-topbar-panels-live.mjs`（57 项） |
-| Step 7 — 顶栏后台任务弹层 + 正文文件预览卡 | ✅ 装饰层 19e 与第 20 节 + `verify-file-preview-live.mjs`（11 项） |
+| Step 7 — 顶栏后台任务弹层 + 正文文件预览卡 | ✅ 装饰层 19e 与第 20 节 + `verify-file-preview-live.mjs`（12 项） |
+| Step 8 — plan 模式的输入框控件 | ✅ 装饰层第 21 节 + `verify-plan-chip-live.mjs`（14 项） |
 
 ## 这是什么
 
@@ -85,7 +86,7 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 
 ## 验证
 
-`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**29 步**（离线 8 + live 21）：
+`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**30 步**（离线 8 + live 22）：
 
 | 层 | 脚本 | 证明什么 |
 |----|------|---------|
@@ -115,6 +116,7 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 | live | `verify-diff-colors-live.mjs` **6** | 右侧栏 diff **不受 accent 影响**：新增行永远是外壳的绿（深色 `#4ED17E` / 浅色 `#22C55E`）、删除行永远是外壳的红、两者都过**通道判据**（不只是比 hex）、**新增行色既不是用户配的 accent 也不是默认 accent**，而**品牌族（模块图标 / 发送键）仍然跟着 accent 走** |
 | live | `verify-header-tabs-live.mjs` **15** | 顶栏单位行（Chat / Trajectory / Files / Tasks / Papers）：**非激活单元会回应指针**，而且**用的就是点击后那块 plate 的颜色**（实测 hover `rgb(146,201,255)` 与当前 plate **完全相同**，比 band 强 **155 级平均通道**），墨色在该填充上**对比度 10.06:1**；**当前单元保持自己的 plate 不被染色**；整行**右对齐**（右边距横带右边 151px、与右侧控件留 16px，中心 1197 vs 横带 932）、每个单元直角 |
 | live | `verify-topbar-panels-live.mjs` **57** | 顶栏**三个**弹层（Agent Team / 子代理目录 / 后台任务）：面板**自己**有不透明底色（不再是从 10×10 的伪元素里透出正文）、无投影、直角、1px `border-l3` 发丝线、角括号仍在；成员磁贴直角+发丝线+**当前会话左缘焦点色竖条**；目录的半径令牌族在锚点上归零（行与点击区都直角）且**锚点恰好命中 1 个元素**、侧栏会话行不被波及（泄漏断言）；任务弹层的触发器是横带里**唯一"有 aria-expanded 而无 aria-haspopup"**的按钮、且**弹层内部自己的折叠按钮不会被同一条规则染上黄线**（这条规则的第一版漏过、检查现在按"线上有没有那条黄线"来数）；三个触发器打开时**盒子与位置不变** |
+| live | `verify-plan-chip-live.mjs` **14** | plan 模式下输入框那颗 **Plan** 控件：锚点是**声明的槽位** `[data-slot='conversation.input.plan']`（不点任何模块类名）；**关掉装饰层做 A/B** 证明它本来是外壳那块**浅色 accent 实底药丸**（实测 `color(srgb .84 .92 1)`、8px 圆角），皮肤把它换成「直角 + 1px accent 45% 发丝线 + accent 墨色 + 小字全大写」；**用真指针**量 hover（外壳那条 hover 是三个类的选择器，不量就会漏看它把洗色又刷回来）；跑完**点一下 chip 退出 plan 模式**，不留一个卡在 plan 模式的会话 |
 | live | `verify-file-preview-live.mjs` **12** | 正文里**悬停代码文件图标**弹出的预览卡：走**声明式属性**的包含锚点（`body > *:has(> [data-changes-hover-preview])`）恰好命中 1 个、**底色仍是调色板的 `--dsw-alias-bg-layer-1`**（并断言它**不是**顶栏弹层那块的 `--dsw-specific-menu`，防止两条语义再写反）、1px `--dsw-alias-border-l4` 边框（并断言**不是**内联卡片那条更淡的发丝线）、无投影、直角、一对角括号，路径行走 readout 字距与次级墨色；**同一族原语画出的侧栏会话悬浮卡不被该锚点命中**（泄漏断言）。本部署没有会话以"改动文件卡"收尾时，量的是按声明属性搭的**复制件**并在输出里注明"只证明规则生效、不证明它压住了外壳" |
 | live | `verify-page-effects-live.mjs` **24** | 三个页面特效（顶栏光 / 页标 / 点阵块）**各自独立**、开关只管自己那一区；页标的**四张印版各自被服务且各自落墨**（尺寸按各自长宽比：完整 600×109、字标 600×89、图章 196×222、合成 600×150）；**两个滚动端墨迹盒一致**（钉在面板上）；**竖排的足迹是高而不是宽**（94×522，含真实 computed transform），**换角真的换位置**（左下角实测落在面板左下象限）；印版路由缺失时**报一条失败并说明要重启**，不假装通过 |
 
@@ -507,6 +509,25 @@ dsh 升到 0.2 之后，横带的控件区多了三个会展开面板的按钮�
 
 > **这条检查有一个"复制件"分支，而且它自己会说**：本部署里**不是每个会话都以"改动文件卡"收尾**，所以找不到真卡时，脚本按声明的属性**现搭一个包装**来量皮肤的声明，并在输出里写清"这只证明规则生效、不证明它压住了外壳"。真卡可达时走真卡，量的是同一组读数（含"包装仍保持外壳自己的定位"这一条）。这也是本仓库排队条 / todo 面板检查里的同一手法。
 
+## plan 模式下输入框那颗 Plan 控件（装饰层 21）
+
+plan 模式打开时，`dsh-client-ui-plan` 会在输入框那一排（`conversation.input.plan`）挂一颗写着 **Plan** 的 chip，点它退出 plan 模式。外壳把它画成**浅色 accent 实底药丸**：底色 `--dsw-alias-state-business-tertiary`、墨色 `--dsw-alias-state-business-primary`（实测配置蓝 accent 时 `fill rgb(219,237,255)` / `ink rgb(146,201,255)`），8px 圆角、13px/500。**在一个深色输入区上放一块浅色药丸**，正好是这一层从不使用的形状：这里的面 = 画布 + 一条发丝线，accent 只做墨色或线（第 2 节的发丝线规则、15d 的"accent 拥有什么"）。
+
+**锚点**是声明的槽位名，没有点任何模块类名 —— 实测祖先链：
+`button > span.wrap > div[data-slot='conversation.input.plan'] > div.modes > div.tools > div.row > div.card > div.root > div[data-slot='conversation.composer.bar']`。
+
+| 部位 | 做法 |
+|---|---|
+| chip | **去掉实底**、直角、1px accent 45% 发丝线、accent 作墨色；标签进 caption 语气（大写 + 0.08em + 12px）—— 它是固定标签词，所以大写是参考集的小字拉丁标签规则，不是改写内容 |
+| hover / 键盘焦点 | **同一条线加到满强度**，而不是把外壳那块洗色放回来：外壳自己的 hover 是**三个类**的选择器，这里的普通 `:hover` 会被它压住、洗色在指针每过一次就闪一下（规则里用 `:hover:not(:disabled)` 对齐它的具体度） |
+| 失败行 | 保留语义红，只加 readout 字距 |
+
+> **点击它会"离开"这个模式**，所以 hover 预览的是"线加满"而不是某个状态色 —— 15d 的不变量在这里能表现的形式只有这一种。
+
+> **检查脚本自己开、自己关**：plan 模式只在开会话内有效，所以 `verify-plan-chip-live.mjs` 先开一个**临时会话**（侧栏那颗 New Session **按钮**，不是行 —— 展开 "Show 99 more sessions" 会把行重渲染掉，第一版就是这么丢的），用 `/` 打开命令面板并**点击** Plan 条目（上一版按文本首词猜命令名，猜出 "PlanEnter" 当成消息发出去了），量完再点 chip 退出模式，不留一个卡在 plan 模式的会话。
+>
+> **A/B 是这条检查的核心**：关掉装饰层后 chip 立刻回到那块浅色实底药丸（实测 `color(srgb .84 .92 1)`、8px 圆角、无边框）—— 这才是"改的是皮肤、不是外壳"的证明。
+
 ## 页面印版：正文面板上的一张图（装饰层 18b）
 
 页标现在就是**一张图**：四张可选印版之一（默认 `endfield-decal.png` —— 现在这张是由 `my-badge.png` + `my-wordmark.png` **合成**的锁定组合，见 `scripts/compose-lockup.mjs`），或者**你自己上传的一张图**。设置页的旋钮：`Page mark`（总开关）、`Artwork`（哪张图）、`Custom image`（上传本地图片）、`Orientation`（横排 / 竖排）、`Position`（面板四角）、`Size`、`Opacity`。竖排即把图**转 90°**（几何是算出来的，不是手调偏移：绕中心旋转后，偏移要减去长短边差的一半）。
@@ -675,6 +696,7 @@ scripts/probe-mark-visibility.mjs  探针：页标"画了但看不见"的几何 
 scripts/probe-decal-live.mjs       探针：印版的送达/武装/落墨三问 + 浓淡与位置的网格量测
 scripts/probe-topbar-panels.mjs    探针：顶栏三个弹层的 DOM 契约 + 外壳自己的装饰 + 截图
 scripts/probe-hover-surfaces.mjs   探针：后台任务弹层 + 正文文件预览卡（含 portal 差分）
+scripts/probe-plan-chip.mjs        探针：把 plan 模式打开，量输入框那颗 Plan 控件 + 截图
 scripts/inspect-shell-dom.mjs  探查 shell DOM（结构）
 scripts/probe-green.mjs        探查运行中页面的绿色元素（颜色）
 assets/fonts/               OFL 字体（见 assets/fonts/NOTICE.md）

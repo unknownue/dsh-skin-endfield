@@ -65,6 +65,7 @@ if ($env:DSH_URL) {
     Step 'live: top bars (header + pane strip)'    { node scripts/verify-top-bars-live.mjs }
     Step 'live: top-bar hover panels (team + subagents + jobs)' { node scripts/verify-topbar-panels-live.mjs }
     Step 'live: transcript file preview (hover card)' { node scripts/verify-file-preview-live.mjs }
+    Step 'live: plan-mode chip at the composer' { node scripts/verify-plan-chip-live.mjs }
     Step 'live: error ink (red, not magenta)'      { node scripts/verify-error-ink-live.mjs }
     Step 'live: composer band is opaque'           { node scripts/verify-composer-opacity.mjs }
     Step 'live: tooltips do not move the page'     { node scripts/verify-tooltip-stability-live.mjs }

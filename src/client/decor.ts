@@ -2364,4 +2364,45 @@ body > *:has(> [data-changes-hover-preview]) [data-changes-preview-path] {
 body > *:has(> [data-changes-hover-preview]) [data-diff-note] {
   letter-spacing: 0.02em;
 }
+
+/* ── 21. the plan-mode control at the composer ─────────────────────────── */
+/* While plan mode is on, dsh-client-ui-plan seats a chip at the composer
+   (the slot conversation.input.plan) that says so and leaves the mode when clicked. Out of the box
+   it is a 28px pill FILLED with --dsw-alias-state-business-tertiary: a pale accent wash with the
+   as its ink. Measured with the configured blue accent: fill rgb(219,237,255), ink rgb(146,201,255)
+   -- a light, soft plate sitting on the dark composer, which is the one shape this layer does not
+   use anywhere: a surface here is canvas plus a hairline, and the accent is ink or a line, never a
+   wash (section 2 for the hairline rule, section 15d for what the accent owns).
+   The anchor is a DECLARED slot name, so no module class is named: the seat is
+   [data-slot='conversation.input.plan'] (measured chain: button > span.wrap > div[data-slot] >
+   div.modes > div.tools > div.row > div.card > div.root > div[data-slot='conversation.composer.bar']).
+   The chip becomes the skin's outlined label: square, no fill, one hairline in the accent, the
+   accent as ink, and the caption voice the queue strip's count line and the to-do panel's title
+   already speak (the label is a fixed word, so uppercasing it is the reference's small-Latin-label
+   rule, not a rewrite of content). */
+body [data-slot='conversation.input.plan'] button {
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary, #00FFA2) 45%, transparent);
+  border-radius: 0;
+  corner-shape: round;
+  color: var(--dsw-alias-state-business-primary, #00FFA2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+/* Hover and keyboard focus PROMOTE the same hairline instead of bringing the shell's wash back:
+   its own hover rule is a three-class selector, so it wins over a plain hover here and the pale
+   fill would flash on every pass of the pointer. The click this chip performs LEAVES the mode, so
+   the preview is the line at full strength rather than a state colour (15d's invariant, in the one
+   form a chip can show it). */
+body [data-slot='conversation.input.plan'] button:hover:not(:disabled),
+body [data-slot='conversation.input.plan'] button:focus-visible {
+  background: none;
+  border-color: var(--dsw-alias-state-business-primary, #00FFA2);
+}
+/* The failure line the seat can carry (the toggle failing) keeps its semantic red; only the
+   tracking joins the readout voice this layer gives every caption. */
+body [data-slot='conversation.input.plan'] [class*='_error'] {
+  letter-spacing: 0.02em;
+}
 `
