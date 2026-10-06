@@ -6,7 +6,9 @@
  * composition. It does NOT prove the Host settings namespace registered — that
  * lives on the Node side and is not reachable from the page. The honest way to
  * check the namespace is to write a value from Settings -> Endfield Skin and see
- * it persist into `~/.dsh/settings.yaml`; an earlier version of this script
+ * it persist into the active profile's `settings.yaml` (dsh 0.2 moved it out of
+ * `~/.dsh/settings.yaml` into `~/.dsh/profiles/<profile>/settings.yaml`, under the
+ * `skin-endfield:` section); an earlier version of this script
  * guessed at settings RPC paths, got 404 on all of them, and reported
  * "inconclusive", which is noise rather than evidence.
  *
@@ -59,7 +61,7 @@ try {
     if (ok) {
       console.log('\nNote: this does not cover the Host settings namespace. To check that,')
       console.log('change a value in Settings -> Endfield Skin and confirm it persists into')
-      console.log('~/.dsh/settings.yaml under `dsh-skin-endfield:`.')
+      console.log('~/.dsh/profiles/<profile>/settings.yaml under `skin-endfield:`.')
     }
     process.exitCode = ok ? 0 : 1
   }
