@@ -94,6 +94,7 @@
 | `UI-FRAME-NOTES.md` | **帧证据清点报告**（308 行 / 68 KB）：界面状态清单、组件解剖、难找状态结论、逐点取色（带采样坐标）、动效观察、不确定项。**`02-ui-inventory.md` 的一手底稿** | 1 | 68 KB |
 | `sheets-lab/` | 带帧号标注的接触表（`make-sheets2.ps1` / `make-sheets3.ps1` 可复跑），比 `contacts2/` 更便于逐帧定位 | — | — |
 | `logs/` | 结构化元数据：`bulletins.json/csv`、`bili-priority.json/csv`、`youtube-official.json`、`videos.tsv`、`cssimg-index.txt` | — | — |
+| `version-briefing/` | **版本导览页（2026-10 抓，见 `docs/design-reference/07-version-briefing-notes.md`）**：`version.css` + `version.js`（v1d6）+ 6 个装饰 SVG（`tab-guide` / `button-deco-lt` / `story` / `region` / `optimization` / `gameplay`）+ `screenshots/` 共 10 张（总览与 6 个分区视图）。页面是 SPA，静态 HTML 只有 1 KB，所以**必须连 CSS/JS 一起留**才能复现结论 | 18 | ~12 MB |
 
 > **抽帧的两套数据别混用**：`frames/` 是首轮每片 1 张，用于快速确认"这视频里有没有 UI"；`frames2/` 才是**界面状态清单的证据源**。密抽帧用 `-skip_frame nokey` 只解关键帧以换取速度，**帧编号不等于视频时间码**，不要用它推算时长。
 >
