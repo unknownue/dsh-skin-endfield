@@ -55,6 +55,7 @@
     "verify:todo-dock": "node scripts/verify-todo-dock-live.mjs",
     "verify:title-underline": "node scripts/verify-title-underline-live.mjs",
     "verify:diff-colors": "node scripts/verify-diff-colors-live.mjs",
+    "verify:mask-blur": "node scripts/verify-mask-blur-live.mjs",
     "verify:page-effects": "node scripts/verify-page-effects-live.mjs",
     "decal:render": "node scripts/make-decal.mjs",
     "decal:check": "node scripts/make-decal.mjs --check",

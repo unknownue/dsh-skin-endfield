@@ -100,12 +100,12 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 
 ## 验证
 
-`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**30 步**（离线 8 + live 22）：
+`pnpm verify`（`scripts/verify-all.ps1`）按代价从低到高跑，**32 步**（离线 8 + live 24）：
 
 | 层 | 脚本 | 证明什么 |
 |----|------|---------|
 | 离线 | `verify-client.mjs` **28** | bundle 契约、89 令牌、装饰层护栏、卸载对称性、**改 Accent 会重铺令牌层**、**跨色相推导都够对比度**、**设置页控件与提交路径**（含页标样式选择与两个印版数值的守卫）、**错误色是红不是品红**、**每条 `_bubble` 规则都必须排除 tooltip**、**横幅 `//` 前缀不落在运行行上** |
-| 离线 | `verify-host.mjs` **13** | 字体路由 + **印版路由**、路径穿越防护（含**不能跨目录读到研究素材**）、设置命名空间的两侧行为 |
+| 离线 | `verify-host.mjs` **16** | 字体路由 + **印版路由**、路径穿越防护（含**不能跨目录读到研究素材**）、设置命名空间的两侧行为 |
 | 离线 | `verify-settings-parity.mjs` **4** | schema 默认值与浏览器回退值一致（13 个字段） |
 | 离线 | `make-decal.mjs --check` | 发货印版**每个上色像素 R=G=B**、有 alpha、体积合理 —— "纯灰"是被断言的，不是被假设的 |
 | 离线 | `verify-install.ps1` | profile 能否装载这个包 |
@@ -132,6 +132,7 @@ pnpm showcase         # 把皮肤铺到 shell 的 DOM 形状上，输出对照�
 | live | `verify-topbar-panels-live.mjs` **57** | 顶栏**三个**弹层（Agent Team / 子代理目录 / 后台任务）：面板**自己**有不透明底色（不再是从 10×10 的伪元素里透出正文）、无投影、直角、1px `border-l3` 发丝线、角括号仍在；成员磁贴直角+发丝线+**当前会话左缘焦点色竖条**；目录的半径令牌族在锚点上归零（行与点击区都直角）且**锚点恰好命中 1 个元素**、侧栏会话行不被波及（泄漏断言）；任务弹层的触发器是横带里**唯一"有 aria-expanded 而无 aria-haspopup"**的按钮、且**弹层内部自己的折叠按钮不会被同一条规则染上黄线**（这条规则的第一版漏过、检查现在按"线上有没有那条黄线"来数）；三个触发器打开时**盒子与位置不变** |
 | live | `verify-plan-chip-live.mjs` **14** | plan 模式下输入框那颗 **Plan** 控件：锚点是**声明的槽位** `[data-slot='conversation.input.plan']`（不点任何模块类名）；**关掉装饰层做 A/B** 证明它本来是外壳那块**浅色 accent 实底药丸**（实测 `color(srgb .84 .92 1)`、8px 圆角），皮肤把它换成「直角 + 1px accent 45% 发丝线 + accent 墨色 + 小字全大写」；**用真指针**量 hover（外壳那条 hover 是三个类的选择器，不量就会漏看它把洗色又刷回来）；跑完**点一下 chip 退出 plan 模式**，不留一个卡在 plan 模式的会话 |
 | live | `verify-file-preview-live.mjs` **12** | 正文里**悬停代码文件图标**弹出的预览卡：走**声明式属性**的包含锚点（`body > *:has(> [data-changes-hover-preview])`）恰好命中 1 个、**底色仍是调色板的 `--dsw-alias-bg-layer-1`**（并断言它**不是**顶栏弹层那块的 `--dsw-specific-menu`，防止两条语义再写反）、1px `--dsw-alias-border-l4` 边框（并断言**不是**内联卡片那条更淡的发丝线）、无投影、直角、一对角括号，路径行走 readout 字距与次级墨色；**同一族原语画出的侧栏会话悬浮卡不被该锚点命中**（泄漏断言）。本部署没有会话以"改动文件卡"收尾时，量的是按声明属性搭的**复制件**并在输出里注明"只证明规则生效、不证明它压住了外壳" |
+| live | `verify-mask-blur-live.mjs` **7** | 模态遮罩的磨砂**真的落在像素上**：令牌内联在 `<body>` 上、设置遮罩 `backdrop-filter: blur(12px)`，再**抽出该层做对照**（同一份 4% 压暗、`none`）比较条纹场的边缘能量（每像素平均 \|Δlum\| 0.836 vs 245）——"blur 写对了"和"blur 画出来了"是两条断言（见「模态遮罩没有模糊」） |
 | live | `verify-page-effects-live.mjs` **24** | 三个页面特效（顶栏光 / 页标 / 点阵块）**各自独立**、开关只管自己那一区；页标的**四张印版各自被服务且各自落墨**（尺寸按各自长宽比：完整 600×109、字标 600×89、图章 196×222、合成 600×150）；**两个滚动端墨迹盒一致**（钉在面板上）；**竖排的足迹是高而不是宽**（94×522，含真实 computed transform），**换角真的换位置**（左下角实测落在面板左下象限）；印版路由缺失时**报一条失败并说明要重启**，不假装通过 |
 
 **离线层读源码，live 层读运行中 GUI 的计算值。** 两者不可互相替代 —— 本轮踩过的坑几乎都来自"只用前者"：装饰层曾把生成式 CSS 交给捆包器，源码求值正确、离线全绿，而**产物里那段规则根本不存在**。改动装饰层后请 grep **bundle** 确认规则在里面。
@@ -688,6 +689,22 @@ pnpm decal:check      # 断言每张已发货的图：上色像素 R=G=B、有 a
 > **当时记为"既有缺陷"的 mark，本轮已查明并修掉**（见上一节）。它当时被记成 `KNOWN_BROKEN`：class 生效、伪元素解析正常（`content` 为配置文本、盒子 22x206、计算样式里有 1.4px 描边），但开关它**改变 0 个像素**；把 `[data-conversation-scroll]` 的 `overflow: auto` 改成 `visible` 后立刻画出约 1838 个亮像素（"裁剪时"只有 56）。真相是**滚动**不是**裁剪**：那个元素就是正文的滚动容器，而真实会话永远停在末尾，墨迹被带到视野上方约 5600px 处。`KNOWN_BROKEN` 这个集合现在**是空的**，两种读法分别是几何读数与逐滚动位置的像素读数，都留在 `scripts/probe-mark-visibility.mjs` 里。
 
 > **检查工具的升级，两步**：`verify-page-effects-live` 原来用"区内亮像素占比"判断特效是否作画 —— 在**区里本来就有别的墨迹**（会话时间戳、卡片边缘）时，这个指标量的是内容而不是特效，会把一个正常作画的特效报成 `+0.00pp`。第一步改成**像素差分**（两个状态截图的逐像素比较，逐通道差 > 6 记一次变化），并把"两轴交界处那片共有区域"从跨区断言里真正减掉 —— 于是 `dotBlock` 的跨区泄漏实测 **0.000%**，而 mark 的问题被如实暴露出来。第二步（本轮）把差分结果里的**变化像素包围盒**也读出来，于是"画了多少"之外多了一个"画在哪儿"：mark 的断言现在是**两个滚动端各量一次、且两次的墨迹盒必须一致** —— 也就是把它钉成"面板上的页标"。只测一个滚动位置的话，这条缺陷要么报成通过、要么报成谜。
+
+## 模态遮罩没有模糊：外壳把 `--dsw-mask-blur` 改成了 `none`
+
+现象：打开设置（`.VOzbGW_overlay`）后背景只有压暗、没有磨砂；图片灯箱与账号欢迎页同理。
+
+诊断链条（每一环都在运行中的 GUI 上读回，不靠读源码猜）：
+
+- 设置遮罩的规则就是 `backdrop-filter: var(--dsw-mask-blur)`（`dsh-client-ui-settings-general` 的 `.VOzbGW_mask`）；`Modal`（`dsh-client-ui-primitives/lib/Modal.module.css:21`）、`ImageLightbox` 与账号页的 `filter` 读的是同一个 token。
+- 主题表 `gradient-shadow-text.css` 现在是 `--dsw-mask-blur: none`（`dsh-client-ui-theme/lib/client.js:1160`）。按版本二分这个值：`0.1.2-rc.1` 到 `0.1.7-rc.1` 都是 `blur(2px)`，从 `0.1.7-rc.2` 起是 `none`，`0.2.x` 沿用（npm 上 `0.2.0-rc.2`、`0.2.1-alpha.2` 同样是 `none`）。主题 README 把这条写成了规则 —— "Modal masks retain their dark translucent fill without background blur." —— 所以这是有意为之，不是外壳的回归。
+- 上游是"轻微"、本皮肤里是"完全没有"：外壳的 `--dsw-alias-bg-mask-1` 是 24%（浅）/50%（深）压暗，而皮肤把它换成 4% 的洗色，于是遮罩唯一的可见线索只剩模糊，一去掉就等于没有遮罩。
+
+修法：走令牌层。`endfieldTokens` 里加一条 `'--dsw-mask-blur': { light: MASK_BLUR, dark: MASK_BLUR }`（`MASK_BLUR = 'blur(12px)'`）。为什么不是写一条 `body { --dsw-mask-blur: blur(12px) }` 的样式表规则：外壳的 theme presenter 把 override 令牌作为**内联**自定义属性写在 `<body>` 上（`dsh-client-ui-layout` 的 `ThemePresenter.apply`），内联声明直接压过样式表里的 `body { --dsw-mask-blur: none }` —— 不需要 `!important`，也不赌两张样式表的先后（字体那一节正是赌顺序吃过亏）。值取 12px：外壳自己的菜单材质是 `blur(40px) saturate(150%)`，对整屏遮罩太重；0.1.x 的原值 2px 落在这块 4% 洗色上几乎看不出来。
+
+影响面是所有读该 token 的面：设置模态、`Modal`、图片灯箱、账号欢迎页，以及 `dsh-ui-width` / `dsh-workspace-enhancement` 这些第三方弹层的遮罩（它们读的是同一个 token，没有各自的硬编码，所以一起被修好）。
+
+验证：`pnpm run verify:mask-blur`（live 层，需要运行中的 `dsh web`，已接入 `verify-all`）。7 条断言里有两条互不替代：令牌内联在 `<body>` 上并解析为 `blur(12px)`、设置遮罩的计算值同值 —— 这是"写对了"；把这一层**抽出来做对照**（同一份 4% 压暗、`backdrop-filter` 变回 `none`）再比较像素 —— 遮罩下方铺一层 1px 黑白条纹，模糊态每像素平均 |Δlum| **0.836**、抽出后 **245**（边缘能量被抹平 99.7%），这是"画出来了"。截图留在 `tests/out/mask-blur-settings{,-none}.png` 与两张条纹图。
 
 ## 代码结构
 

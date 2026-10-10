@@ -49,6 +49,28 @@ const ERROR_RED = '#EC1313'
 const ERROR_RED_DARK = '#F25A5A'
 
 /**
+ * Backdrop blur for every stock modal mask (`--dsw-mask-blur`).
+ *
+ * DSH 0.1.7-rc.2 redefined that token from `blur(2px)` to `none` and 0.2.x kept
+ * it, so every mask the shell ships — the settings overlay (`.VOzbGW_mask` in
+ * `dsh-client-ui-settings-general`), `Modal`, `ImageLightbox`, and the account
+ * page's `filter: var(--dsw-mask-blur)` — is now tint-only with a sharp backdrop.
+ * Upstream the loss is subtle because the stock fill is 24% black on light and
+ * 50% on dark; in this skin it is total, because `--dsw-alias-bg-mask-1` is a 4%
+ * wash that on its own reads as no mask at all.
+ *
+ * The value travels through the token layer rather than a stylesheet: the theme
+ * presenter writes override tokens as INLINE custom properties on <body>
+ * (`ThemePresenter.apply` in `dsh-client-ui-layout`), and an inline declaration
+ * beats the theme sheet's `body { --dsw-mask-blur: none }` without `!important`
+ * and without betting on which stylesheet lands later. Both appearances take the
+ * same value — a blur carries no colour. Tune here; 40px is the shell's own menu
+ * material (`--dsw-menu-backdrop-filter`), which is far too heavy for a
+ * full-viewport mask.
+ */
+const MASK_BLUR = 'blur(12px)'
+
+/**
  * The shell's own success green, for the one alias that carries meaning rather than
  * brand — a diff's added line. Values are `--dsw-static-green-500` (light column) and
  * `--dsw-static-green-400` (dark column) / `-400` for the soft step, i.e. exactly what
@@ -118,6 +140,10 @@ export function endfieldTokens(settings: SkinSettings): ThemeTokenOverrides {
     },
     '--dsw-alias-bg-mask-drop': { light: 'rgba(25,25,25,0.12)', dark: 'rgba(0,0,0,0.45)' },
     '--dsw-alias-bg-mask-photo': { light: 'rgba(25,25,25,0.60)', dark: 'rgba(0,0,0,0.70)' },
+    // The masks above are the tint; this is the frost under it. Non-colour token,
+    // and the only reason it belongs in this table rather than in a sheet is that
+    // the shell redefines it as `none` — see MASK_BLUR.
+    '--dsw-mask-blur': { light: MASK_BLUR, dark: MASK_BLUR },
 
     // ── hairlines ───────────────────────────────────────────────────────────
     '--dsw-alias-border-l1': { light: '#E7E7E7', dark: '#2E2E2E' },

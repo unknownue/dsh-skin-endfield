@@ -78,6 +78,7 @@ if ($env:DSH_URL) {
     Step 'live: title current-location rule'       { node scripts/verify-title-underline-live.mjs }
     Step 'live: page effects (3 independent)'      { node scripts/verify-page-effects-live.mjs }
     Step 'live: diff colors ignore the accent'     { node scripts/verify-diff-colors-live.mjs }
+    Step 'live: modal masks are frosted again'     { node scripts/verify-mask-blur-live.mjs }
 } else {
     Write-Host ""
     Write-Host "=== live layers skipped ===" -ForegroundColor Yellow
