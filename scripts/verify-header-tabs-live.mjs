@@ -41,18 +41,18 @@ const GEOMETRY = `(() => {
     scale: window.devicePixelRatio || 1,
     row: list ? (() => { const r = list.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right } })() : null,
     header: (() => { const h = document.querySelector('header'); if (!h) return null; const r = h.getBoundingClientRect(); return { left: r.left, width: r.width, right: r.right } })(),
-    // Where the bar's own right-hand controls begin: the buttons that are not part of this row and
-    // sit right of the bar's centre. This is the edge the row has to clear, and it is read rather
-    // than assumed because it is a property of the bar, not of the row.
+    // Where the bar's own right-hand controls begin. This is the edge the row has to clear, and
+    // it is read rather than assumed because it is a property of the bar, not of the row.
+    // Scoped to the shell's declared control cluster (headerUtilities / headerCorner): after shell
+    // 0.2.2-alpha.2 the band also carries action chips (preset / agent-team / background jobs)
+    // whose buttons sit right of the bar's centre but are NOT the cluster the row must clear --
+    // taking the minimum left of every button made the row look 387px "under the controls" while
+    // the real cluster still had 16px of air.
     controlsLeft: (() => {
       const h = document.querySelector('header')
       if (!h) return null
-      const hr = h.getBoundingClientRect()
-      const lefts = [...h.querySelectorAll('button, [role=button]')]
-        .filter((b) => !b.closest('[role=tablist]'))
-        .map((b) => b.getBoundingClientRect().left)
-        .filter((l) => l > hr.left + hr.width * 0.5)
-      return lefts.length ? Math.min(...lefts) : null
+      const els = [...h.querySelectorAll("[class*='headerUtilities'], [class*='headerCorner']")]
+      return els.length ? Math.min(...els.map((e) => e.getBoundingClientRect().left)) : null
     })(),
     tabs: tabs.map((tab) => {
       const r = tab.getBoundingClientRect()
@@ -139,8 +139,13 @@ try {
     // wrong offset breaks silently -- the first measured value put the row 12px UNDER them).
     const clearance = geometry.row === null || geometry.controlsLeft === null ? null : geometry.controlsLeft - geometry.row.right
     const offset = geometry.row === null ? null : geometry.header.right - geometry.row.right
-    check(offset !== null && Math.abs(offset - 151) <= 3,
-      `the row is right-aligned: right edge ${geometry.row === null ? 'n/a' : Math.round(geometry.row.right)} = bar ${Math.round(geometry.header.right)} - ${offset === null ? 'n/a' : Math.round(offset)} (want 151)`)
+    check(offset !== null && Math.abs(offset - 177) <= 3,
+      `the row is right-aligned: right edge ${geometry.row === null ? 'n/a' : Math.round(geometry.row.right)} = bar ${Math.round(geometry.header.right)} - ${offset === null ? 'n/a' : Math.round(offset)} (want 177)`)
+    // 177 = the wrapper's reserved padding-right (115) + the more-views anchor that rides after the
+    // row (22 + 12 margin) + the band's own 28px padding-right. Shell 0.2.2-alpha.2 moved the tab
+    // row into its own grid row; the skin's '_tabs' wrapper now owns the right offset, so the
+    // constant lives in decor.ts and is mirrored here -- the old 151 belonged to the
+    // absolute-positioning era when the row carried 'right: 151px' itself.
     check(clearance !== null && clearance >= 8,
       `and clears the bar's right-hand controls by ${clearance === null ? 'n/a' : `${Math.round(clearance)}px`} (want >= 8; negative means the row is under them)`)
     check(geometry.row !== null && geometry.row.left + geometry.row.width / 2 > geometry.header.left + geometry.header.width / 2 + 100,

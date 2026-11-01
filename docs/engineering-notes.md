@@ -451,6 +451,8 @@ body [data-phase] [data-composer-seat][class] {
 
 ### 这一行现在**右对齐**（原先是我们自己把它居中的）
 
+> **读数已被下一节取代**：下表是「绝对定位 + ight: 151px」时代的量法。2026-10-31 升级到 shell  .2.2-alpha.2 后，单位行改由 _tabs 覆盖层承载、偏移变成 **177**（单位行→右侧控件 50px），推导见下一节「shell 0.2.2-alpha.2 的顶栏重锚」。
+
 它原来是 `left: 50% + translateX(-50%)`，标题写的就是"centred against the band"——472px 的一行浮在 1304px 的横带正中，左右各留一大片空白。改成右对齐后：
 
 | 读数 | 值 |
@@ -465,6 +467,63 @@ body [data-phase] [data-composer-seat][class] {
 窄窗的取舍也记在案：窗口窄到 1100px 时五个单元本来就放不下，`max-width: calc(100% - 440px)`（原先防止**换行**的那条）决定它是**裁切**而不是换行——与居中时同样的行为，没有变。
 
 > **一次没有成功的"优化"，如实记下**：我原本想把图标与文字之间的间距拉开（量到约 4px，Trajectory 上读起来像撞在一起）。改了两版（`padding-left` 40px / 图标左移）后，**计算值与截图对不上，恒定差 12px** —— 标签所在的列与图标的包含块锚点不同，所以"18px 间距"从未真正出现在屏幕上。按证据回滚，没有把没有效果的改动留在仓库里；`decor.ts` 里留了注释说明这段历史。**像素级间距断言也一并删除**：在 4px 这个尺度下，对 12px 抗锯齿文字 + 旋转菱形做阈值扫描，同一行跑出过 0px/1px/4px/26px 四种结果 —— 会抖的检查不如不写，间距交给眼睛与注释，检查只保留无歧义的部分。
+
+## shell 0.2.2-alpha.2 的顶栏重锚（装饰层 15a/15c/15d，2026-10-31）
+
+dsh 升到 `0.2.2-alpha.2` 后，会话顶栏显示坏掉：横带变成 82px 两行、标题消失只剩几个图标、单位行压在动作 chip 上。原因是**两个独立的问题叠在一起**，只修一个都还是坏的。
+
+### 问题一：皮肤把外壳的 grid 改成了 flex
+
+外壳从 0.2.x 起就把 `<header>` 声明成 **grid**（`.wSkVaW_header{grid-template-columns:auto minmax(0,1fr);display:grid}`，单位行是 `grid-column:1/-1` 的**第二行**）。装饰层 15a 当年写的是 `display:flex` —— 那时候外壳还是块级 + 自身 flex-direction 的一代，强行改 flex 是无害的一行属性；现在同一行属性会让**所有 grid 落位失效**：
+
+- 标题行是 flex 子项，宽度由内容决定，而内容（隐藏的原生面包屑）宽度是 0 ⇒ `titleRow` 实测 **0×60**；
+- 单位行留在同一 flex 行里、`width:1224px` 直接吃掉整行 ⇒ `titleRow` 被挤成 0，横带被第二行撑到 82px。
+
+改法是**保留外壳的 grid**，只把「单位行不该占第二行」这件事用排版表达出来：单位行的容器 `[class*='_tabs']` 改成 `position:absolute; inset:0` 的横带覆盖层（右对齐、`pointer-events:none`、子元素恢复命中），单位行回到普通流并继续用皮肤自己的右对齐样式。标题行因此拿回整行宽度（实测 **1256px**），横带回到 **52px**。
+
+### 问题二：面包屑插件在窄预算里闭锁成"只有图标"
+
+本机装了 `dsh-better-session-title@1.3.1`：它**隐藏外壳自己的 `nav` 面包屑**，在动作槽里自绘 `.bst-crumbs`。它的自适应逻辑（`lib/client.js` 的 `update()`）在文本被挤到 **< 80px** 或整行溢出时，把该级收成"只有图标"，并按 `header.clientWidth >= 折叠时宽度 + 180` 才恢复 —— 是个**滞回**。皮肤一旦给标题区设上限（见下），它的行就会被挤 ⇒ 每次加载都折叠、而且本窗口宽度下永远不恢复：标题**永远读不到**。
+
+改法两条：
+
+1. `.bst-crumbs { flex-shrink: 0 }` —— 面包屑层不承担横带的挤压预算，让**次要 chip** 去被裁；
+2. 把皮肤自己的两处标题纹样（`///` 前缀、当前位置线）**重锚到插件的会话 crumb 上**：原规则打在 `[class*=crumbCurrent]`（原生 nav，已被插件 `display:none`），现在同时打在 `.bst-crumbs .bst-crumb:last-of-type > [data-bst-crumb]` —— 用插件自己声明的 `data-bst-crumb="session-<id>"` 属性 + 链上最后一节（子会话会先渲染父级），不碰它的私有类名布局。
+
+### 单位行：外壳把点击区放大到 35px（0.2.2-alpha.2）
+
+同一轮升级里，外壳自己的 tab 规则从「28px 单元」改成了「35px 点击区 + 负外边距」：
+`.wSkVaW_tab { min-height:35px; margin:-10px calc(-1 * var(--dsh-tab-hit-inline)) 0; padding:10px var(--dsh-tab-hit-inline) 9px }`。
+皮肤的单元是 28px 盒（`2(border)+4+16+6`），只覆盖了 `padding`，没管 `min-height` 与 `margin`，于是出现两个可见缺陷：
+
+- 单元长到 **35px**，在 52px 横带里居中的是 tablist（25px），不是单元本身 ⇒ 单元盒 y=4..39、中心 21.5，比横带中心高 4.5px，激活单元的 2px 黄色上划线几乎贴着窗口顶边；
+- 相邻单元的负外边距把每个盒子向邻居里推 **20px**，而单元间分隔线（`[role='tab'] + [role='tab']::before`，锚在单元的 inline start）就落在**上一个单元的盒内** —— 实测每条竖线都切在 CHAT / TRAJECTORY / TASKS 的最后一个字母上。
+
+修法是显式把这两项退回设计值：`min-height: 28px; margin: 0; box-sizing: border-box; line-height: 16px`。
+当前单元 `2+4+16+6 = 28`、悬停 `1+5+16+6 = 28`，两种状态高度一致；单元回到 y=12..40，黄色上划线落在 y=12，分隔线正好落在两个标签之间的空隙里。单位行整体宽度因去掉负外边距从 310px 变 **390px**，右对齐偏移仍是 **177**（row 的右缘由容器决定，与宽度无关），`verify-header-tabs-live.mjs` 里 1100px 窄窗的间隙断言同时通过。
+
+> 顺带升级了面包屑插件本体：`dsh-better-session-title@1.3.1` → **`dsh-better-session-topbar@1.5.4`**（上游改名的正式包，npm 渠道）。DOM 契约未变（`.bst-crumbs` + `data-bst-crumb="ws|session-<id>"`，会话级按钮新增 `bst-crumb-current` 类），所以 15c-bis 的 `///` 与当前位置线规则不改选择器直接生效；真机 13 项核对（bundle 已加载 / 旧包已消失 / 52px 单行 / crumb 文本非图标态 / `///` / 当前位置线 / 原生 nav 被隐藏 / 单位行 177px / 无 console 错误）全部 PASS。
+
+### 现在的实测读数
+
+| 读数 | 值 |
+|---|---|
+| 横带 | **52px**（10 上 + 30 标题行 + 12 divider） |
+| 标题行 | 1256px；标题区上限 `calc(100% − 496px)` |
+| 单位行右边 | **1407** = 横带右边 1584 − **177** |
+| 177 的来源 | 容器预留 **115**（右侧控件区）+ 更多视图锚点 **22+12** + 横带自身右 padding **28** |
+| 单位行 → 右侧控件（`headerUtilities`）| **50px**（其中 34 是锚点，16 是设计要的空气） |
+| 1100px 窄窗 | 偏移量不变（同样由容器右缘算出），检查里逐项钉住 |
+
+动作 chip 区被 `calc(100% − 496px)` 封顶后**不再被挤压变形**（`[class*='headerActions'] [data-slot] > * { flex-shrink:0; white-space:nowrap }`），超出部分是缓存列表右侧的**渐隐裁切**——先被裁掉的是"3 subagents / 1 background job running"这类次要 chip，标题与工作区面包屑永远优先。
+
+### 验证
+
+- `verify-top-bars-live.mjs`：38 项全绿（`单行`、`52px`、`///`、单位行右对齐、divider、hover 稳定性…）。
+- `verify-header-tabs-live.mjs`：全绿（偏移 177、与控件间隙 50px、1100px 窄窗同值）。
+- 两个检查都顺手修了状态前提：会话行选择不再依赖 `Docker|skin` 命中、右侧面板关闭按钮的 aria-label 变了；`controlsLeft` 只取外壳声明的控件簇（`headerUtilities`/`headerCorner`），否则动作 chip 的按钮会被误当成"控件"而报出 −387px 的假失败。
+
+> 相关限制：**长标题仍会截断** —— 但截断点现在来自插件按钮的 `max-width`（皮肤按外壳原生口径收紧到 220px，见 decor.ts 15c-bis），与窗口宽度无关，和上文"外壳写死 220px"的历史说明同源。
 
 ## 顶栏的三个弹层：Agent Team、子代理目录、后台任务（装饰层 19）
 
@@ -756,3 +815,5 @@ assets/logo/                皮肤自己的印版：3 个 SVG 源 + 生成的 4 
 - 新增 **Accent** 字段需要**重启 `dsh web`** 才生效：浏览器半边的设置订阅连同已装的 bundle 会随 HMR 更新，但命名空间的 schema 由宿主半边注册，只在启动时读一次。
 - **水贴的印版走宿主路由**（`/skin-endfield/logo/…`），所以同一条限制：宿主半边只在 `dsh web` 启动时加载一次，**没重启前这条路由不存在** —— 设置页那格预览会是空的、画面上也不会印出来（live 检查把"每张印版都被送达"报成一条失败并说明原因，跳过各自的落墨断言）。重启一次即可。
 - **顶栏标题的截断是外壳行为**，截断点是外壳写死的：`ConversationRoot.module.css` 的 `.crumb` 上 `max-width: 220px` + `text-overflow: ellipsis`（实测：标题 12 字时 184px 不截断；一超过 220px 就截，且**与窗口宽度无关**，窗口 1304px 时同样在 220px 截）。皮肤只加了 `///` 前缀，它是标题元素**行内内容**的一部分，因此**占用那 220px 里的约 33px**（18px 字号 + 0.2em 间距）—— 也就是标题实际能用的宽度从 220px 降到约 179px。这是前缀的代价，不是 bug；嫌标题显示太短可以缩前缀或去掉（改一行），但"长标题会不全"本身不是皮肤造成的。
+
+

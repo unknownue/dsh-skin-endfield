@@ -156,8 +156,12 @@ const PROBE = `(() => {
     //
     // This was a CENTRING offset (the row's centre against the band's centre, asserted within
     // 3px). The row is right-aligned now, by request, so the meaningful reading is the gap
-    // between the row's right edge and the band's -- measured at 151px, the same value the
-    // unit-row check pins from the other side, and the thing that moves if the offset changes.
+    // between the row's right edge and the band's, and the thing that moves if the offset changes.
+    // 151px was the absolute-positioning era (the row carried 'right: 151px' itself, measured on a
+    // 1304px band). Shell 0.2.2-alpha.2 moved the row into its own grid row, the skin's '_tabs'
+    // wrapper now owns the right edge and reserves 'padding-right: 115px' for the control cluster,
+    // and the more-views anchor (22px + 12px margin) rides after the row inside that wrapper --
+    // so the measured gap is 115 + 34 + the band's own 28px padding-right = 177px.
     tabRowBox: (() => { const u = header.querySelector('[role=tablist]')
       if (!u) return null
       const r = u.getBoundingClientRect()
@@ -200,7 +204,13 @@ try {
   await sleep(10000)
   await evalIn(cdp, `(() => {
     const rows = [...document.querySelectorAll('[class*=sessionRow]')]
-    const t = rows.find(r => /Docker|skin/i.test(r.textContent || '')) || rows[1] || rows[0]
+    // A session WITH history is required: the unit row only exists once a session is open, and a
+    // run that lands on the new-session entry measures a 0x0 tab row whose assertions are skipped
+    // instead of proven. /Docker|skin|dsh/ keeps the historical preference where it exists, then
+    // the first row that is not the new-session entry, then anything.
+    const t = rows.find(r => /Docker|skin|dsh/i.test(r.textContent || ''))
+      || rows.find(r => !/New Session/i.test(r.textContent || ''))
+      || rows[0]
     if (t) t.click(); return !!t })()`)
   await sleep(5000)
   // Normalize: close the right pane if it happens to be open, so the layout checks below measure
@@ -307,9 +317,9 @@ try {
   // precondition rather than a misalignment -- and it produced exactly one false failure before this
   // guard existed.
   check(out.unitRightGap === null || out.tabRowBox === null || out.tabRowBox.width > 0
-    ? Math.abs((out.unitRightGap ?? 151) - 151) <= 3
+    ? Math.abs((out.unitRightGap ?? 177) - 177) <= 3
     : (console.log('  [note] the tab row is not laid out in this state, so the alignment assertion is skipped'), true),
-    `the units are right-aligned on the band (right edge ${out.unitRightGap}px in from the band's right edge; want 151)`)
+    `the units are right-aligned on the band (right edge ${out.unitRightGap}px in from the band's right edge; want 177)`)
   check(out.controlRight !== null && Math.abs(out.controlRight - out.bandContentRight) <= 20,
     `the controls are back at the right edge (controls end ${out.controlRight}, band content ends ${out.bandContentRight})`)
 
@@ -413,3 +423,4 @@ try {
 } finally {
   cdp.close()
 }
+

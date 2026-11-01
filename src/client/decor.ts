@@ -896,22 +896,29 @@ body [data-queue-dock] [class*='fileSize'] {
 
 /* 15a/15b/15c. The band, per 12-blueprint-grid.jpg, one line tall, with its divider back.
    Measured basis, all in scripts/probe-header-flow.mjs / probe-header-widths.mjs:
-     - the header is display:block and its own flex-direction is ALREADY row, so turning it into
-       a flex row is one property;
-     - the freed height returns to the body with NO compensating rule: the header is flex:0 0 auto
-       and the conversation body is flex:1 1 0% in the same column, with scrollBody
-       (overflow-y:auto) inside it. 44px = 10px top padding + a 31px row + 3px slack;
+     - SHAPE CORRECTION (2026-10-31, shell 0.2.2-alpha.2): the header is a GRID, not a block:
+       'grid-template-columns: auto minmax(0,1fr)' with the title in column 2 and the tab row
+       spanning row 2 ('grid-column: 1/-1'). The old rule here forced 'display:flex', which
+       dropped every grid placement: the title row became a flex item squeezed between the
+       absolute-free wrappers and measured 0x60 (its columns collapsed), while the tab wrapper
+       stayed in flow and ate 1224px of the same row -- the band grew to 82px, the title
+       vanished, and the breadcrumb plugin latched into icon-only mode because its row was
+       overflowing. Keep the shell's grid; flatten row 2 by taking the tab wrapper out of flow
+       (see the '_tabs' rule below). Everything the old comment measured still holds once the
+       grid is kept: the band is flex:0 0 auto in the column, 44px = 10px top padding + a 31px
+       row + 3px slack, and the divider is the band's only edge;
      - the units must be centred against the HEADER, not against the leftover space. Auto margins
-       centre between the neighbours, and the neighbours are unequal (the title column ends at 912
-       while the controls reach 928), which measured out as the units sitting ~166px right of the
-       header's centre. Centring with left:50% + translateX(-50%) is exact here because the units'
-       width comes from their own content, so the transform is stable.
+       centre between the neighbours, and the neighbours are unequal, which measured out as the
+       units sitting ~166px right of the header's centre. The right-alignment lives in the unit
+       rule ('15d') and is unaffected by the grid change;
      - the divider returns, inset at both ends so it clears the sidebar column and the right edge.
        The frame's band is otherwise a flat tint, so the divider is the band's ONLY edge. */
 body header[class*='_header'] {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto;
   align-items: center;
-  gap: 16px;
+  gap: 0;
   /* The divider sits 12px below the title row's baseline: the band's own padding-bottom, NOT a
      taller min-height. Raising min-height would push the row down with it (the row sits at the top
      of a flex column with align-items:center, held up by padding-top), whereas padding-bottom only
@@ -921,6 +928,47 @@ body header[class*='_header'] {
   border-bottom: none;
   position: relative;
 }
+/* The tab row is its own grid row in the shell ('grid-column: 1/-1', row 2). The skin's band is
+   ONE line tall, so the wrapper leaves the grid: it becomes an overlay spanning the band, which is
+   also the positioning context the unit row ('15d') expects, and it lets pointer events through so
+   the title underneath stays clickable. The wrapper is right-aligned: the 'viewsMoreAnchor' chip
+   rides along after the units, and the reserved right padding is the air the band's own control
+   cluster needs (measured: cluster starts at 1457, band content box ends at 1556 -> 99px reserved
+   for it + 16px of air = 115px). */
+body header[class*='_header'] [class*='_tabs'] {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  width: auto;
+  margin: 0;
+  padding: 0 115px 0 0;
+  pointer-events: none;
+  z-index: 2;
+}
+body header[class*='_header'] [class*='_tabs'] > * {
+  pointer-events: auto;
+}
+/* The band is ONE line, so the title cluster and the unit row share it: the cluster is capped
+   short of the units (measured on a 1304px band: the units row starts at 1097, so the cluster
+   may reach 1081) and the control cluster is pushed to the right edge by an auto margin instead
+   of by whatever flex sizing the shell gives it. Without the cap the action chips (the preset
+   chip, the agent-team chip, the background-job chip) ran underneath the unit row's opaque band
+   background and were cut mid-word; without the auto margin the leftover space collected to the
+   right of the corner button once the cluster stopped growing. The 480px reserve is units (310)
+   + more-anchor (34) + air (16) + control cluster (115) + slack (21) -- what the right side costs
+   at the shipped view count. ':has()' cannot measure a sibling's width, so the constant lives
+   here with its derivation rather than being discovered by a reader at debug time. */
+body header[class*='_header'] [class*='titleCluster'] {
+  flex: 0 1 auto;
+  max-width: calc(100% - 496px);
+}
+body header[class*='_header'] [class*='headerUtilities'] {
+  margin-left: auto;
+}
+
 body header[class*='_header']::after {
   content: '';
   position: absolute;
@@ -1020,6 +1068,73 @@ body header[class*='_header'] [class*='crumbCurrent']::after {
   pointer-events: none;
 }
 
+/* 15c-bis. The same two flourishes on the breadcrumb plugin's session crumb.
+   2026-10-31, shell 0.2.2-alpha.2: the breadcrumb plugin (dsh-better-session-topbar, shipped as
+   dsh-better-session-title up to 1.3.x) hides the shell's own 'nav[class*=crumbs]' and renders the
+   title inside its own '.bst-crumbs' layer,
+   so the two rules above now target a subtree the plugin takes out of layout, and the visible
+   title carried neither the /// mark nor the location rule. Re-anchored on two things the plugin
+   itself declares rather than on its private layout: the documented '.bst-crumbs' class contract,
+   and the 'data-bst-crumb="ws" | "session-<id>"' attributes its buttons carry. Only the LAST crumb
+   in the chain is the current session (a subagent session renders its ancestors before it), so
+   the chain position decides, not the attribute value. */
+body header[class*='_header'] .bst-crumbs .bst-crumb:last-of-type > [data-bst-crumb] {
+  position: relative;
+}
+body header[class*='_header'] .bst-crumbs .bst-crumb:last-of-type > [data-bst-crumb]::before {
+  content: var(--endfield-title-slash, "///");
+  font-size: 18px;
+  margin-inline-end: 0.2em;
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+body header[class*='_header'] .bst-crumbs .bst-crumb:last-of-type > [data-bst-crumb]::after {
+  content: '';
+  position: absolute;
+  /* The button's own 6px inline padding, then the 14px chevron and its 5px gap. */
+  left: 6px;
+  right: 25px;
+  bottom: 1px;
+  height: 2px;
+  background: var(--dsw-alias-label-tertiary);
+  pointer-events: none;
+}
+/* The crumb buttons keep the shell's own 220px cap rather than the plugin's 180px: the band has
+   the room (the cluster is capped 496px short of the band's right edge, which leaves the title
+   ~300px before it starts eating the action chips), and a session title is the one thing in this
+   bar that must be readable, not folded at the first opportunity. */
+body header[class*='_header'] .bst-crumbs .bst-crumb-btn {
+  max-width: 220px;
+}
+/* The workspace crumb keeps the skin's text ramp; the plugin colours it with the shell's
+   label-primary, which would make two crumbs shout equally. */
+body header[class*='_header'] .bst-crumbs .bst-crumb:not(:last-of-type) > [data-bst-crumb] {
+  color: var(--dsw-alias-label-tertiary);
+}
+/* The breadcrumb layer must not absorb the band's squeeze.
+   The plugin watches its own row with a ResizeObserver and, when a crumb's text is squeezed below
+   ~80px, collapses that crumb to icon-only and latches the decision until the top bar grows by
+   180px ('update()' in its client.js: rowOverflow / text.clientWidth < ICONIC_TEXT_FLOOR, recovery
+   only on 'header.clientWidth >= at + 180'). The band caps the title cluster (15c) so the action
+   chips stop short of the unit row; if the crumb layer were allowed to shrink inside that cap it
+   would hit the floor on EVERY load at this width and stay icon-only -- the session title would
+   never be readable, which is the bug this whole section was re-anchored for. Keeping the layer at
+   its natural size sends the overflow to the cluster's own clip/fade instead, where the secondary
+   chips are what get cut, not the title. */
+body header[class*='_header'] .bst-crumbs {
+  flex-shrink: 0;
+}
+/* The action chips are the band's overflow budget: they keep their natural width and single line
+   and let the title cluster's own clip/fade cut the tail, instead of each chip squeezing its own
+   label onto two lines (measured: at the shipped chip count a capped cluster squeezed them into
+   14px-tall two-line blobs). The title and the workspace crumb are never the things that give. */
+body header[class*='_header'] [class*='headerActions'] [data-slot] > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+
 /* The hover tooltip inside the top bar's split control must not take part in the layout.
    Measured cause of a hover flicker: the bubble is an 88px flex sibling of the control's two buttons,
    so showing it widens the row, which slides the button out from under the pointer, which ends the
@@ -1033,26 +1148,20 @@ body header[class*='_header'] [class*='_split'] [class*='bubble'] {
 
 /* 15d. the unit row, right-aligned against the band. */
 body header[class*='_header'] [role='tablist'] {
-  position: absolute;
-  /* RIGHT-ALIGNED BY REQUEST, and the two properties that used to centre it are worth naming
-     because this file wrote them: left: 50% + transform: translateX(-50%), under a heading that
-     read "centred against the band" -- which parked a 472px row in the middle of a 1304px band
-     with a wide empty gap on either side. Both are gone; the rest of the rule is untouched.
+  /* FLOW, not absolute (2026-10-31). The shell made the tab row its own grid row in 0.2.2, and
+     the '_tabs' wrapper (15c) takes it out of that row and right-aligns it over the band, so the
+     row itself is a normal flex child again. The old absolute spelling is worth recording because
+     it is what the last three revisions were tuned against: it anchored to the wrapper's padding
+     box with 'right: 151px' (measured on a 1304px band with the control cluster at x 1449) and
+     'top: 50%; translate: 0 -50%'. Both offsets are gone -- the wrapper now reserves the right
+     cluster ('padding-right: 115px') and centres the row vertically, so the same 16px of air and
+     the same vertical centring hold without a magic constant here.
 
-     The offset is MEASURED, not derived, and the difference matters because the derivation was
-     wrong the first time. The bar's right cluster (the small controls plus the avatar) starts at
-     x 1449, stable across Chat, Trajectory and hovered; the bar's own gap is 16px, so the row's
-     right edge wants to be at 1433. right: 123px -- which is what "the padding box ends at 1556,
-     so reserve 1556 - 1433" produces -- actually put that edge at 1461, i.e. 12px INSIDE the
-     cluster: for this absolutely positioned box the offset anchors to the bar's BORDER edge, and
-     the padding does not enter into it. 151px is the value that measures out at 16px of air, and
-     the live check pins both the offset and the clearance.
-
-     Because the offset is taken from the right edge, that clearance holds at any window width:
-     measured at 1100px, the row's right edge lands at 949 against a cluster at 965 -- still 16px
-     of air, the two moving together. At that width all five units no longer fit; the max-width
-     below decides what happens then, and it clips rather than wraps, as it did when centred. */
-  right: 151px;
+     RIGHT-ALIGNED BY REQUEST: the two properties that used to centre it -- left: 50% +
+     transform: translateX(-50%), under a heading that read "centred against the band" -- parked
+     a 472px row in the middle of a 1304px band with a wide empty gap on either side. They stay
+     gone. */
+  position: relative;
   /* Not a percentage: the column is 1304px with the pane closed and 591px with it open, so 60% of
      it was 355px -- narrower than the row's natural 472px, which made the row WRAP and the tabs
      vanish for the wrong reason. Reserving 220px per side measures the space the title and the
@@ -1062,10 +1171,17 @@ body header[class*='_header'] [role='tablist'] {
   margin: 0;
   padding: 0;
   gap: 0;
-  top: 50%;
-  translate: 0 -50%;
+  right: auto;
+  top: auto;
+  translate: none;
   background: var(--endfield-band, color-mix(in srgb, var(--dsw-alias-bg-base) 55%, #2E2E2E));
 }
+/* The shell's "more views" chip rides after the units inside the same row. It is in flow now, so
+   it needs the air the old absolute row got for free from the measured offset. */
+body header[class*='_header'] [class*='viewsMoreAnchor'] {
+  margin-left: 12px;
+}
+
 body header[class*='_header'] [role='tab'] {
   /* 'role' repeated purely to out-rank the shell's own class rule: an attribute selector ties a
      class, and the shell's sheet may land later in document order. */
@@ -1081,6 +1197,23 @@ body header[class*='_header'] [role='tab'] {
      was supposed to buy never appeared on screen. Reverted rather than left in on trust — the
      spacing is tight by design and the label column is what keeps it readable. */
   padding: 6px 16px 6px 30px;
+  /* Shell 0.2.2-alpha.2 enlarged the unit's HIT area: its own rule is now
+     'min-height:35px; margin:-10px calc(-1 * var(--dsh-tab-hit-inline)) 0' with the inline padding
+     moved onto that variable. The skin's unit is a 28px box by design ("当前单元 28px 高，与其余相同"),
+     so both shell metrics have to be left out of it:
+       - min-height 35 grew every unit by 7px and pushed the active unit's top line up against the
+         window edge (unit box y=4..39 in a 52px band, i.e. centred on 21.5 instead of 26);
+       - the -10px inline margins pulled each box 20px into its neighbour, so the inter-unit
+         separator (this file's '::before', anchored at the tab's inline start) landed INSIDE the
+         previous unit's box -- measured on the live row: a hairline slicing the last letter of
+         CHAT / TRAJECTORY / TASKS.
+     With both reset the unit is 28px again, the row centres in the band (y=12..40) and the
+     separator sits exactly in the gap between two labels. 2(border) + 4 + 16 + 6 = 28 stays true for
+     the active unit, and 1 + 5 + 16 + 6 = 28 for a hovered one, so neither state changes height. */
+  min-height: 28px;
+  margin: 0;
+  box-sizing: border-box;
+  line-height: 16px;
   position: relative;
   border: none;
   border-radius: 0;
@@ -1207,7 +1340,8 @@ body header[class*='_header'] [role='tab']:nth-of-type(2)::after {
    visibility:visible while parked off screen (all three attempts are recorded in
    scripts/probe-pane-attr-hunt.mjs). Keying on a declared data-* hook rather than a hashed class is
    what keeps this standing when the shell is rebuilt. */
-body:not(:has([data-rightbar-collapsed])) header[class*='_header'] [role='tablist'] {
+body:not(:has([data-rightbar-collapsed])) header[class*='_header'] [role='tablist'],
+body:not(:has([data-rightbar-collapsed])) header[class*='_header'] [class*='viewsMoreAnchor'] {
   display: none;
 }
 
@@ -2406,3 +2540,5 @@ body [data-slot='conversation.input.plan'] [class*='_error'] {
   letter-spacing: 0.02em;
 }
 `
+
+
