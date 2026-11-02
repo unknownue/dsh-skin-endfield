@@ -216,11 +216,22 @@ try {
   // Normalize: close the right pane if it happens to be open, so the layout checks below measure
   // the closed state they are written about. The state persists across loads, so it cannot be
   // assumed -- two earlier runs disagreed purely because of this.
+  //
+  // Since shell 0.2.2 the pane is always RENDERED and merely moved off screen when collapsed, so
+  // "a Collapse right sidebar button exists" is no longer the open state: measured with the pane
+  // closed, that button sits at x=2263 with visibility:hidden. The first version clicked it anyway,
+  // which OPENED the pane, hid the unit row (the skin's one display:none rule) and failed the
+  // single-line and plate-height assertions on a correct page. The button's own box is the state.
   const paneState = await evalIn(cdp, `(() => {
     const collapse = [...document.querySelectorAll('button')]
       .find((b) => /^Collapse right sidebar$/.test(b.getAttribute('aria-label') || ''))
-    const wasOpen = !!collapse
-    if (collapse) collapse.click()
+    const r = collapse ? collapse.getBoundingClientRect() : null
+    const cs = collapse ? getComputedStyle(collapse) : null
+    const wasOpen = collapse !== null
+      && cs.visibility !== 'hidden'
+      && r.width > 0 && r.height > 0
+      && r.left >= 0 && r.left < window.innerWidth
+    if (wasOpen) collapse.click()
     return { wasOpen }
   })()`)
   if (paneState.wasOpen) {
@@ -350,15 +361,13 @@ try {
   check(Number(out.header?.box?.[1]) >= out.titleRowBox?.bottom + 2,
     `the divider has room below the row: band ${out.header?.box?.[1]}px, row ends ${out.titleRowBox?.bottom}`)
 
-  // 15e: the right pane's strip, which only exists while that pane is open.
-  if (out.dockStrip.present) {
-    // Same mechanism as the conversation bar, at 28px: squared, and the current one filled.
-    // The `//` marker this used to assert was withdrawn with the redesign.
-    check(out.dockStrip.active?.outer.radius === '0px', `the pane tab is square (${out.dockStrip.active?.outer.radius})`)
-    check(out.dockStrip.active?.fill !== undefined && out.dockStrip.active?.fill !== null,
-      `the pane tab is filled like the bar's plate (${out.dockStrip.active?.fill})`)
-  } else {
-    console.log('  [SKIP] the right pane is closed, so its strip was not measured — not a pass')
+  // 15e is measured in the pane-OPEN section further down, because that is the only state in which
+  // the strip has a current tab: since shell 0.2.2 the pane's DOM stays MOUNTED when collapsed
+  // (only moved off screen -- the same fact that made the collapse-button probe above wrong), so
+  // "a [data-dockkit-strip] element exists" is not the open state either. Measured with the pane
+  // closed: the element was there, with no current tab and no box.
+  if (!(out.dockStrip?.present && out.dockStrip.active)) {
+    console.log('  [SKIP] the right pane is closed (no current pane tab), so its strip is measured in the open state below')
   }
 
   // The hover stability check: park the pointer on the file-explorer control and sample the row's
@@ -415,6 +424,17 @@ try {
   console.log(`  toggle clicked: ${openedPane}   conversation tab row: ${paneOpen.conversationTabRowDisplay}`)
   check(paneOpen.conversationTabRowDisplay === 'none' || paneOpen.conversationTabRowAbsent === true,
     `the conversation tab row is hidden while the right pane is open (${paneOpen.conversationTabRowDisplay})`)
+
+  // 15e: the right pane's strip, measured HERE -- the only state in which it has a current tab.
+  // Same mechanism as the conversation bar at 28px: squared, and the current one filled. The `//`
+  // marker this used to assert was withdrawn with the redesign.
+  if (paneOpen.dockStrip?.present && paneOpen.dockStrip.active) {
+    check(paneOpen.dockStrip.active.outer.radius === '0px', `the pane tab is square (${paneOpen.dockStrip.active.outer.radius})`)
+    check(paneOpen.dockStrip.active.fill !== undefined && paneOpen.dockStrip.active.fill !== null,
+      `the pane tab is filled like the bar's plate (${paneOpen.dockStrip.active.fill})`)
+  } else {
+    console.log('  [SKIP] the pane strip has no current tab even with the pane open, so 15e was not measured — not a pass')
+  }
 
   console.log(failures.length === 0
     ? '\nOK: both top bars carry the skin\'s rail treatment'

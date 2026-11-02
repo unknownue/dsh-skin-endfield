@@ -451,7 +451,7 @@ body [data-phase] [data-composer-seat][class] {
 
 ### 这一行现在**右对齐**（原先是我们自己把它居中的）
 
-> **读数已被下一节取代**：下表是「绝对定位 + ight: 151px」时代的量法。2026-10-31 升级到 shell  .2.2-alpha.2 后，单位行改由 _tabs 覆盖层承载、偏移变成 **177**（单位行→右侧控件 50px），推导见下一节「shell 0.2.2-alpha.2 的顶栏重锚」。
+> **读数已被下一节取代**：下表是「绝对定位 + right: 151px」时代的量法。2026-10-31 升级到 shell 0.2.2-alpha.2 后，单位行改由 _tabs 覆盖层承载、偏移变成 **177**（单位行→右侧控件 50px），推导见下一节「shell 0.2.2-alpha.2 的顶栏重锚」。
 
 它原来是 `left: 50% + translateX(-50%)`，标题写的就是"centred against the band"——472px 的一行浮在 1304px 的横带正中，左右各留一大片空白。改成右对齐后：
 
@@ -525,9 +525,55 @@ dsh 升到 `0.2.2-alpha.2` 后，会话顶栏显示坏掉：横带变成 82px �
 
 > 相关限制：**长标题仍会截断** —— 但截断点现在来自插件按钮的 `max-width`（皮肤按外壳原生口径收紧到 220px，见 decor.ts 15c-bis），与窗口宽度无关，和上文"外壳写死 220px"的历史说明同源。
 
+## 顶栏的直角：后台任务 chip 与它的弹层（装饰层 15c-ter / 19e，2026-11-01）
+
+用户报的是"会话顶部栏的 background jobs 控件是圆角矩形、弧度很大"。量下来是**两处**，而且都不是外壳的问题：chip 的圆角来自面包屑插件，弹层的圆角来自 0.2.2 换了渲染方式后**皮肤没跟上的锚点**。
+
+### 一、后台任务 chip：插件用同具体度的规则压过了皮肤
+
+- 现象：横带动作簇里，后台任务那枚 chip 实测 `border-radius: 12px`（28px 高的盒子上 12px 已经接近半圆端帽），同一带的其它控件（含 Agent Team、子代理计数、两节面包屑）全是 0。
+- 来源：`dsh-better-session-topbar@1.5.4` 给三枚原生 chip 打 `data-bst-chip` 后统一改度量，自带 `button[data-bst-chip]{border-radius:var(--dsw-radius-md)}`。这条与装饰层第 1 节的通配表单规则**同具体度**（元素 + 1 属性），谁赢取决于**注入顺序** —— 插件在皮肤之后注入，所以它赢。另外两枚被 19a 用更高具体度的选择器单独钉成直角，于是"漏网"的只有任务 chip。
+- 修法：在**外壳自己声明的槽位** `[data-slot='conversation.session.header.actions']` 上把控件收成直角（15c-ter，具体度 (0,2,3)，与插入顺序无关）。选槽位而不是插件的 `data-bst-chip`：槽位是 `dsh-client-ui-conversation` 的 `slots.d.ts` 契约，现役与将来新增的控件都过这里；插件属性只覆盖它今天改的那三枚。
+- 同一轮量出的泄漏：插件给面包屑按钮也写了 `aria-expanded`（它自己的工作区/会话下拉），于是 19e 的"打开态标记"落到了 crumb 上 —— 实测悬停 crumb 得到 `inset 0 1px 0 0 color(srgb 1 .98 0 / .55)`。19e 的选择器补 `:not([data-bst-crumb])`（插件自己声明的属性，15c-bis 已用它锚 `///` 与当前位置线），悬停 crumb 回到 `none`，插件自己的 hover 底色保留。
+
+### 二、后台任务弹层：0.2.2 把它换成了原语库的 MenuSurface
+
+- 0.2.2 起 `dsh-client-ui-jobs` 不再把列表挂在横带内部：弹层由原语库的 `MenuSurface` 渲染、`createPortal` 到 `<body>`，面板是 `div[data-menu-material='translucent']`。实测（1920 宽）：**500×162、`border-radius: 16px`**（来自 surface 自己读的 `--dsw-radius-lg`）、`--dsw-elevation-prominent` 的 0.5px 描边 + 两层投影；填充不是面板自己的 `background`，而是内层 `.material`（`position:absolute; inset:0; z-index:-1; border-radius:inherit; background:var(--dsw-menu-surface-fill); backdrop-filter:var(--dsw-menu-backdrop-filter)`）。
+- 旧 19e 的锚点（横带里的 `… > ul`、它的 `::before/::after` 角括号、`ul > li` 内容规则）在这套 DOM 上**一个都匹配不到**，所以整块保持外壳原样。横带里其它控件都是直角，这块 16px 圆角 + 柔和投影的浮层就是唯一的"大圆角矩形"，和对 chip 的抱怨是同一句观感。
+- 新锚点：`body [data-menu-material]:has(> ul[class*='_menuBody'])`。`data-menu-material` 是 MenuSurface 的声明；`> ul` 的包含关系把这节限制在这枚弹层上（同一属性也标着别的浮层菜单，那些归第 2 节管）。CSS Modules 类名保留 local name，`_menuBody` 后缀跨构建稳定 —— 与文件里既有的 `[class*='_header']` / `[class*='_tabs']` 同一读法。
+- **底色是"改指向"而不是"盖上去"**：在锚点上重指 `--dsw-menu-surface-fill`（→ `--dsw-specific-menu`）与 `--dsw-menu-backdrop-filter`（→ `none`），内层继续干它的活，半径靠 `border-radius: inherit` 跟到 0。直接给 surface 上底色、再把内层关掉更直观，但那样会留一层"什么都不模糊"的合成层，并把填充垫到与外壳预期不同的叠放位置。
+- 令牌族照样在锚点上重声明（19d 同款）：列表、行、chevron 框、停止键、分节折叠键一次归零。
+- **角括号故意不画**：这个包的规则是 `overflow: hidden`，`-1px` 的伪元素会被裁掉 —— 那会变成"声明量得到、像素看不见"的假绿，而这正是本仓库一直在删的那类检查。这一层的标识就是 1px 发丝线 + 调色板菜单底色。
+- 内容规则重锚：分节标题（普通 label 与带折叠/Clear 的两种，按"直接子 button"区分）进 caption 语气、非首节保留一条 `border-l1` 发丝线；行内两个小控件原本描 `border-l2`（= 这层底色，隐身）改描 `border-l3`；列表 `overscroll-behavior: contain; scrollbar-gutter: stable`。
+
+### 实测对照
+
+| 读数 | 修前 | 修后 |
+|---|---|---|
+| 动作簇 chip 圆角 | jobs=12px、其余 0 | 全部 0px（两节面包屑 + team + sub + jobs） |
+| 弹层面板 | 500×162、radius 16px、0.5px elevation 描边 + 两层投影 | 500×162、radius 0px、1px `#424242` 框、无投影 |
+| 弹层填充层 | `--dsw-menu-surface-fill`（半透明）+ `blur(40px) saturate(150%)` | `#35373C` 实底、`backdrop-filter: none` |
+| 列表 / 行 / chevron 框 | 令牌族默认（4–16px） | 全部 0px |
+| 悬停 crumb | `inset 0 1px 0 0` 品牌黄 55% | 无（插件自己的 hover 底色保留） |
+| 弹层与横带关系 | 旧锚点假设"列表在横带内" | 列表被 portal 到 `<body>`（实测 `list.closest('header') === null`） |
+
+### 验证
+
+`verify-topbar-panels-live.mjs` 扩成三块，全部 PASS：
+
+- **横带动作簇（新增）**：槽位里每个控件都是直角（实测 5 枚，全 0px）；悬停 crumb 不再带 19e 的标记。
+- **后台任务弹层（重写）**：先在 CDP 里把视口 `Emulation` 到 1920 宽 —— 1584 测试窗下单元行覆盖 chip 右半（实测 chip 993..1058、单元行从 1007 起），点击落在 CHAT 标签上、弹层永远打不开；1920 下同一枚 chip 164px 宽，与单元行留 96px 空隙。随后断言：面板 0px / 半径族归零 / 1px `border-l3` 框 / 无投影 / 填充层实底 = `#35373C` 且 `blur: none` / 列表不在横带内 / 触发器 2px 线 / 触发器自身直角 / 分节标题 caption 语气 / 行内控件直角 / chevron 框 `border-l3`。
+- **顺带修了检查层的两个状态前提**（是外壳 0.2.2 让检查读到别的状态，不是皮肤的问题）：
+  1. `verify-top-bars-live`：右侧面板收起后 DOM 仍挂着，`Collapse right sidebar` 按钮 `visibility:hidden`、位于 x=2263；旧检查"按钮存在即面板打开"于是**点开了收起的面板**，把单位行藏了起来，`单行` 与 `plate 高度` 两条断言在正确页面上报错。改成按按钮自己的可见盒子判断；`[data-dockkit-strip]` 同理（收起时仍在 DOM、无当前 tab），于是 15e 的三条断言移到"面板打开态"那一节去测（实测：pane tab 0px、填充 `rgb(255,255,255)`）。
+  2. `verify-topbar-panels-live`：headless profile 的 localStorage 存着 `dsh.workspace.view.v5`（哪组工作区展开），陈旧值让这一轮读到一个月前的 History 组（10 个从不跑后台任务的会话），19e 整节报 skip 而套件仍是绿的。开跑前清 `local_storage`，并把会话遍历改为**按行文本**点选：点一行会让侧栏重排/重渲染，先前按下标寻址实测走十次也到不了那唯一有任务的会话。
+
+> 记一条**没在本轮修的相关缺陷**：1584px 测试视口下，单元行（`_tabs` 覆盖层，z-index 2）覆盖动作簇最后一枚 chip 的右半，chip 只剩左侧 ~14px 可点、计数与箭头被 CHAT 标签的底色盖住。1920 宽下不存在（chip 与单元行相距 96px）。根因是 15c-bis 给标题簇的封顶常量 `calc(100% - 496px)` 仍是"单位行 310 + 锚点 34 + 空气 16 + 控件区 115 + 余量 21"时代的值，而单位行现在是 **400px**（Chat/Trajectory/Tasks/Papers）。它属于横带预算的独立问题（真正修法要么让插件把 chip 降档、要么重算封顶），本轮不动。
+
 ## 顶栏的三个弹层：Agent Team、子代理目录、后台任务（装饰层 19）
 
 dsh 升到 0.2 之后，横带的控件区多了三个会展开面板的按钮：`Agent Team`（`dsh-experimental-client-ui-agent-team`）与子代理数量（`dsh-client-ui-subagent`，子目录只在当前会话**有子会话**时才渲染这个触发器）都是**悬停即展开**；后台任务计数（`dsh-client-ui-jobs`）是**点击展开**、点外面收起。三者都由别的包渲染、类名都是 CSS Modules 生成的，皮肤此前完全没有覆盖它们。前两个 portal 到 `<body>`，第三个是横带自己内部的绝对定位列表。
+
+> **读数已被下一轮修改取代（2026-11-01）**：本节关于 19e 的那部分（弹层锚点、`::before/::after` 角括号、"列表在横带内部"）是 0.2.2 之前的 DOM。0.2.2 起后台任务弹层改由原语库的 `MenuSurface` portal 到 `<body>`，19e 已重锚、角括号已撤；"任务 chip 圆角 / crumb 标记泄漏"两处也一并修掉。修订与实测见上一节「顶栏的直角：后台任务 chip 与它的弹层」。
 
 > **其中一个不是"没适配"，而是被皮肤自己弄坏了。** Agent Team 面板把底色画在**自己的 `::before`** 上，而装饰层第 6 节早已把 `[role=dialog]` 的 `::before` 征用成 10px 角括号 —— 那个面板恰好就是 `role=dialog`。实测（`pnpm probe:topbar-panels`）：伪元素量到 **10×10px**、`inset: -1px`、带角括号的黄边，而 320×166 的面板本体 `background-color: rgba(0,0,0,0)`。**正文从面板里透出来，文字压在面板自己的标签上**。所以这一节的第一件事是把底色搬回元素本身，只做直角化并不够。
 

@@ -1,5 +1,5 @@
 /**
- * Live proof for the two top-bar hover panels (decor section 19).
+ * Live proof for the band's popovers and action chips (decor sections 15c-ter and 19).
  *
  * Offline checks can prove a rule is IN the stylesheet; only the running app can prove it WINS.
  * That distinction is the whole point of this file, because every rule in section 19 fights a
@@ -11,7 +11,14 @@
  *   - the member tile's hover is a two-class-plus-pseudo rule, so `box-shadow: none` on an
  *     attribute-and-elements selector loses unless `[class]` is in the selector;
  *   - the catalogue reads a RADIUS TOKEN FAMILY, so the squared corner only appears if
- *     re-declaring that family on the anchor actually reaches the rows and their click areas.
+ *     re-declaring that family on the anchor actually reaches the rows and their click areas;
+ *   - the job popover is portalled by the primitives' MenuSurface and its fill lives on an inner
+ *     material layer painted from a token, so "it is square / opaque" is a claim about the plate
+ *     AND about that layer (measured before the fix: 16px radius, elevation stroke, translucent
+ *     blur -- the one large rounded rectangle in the band);
+ *   - the action chips are re-dressed by the breadcrumb plugin through a rule that TIES the
+ *     skin's blanket form-control rule in specificity and wins on insertion order, so the job
+ *     chip arrived at 12px while the rest of the cluster was square.
  *
  * It also states what it does NOT prove, rather than counting it as a pass: a nested catalogue
  * branch (no session in this deployment has a loadable child catalogue, so no `[role=group]` can
@@ -184,11 +191,48 @@ const widthOf = (value) => {
   const m = /^([\d.]+)px/.exec(String(value).trim())
   return m === null ? null : Number(m[1])
 }
+/**
+ * Open session after session until `probe` answers non-null, addressed by the row's TEXT.
+ *
+ * The first version of the job half walked the rows by index (`querySelectorAll(...)[i]`) and it
+ * NEVER reached the one session that owned a background job: clicking a row can re-render or
+ * re-order the sidebar list, so the index captured before the first click addresses a different
+ * session afterwards (measured: ten index-addressed clicks, no job trigger; the same session was
+ * row 1 of a fresh text snapshot). Text is what a human clicks by, and it survives the re-render.
+ */
+const openSessionWhere = async (probe, { wait = 2800 } = {}) => {
+  const titles = await cdp.evalIn(`[...document.querySelectorAll('[class*=sessionRow]')]
+    .map((r) => (r.textContent || '').trim().slice(0, 60))`)
+  for (const title of titles) {
+    const clicked = await cdp.evalIn(`(() => {
+      const want = ${JSON.stringify(title)}
+      const row = [...document.querySelectorAll('[class*=sessionRow]')]
+        .find((r) => (r.textContent || '').trim().slice(0, 60) === want)
+      if (!row) return false
+      row.click(); return true })()`)
+    if (!clicked) continue
+    await sleep(wait)
+    const hit = await cdp.evalIn(probe)
+    if (hit !== null) return hit
+  }
+  return null
+}
 
 const cdp = await connectCdp({ profile: '_chrome-topbar-panels', args: ['--hide-scrollbars'] })
 
 try {
   await cdp.send('Runtime.enable'); await cdp.send('Page.enable')
+  // The headless profile persists the app's own UI state in localStorage -- among it
+  // 'dsh.workspace.view.v5', which remembers WHICH workspace group the sidebar has expanded. A
+  // stale value made this suite read a month-old History group (ten sessions that never ran a
+  // background job), and the whole 19e half then reported "skip" while the run looked green.
+  // Clearing it means every run starts from the app's default: the active workspace, with the
+  // sessions a job can have come from. Only this profile is touched (the user's browser is a
+  // different one); the state it resets is layout, not credentials -- the token is in the URL.
+  await cdp.send('Storage.clearDataForOrigin', {
+    origin: new URL(DSH_URL).origin,
+    storageTypes: 'local_storage, session_storage',
+  })
   await cdp.send('Page.navigate', { url: DSH_URL })
   await sleep(10000)
   note(`html carries the skin: ${await cdp.evalIn(`document.documentElement.classList.contains('endfield')`)}`)
@@ -204,6 +248,68 @@ try {
 
   const rows = await cdp.evalIn(`[...document.querySelectorAll('[class*=sessionRow]')].map((r, i) => i)`)
   note(`${rows.length} session rows in the sidebar`)
+
+  // ── the band's action cluster (15c-ter, and 19e's crumb exclusion) ──────
+  // The reported defect: the background-job control arrived at 12px while the rest of the band is
+  // square. The rounding is not the shell's -- the breadcrumb plugin re-dresses the three native
+  // chips through its own 'button[data-bst-chip]' rule ('border-radius: var(--dsw-radius-md)'),
+  // which ties section 1's blanket form-control rule in specificity and wins on insertion order.
+  // What this checks is the OUTCOME, on the shell's declared slot: every control that rides there
+  // is square, whichever package dressed it. The job chip, the team chip and the subagent chip all
+  // hang off that slot; so do the plugin's crumb buttons, which is why one assertion covers the
+  // three native chips and the two breadcrumb levels at once.
+  console.log('\n=== the band\'s action cluster ===')
+  const READ_CHIPS = `(() => {
+    const slot = document.querySelector("header[class*='_header'] [data-slot='conversation.session.header.actions']")
+    if (!slot) return null
+    const read = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect()
+      return { tag: el.tagName.toLowerCase(), text: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 28),
+        box: [Math.round(r.width), Math.round(r.height)],
+        at: [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)],
+        radius: cs.borderTopLeftRadius, shadow: cs.boxShadow,
+        chip: el.getAttribute('data-bst-chip'), crumb: el.getAttribute('data-bst-crumb') } }
+    return [...slot.querySelectorAll("button, [role='button'], [role='tab']")].map(read)
+  })()`
+  let chips = null
+  // Prefer the session that carries a background-job chip -- the reported control is that one --
+  // and fall back to any session with the action slot when this deployment has no jobs at all.
+  const READ_JOBS_CHIPS = `(() => {
+    const chips = ${READ_CHIPS}
+    return chips !== null && chips.length > 0 && chips.some((c) => c.chip === 'jobs') ? chips : null
+  })()`
+  chips = await openSessionWhere(READ_JOBS_CHIPS)
+  if (chips === null || chips.length === 0) chips = await openSessionWhere(READ_CHIPS)
+  if (chips === null || chips.length === 0) {
+    note('no session exposed the band\'s action slot, so 15c-ter was NOT measured here — skip, not a pass')
+  } else {
+    console.log(`  ${chips.length} control(s): ${chips.map((c) => `${c.text || c.tag}=${c.radius}`).join(', ')}`)
+    const jobsChip = chips.find((c) => c.chip === 'jobs')
+    if (jobsChip === undefined) {
+      note('no background-job chip was mounted in this deployment, so the reported control itself is not read — the slot-wide assertion below still holds')
+    } else {
+      console.log(`  background-job chip ${jobsChip.box.join('x')} radius=${jobsChip.radius} shadow=${jobsChip.shadow}`)
+    }
+    check(chips.every((c) => c.radius === '0px'),
+      `every control in the action slot is square (${JSON.stringify(chips.map((c) => (c.chip ?? c.crumb ?? c.tag) + ':' + c.radius))})`)
+    // The other half of the same plugin contract: its crumb buttons are aria-expanded too, so
+    // 19e's open-list mark used to paint a 1px yellow line on a hovered crumb. The exclusion is
+    // the plugin's own data-bst-crumb attribute; this reads the mark off the hovered crumb.
+    const crumb = chips.find((c) => c.crumb !== null)
+    if (crumb === undefined) {
+      note('the breadcrumb plugin is not rendering crumbs here, so the 19e crumb exclusion was NOT measured')
+    } else {
+      await cdp.mouse('mouseMoved', crumb.at[0], crumb.at[1]); await sleep(900)
+      const hovered = await cdp.evalIn(`(() => { const b = document.querySelector("header[class*='_header'] .bst-crumb-btn")
+        if (!b) return null
+        const cs = getComputedStyle(b)
+        return { shadow: cs.boxShadow, fill: cs.backgroundColor, radius: cs.borderTopLeftRadius } })()`)
+      console.log(`  hovered crumb: ${JSON.stringify(hovered)}`)
+      check(hovered !== null && !/inset/.test(hovered.shadow),
+        `19e's open-list mark stays off the breadcrumb (${hovered?.shadow})`)
+      await cdp.mouse('mouseMoved', 5, 880); await sleep(400)
+    }
+  }
+
   // ── the Agent Team panel ────────────────────────────────────────────────
   console.log('\n=== the Agent Team panel ===')
   let teamIdle = null
@@ -395,33 +501,40 @@ try {
 
   // ── the background-job popover (19e) ───────────────────────────────────
   console.log('\n=== the background-job popover ===')
-  const JOBS_HOOK = `button[aria-expanded]:not([aria-haspopup])`
+  // The band has to be wide for this half. The job trigger is the LAST action chip, and at the
+  // 1584px test viewport the unit-row overlay covers its right end -- a click at its centre lands
+  // on the CHAT tab and the list never opens (measured: chip 993..1058, unit row from 1007). At
+  // 1920 the same chip is 164px wide and clears the unit row by 96px. Emulated rather than
+  // reasoned about, and restored at the end of the section.
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1920, height: 900, deviceScaleFactor: 1, mobile: false })
+  await sleep(900)
+  // The crumb exclusion is part of the hook now: since dsh-better-session-topbar 1.5.4 the
+  // breadcrumb buttons are aria-expanded as well (their own workspace / session dropdowns), so
+  // without it the trigger anchor nominates a crumb -- and the click opens nothing.
+  const JOBS_HOOK = `button[aria-expanded]:not([aria-haspopup]):not([data-bst-crumb])`
   let jobs = null
   let jobsIdle = null
-  for (const i of rows) {
-    await cdp.evalIn(`(() => { const r = document.querySelectorAll('[class*=sessionRow]')[${i}]
-      if (r) r.click(); return !!r })()`)
-    await sleep(3200)
-    const at = await cdp.evalIn(`(() => {
-      const header = document.querySelector('header[class*="_header"]')
-      if (!header) return null
-      const b = header.querySelector(${JSON.stringify(JOBS_HOOK)})
-      if (!b) return null
-      const r = b.getBoundingClientRect()
-      const cs = getComputedStyle(b)
-      return { at: [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)],
-        box: [Math.round(r.width), Math.round(r.height)], top: Math.round(r.top),
-        shadow: cs.boxShadow, transform: cs.textTransform, expanded: b.getAttribute('aria-expanded'),
-        hookCount: header.querySelectorAll(${JSON.stringify(JOBS_HOOK)}).length,
-        expandedButtons: [...header.querySelectorAll('button[aria-expanded]')].map((x) => x.getAttribute('aria-haspopup')),
-        listsInHeader: header.querySelectorAll('ul').length,
-        listsOnPage: document.querySelectorAll('ul').length } })()`)
-    if (at === null) continue
+  const at = await openSessionWhere(`(() => {
+    const header = document.querySelector('header[class*="_header"]')
+    if (!header) return null
+    const b = header.querySelector(${JSON.stringify(JOBS_HOOK)})
+    if (!b) return null
+    const r = b.getBoundingClientRect()
+    const cs = getComputedStyle(b)
+    return { at: [Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2)],
+      box: [Math.round(r.width), Math.round(r.height)], top: Math.round(r.top),
+      shadow: cs.boxShadow, transform: cs.textTransform, expanded: b.getAttribute('aria-expanded'),
+      hookCount: header.querySelectorAll(${JSON.stringify(JOBS_HOOK)}).length,
+      expandedButtons: [...header.querySelectorAll('button[aria-expanded]')].map((x) => x.getAttribute('aria-haspopup')),
+      listsInHeader: header.querySelectorAll('ul').length,
+      listsOnPage: document.querySelectorAll('ul').length } })()`, { wait: 3200 })
+  if (at !== null) {
     await cdp.mouse('mouseMoved', 5, 880); await sleep(700)
     jobsIdle = await cdp.evalIn(`(() => {
       const b = document.querySelector('header[class*="_header"] ${JOBS_HOOK}')
       const cs = getComputedStyle(b); const r = b.getBoundingClientRect()
       return { shadow: cs.boxShadow, box: [Math.round(r.width), Math.round(r.height)], top: Math.round(r.top),
+        radius: cs.borderTopLeftRadius,
         transform: cs.textTransform, expanded: b.getAttribute('aria-expanded') } })()`)
     // It opens on CLICK (and dismisses on an outside pointer), so a hover would measure nothing.
     await cdp.mouse('mouseMoved', at.at[0], at.at[1]); await sleep(400)
@@ -432,20 +545,30 @@ try {
       const read = ${READ_EL}
       const header = document.querySelector('header[class*="_header"]')
       const trigger = header.querySelector(${JSON.stringify(JOBS_HOOK)})
-      const wrapper = trigger.parentElement
-      const menu = wrapper.querySelector(':scope > ul')
-      const out = { hookCount: header.querySelectorAll('button[aria-expanded]:not([aria-haspopup]):not(ul *)').length,
+      // The portalled plate (shell 0.2.2): MenuSurface's div[data-menu-material] and the list it
+      // wraps. Same selector as the skin's 19e anchor, on purpose -- this reads the rule's own
+      // target rather than a convenient approximation of it.
+      const pin = document.querySelector('[data-menu-material]:has(> ul[class*="_menuBody"])')
+      const list = pin ? pin.querySelector(':scope > ul') : null
+      const out = { hookCount: header.querySelectorAll('button[aria-expanded]:not([aria-haspopup]):not([data-bst-crumb]):not(ul *)').length,
         hookCountLoose: header.querySelectorAll(${JSON.stringify(JOBS_HOOK)}).length,
         haspopups: [...header.querySelectorAll('button[aria-expanded]')].map((x) => x.getAttribute('aria-haspopup')),
-        listsInHeader: header.querySelectorAll('ul').length, listsOnPage: document.querySelectorAll('ul').length,
-        anchored: header.querySelectorAll(':scope > ul').length,
-        wrapper: wrapper.tagName.toLowerCase(), wrapperCls: String(wrapper.className || '').slice(0, 40),
+        bandLists: header.querySelectorAll('ul').length, pageLists: document.querySelectorAll('ul').length,
+        surfaceAnchors: document.querySelectorAll('[data-menu-material]:has(> ul[class*="_menuBody"])').length,
+        surfaceMaterial: pin ? pin.getAttribute('data-menu-material') : null,
+        listInBand: list ? !!list.closest('header') : null,
         triggerNow: (() => { const cs = getComputedStyle(trigger); const r = trigger.getBoundingClientRect()
           return { shadow: cs.boxShadow, box: [Math.round(r.width), Math.round(r.height)], top: Math.round(r.top),
             expanded: trigger.getAttribute('aria-expanded'), radius: cs.borderTopLeftRadius } })(),
-        menu: menu ? read(menu) : null }
-      if (menu) {
-        const items = [...menu.querySelectorAll(':scope > li')]
+        pin: pin ? read(pin) : null,
+        material: (() => { if (!pin) return null
+          const layer = [...pin.children].find((child) => child !== list)
+          if (!layer) return null
+          const cs = getComputedStyle(layer)
+          return { fill: cs.backgroundColor, blur: cs.backdropFilter, radius: cs.borderTopLeftRadius } })(),
+        list: list ? read(list) : null }
+      if (list) {
+        const items = [...list.querySelectorAll(':scope > li')]
         const headers = items.map((li, index) => ({ li, index })).filter(({ li }) =>
           li.getAttribute('aria-hidden') === 'true' || li.querySelector(':scope > button'))
         out.sectionHeaders = headers.map(({ li, index }) => { const cs = getComputedStyle(li)
@@ -454,60 +577,62 @@ try {
             ariaHidden: li.getAttribute('aria-hidden'), text: (li.textContent || '').trim().slice(0, 20) } })
         // A job row's controls are only rendered for a LIVE job (a settled row is a static span),
         // so both of these are legitimately absent when everything has finished.
-        const stop = menu.querySelector('[data-kill-state]')
+        const stop = list.querySelector('[data-kill-state]')
         out.stop = stop ? { border: getComputedStyle(stop).borderTopWidth + ' ' + getComputedStyle(stop).borderTopColor,
           radius: getComputedStyle(stop).borderTopLeftRadius } : null
-        const chevron = [...menu.querySelectorAll('button > span')].find((s) => s.querySelector(':scope > svg'))
+        const chevron = [...list.querySelectorAll('button > span')].find((s) => s.querySelector(':scope > svg'))
         out.chevron = chevron ? { border: getComputedStyle(chevron).borderTopWidth + ' ' + getComputedStyle(chevron).borderTopColor,
           radius: getComputedStyle(chevron).borderTopLeftRadius, box: (() => { const r = chevron.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)] })() } : null
         out.rows = items.length
-        out.liveRows = menu.querySelectorAll('[data-kill-state]').length
-        // The leak this file found once: with the list open, every fold inside it also matched the
-        // loose trigger hook and drew the yellow line. Counted by the MARK itself (an inset shadow
-        // in the brand yellow), not by recall, and reported with the element that carries it.
-        out.popoverLeak = [...menu.querySelectorAll('button')]
-          .map((b) => ({ cls: String(b.className).slice(0, 30), shadow: getComputedStyle(b).boxShadow }))
-          .filter((entry) => /inset/.test(entry.shadow) && /255,\s*250,\s*0/.test(entry.shadow))
+        out.liveRows = list.querySelectorAll('[data-kill-state]').length
+        out.rowRadii = [...new Set([...list.querySelectorAll('button[class], [class*="rowLine"]')]
+          .map((e) => getComputedStyle(e).borderTopLeftRadius))]
       }
       return out
     })()`)
-    if (dump.menu === null) { note(`session row ${i}: the job popover did not open`); continue }
-    jobs = { ...dump, idle: jobsIdle, at }
-    break
+    if (dump.pin === null) note('the job trigger was found but the popover did not open after the click')
+    else jobs = { ...dump, idle: jobsIdle, at }
   }
+  await cdp.send('Emulation.clearDeviceMetricsOverride')
+  await sleep(400)
 
   if (jobs === null) {
     note('no session in this sidebar showed a background-job trigger, so 19e did NOT run — that is a skip, not a pass')
   } else {
-    const menu = jobs.menu
-    console.log(`  trigger idle=${JSON.stringify(jobsIdle)} open=${JSON.stringify(jobs.triggerNow)}`)
+    const pin = jobs.pin
+    const list = jobs.list
+    console.log(`  trigger idle=${JSON.stringify(jobs.idle)} open=${JSON.stringify(jobs.triggerNow)}`)
     console.log(`  hook matches in the band: ${jobs.hookCount} (${jobs.hookCountLoose} without the list exclusion); other aria-expanded buttons carry ${JSON.stringify(jobs.haspopups)}`)
-    console.log(`  menu ${menu.box.join('x')} fill=${menu.fill} radius=${menu.radius} shadow=${menu.shadow} border=${menu.borderTop}`)
-    console.log(`     ::before border=${menu.beforeBorder}   ::after border=${menu.afterBorder}   radius family lg=${menu.radiusLg} sm=${menu.radiusSm}`)
-    console.log(`  lists in the band: ${jobs.listsInHeader} (on the page: ${jobs.listsOnPage}); section headers: ${JSON.stringify(jobs.sectionHeaders)}`)
-    console.log(`  stop=${JSON.stringify(jobs.stop)} chevron=${JSON.stringify(jobs.chevron)} rows=${jobs.rows}`)
+    console.log(`  panel ${pin.box.join('x')} fill=${pin.fill} radius=${pin.radius} shadow=${pin.shadow} border=${pin.borderTop}`)
+    console.log(`     material layer fill=${jobs.material?.fill} blur=${jobs.material?.blur} radius=${jobs.material?.radius}; radius family lg=${pin.radiusLg} sm=${pin.radiusSm}`)
+    console.log(`  list ${list.box.join('x')} radius=${list.radius}; in the band: ${jobs.listInBand}`)
+    console.log(`  section headers: ${JSON.stringify(jobs.sectionHeaders)}`)
+    console.log(`  stop=${JSON.stringify(jobs.stop)} chevron=${JSON.stringify(jobs.chevron)} rows=${jobs.rows} row radii=${JSON.stringify(jobs.rowRadii)}`)
     writeFileSync(join(OUT, 'topbar-panels-jobs.json'), JSON.stringify(jobs, null, 2))
     writeFileSync(join(OUT, 'skinned-jobs-menu.png'), Buffer.from(await cdp.screenshot(), 'base64'))
 
     check(jobs.hookCount === 1,
-      `the job trigger is the band's only aria-expanded button without aria-haspopup (${jobs.hookCount} match; the open list's own folds are excluded)`,
-    )
-    check(jobs.popoverLeak.length === 0,
-      `no button inside the open list drew the trigger's yellow line (${JSON.stringify(jobs.popoverLeak)})`,
-    )
-    check(alphaOf(menu.fill) === 1 && sameColour(menu.fill, menu.menuToken),
-      `the list paints the palette's own opaque menu fill (${menu.fill} vs ${menu.menuToken})`)
-    check(menu.shadow === 'none', `the shell's elevation is gone (${menu.shadow})`)
-    check(menu.radius === '0px', `the list is square (${menu.radius})`)
-    check(parseFloat(menu.radiusLg) === 0 && parseFloat(menu.radiusSm) === 0,
-      `and the radius family is re-declared on it, so its rows and controls follow (lg=${menu.radiusLg} sm=${menu.radiusSm})`)
-    check(widthOf(menu.borderTop) === 1 && sameColour(colourIn(menu.borderTop), menu.l3Token),
-      `one hairline frames it, in the visible step (${menu.borderTop} vs ${menu.l3Token})`)
-    check(widthOf(menu.beforeBorder) === 2 && sameColour(colourIn(menu.beforeBorder), '#FFFA00')
-      && widthOf(menu.afterBorder) === 2 && sameColour(colourIn(menu.afterBorder), '#FFFA00'),
-      `both brackets are drawn on a list that has no role for section 6 (${menu.beforeBorder} / ${menu.afterBorder})`)
-    check(jobs.listsInHeader === 1,
-      `the list is the band's only list while it is open, which is what the anchor keys on (${jobs.listsInHeader})`)
+      `the job trigger is the band's only aria-expanded button without aria-haspopup (${jobs.hookCount} match; the breadcrumb plugin's crumbs are excluded)`)
+    check(jobs.surfaceAnchors === 1,
+      `the skin's 19e anchor matches the portalled plate and nothing else (${jobs.surfaceAnchors} match)`)
+    check(jobs.listInBand === false,
+      `the list really is portalled out of the band on this shell (in-header: ${jobs.listInBand}; band lists ${jobs.bandLists} of ${jobs.pageLists} on the page)`)
+    check(jobs.surfaceMaterial === 'translucent',
+      `the plate is the shell's menu material, which is what the anchor keys on (data-menu-material=${jobs.surfaceMaterial})`)
+    check(pin.radius === '0px', `the panel is square (${pin.radius})`)
+    check(parseFloat(pin.radiusLg) === 0 && parseFloat(pin.radiusSm) === 0,
+      `the shell's radius family is re-declared on the anchor, so rows and controls follow (lg=${pin.radiusLg} sm=${pin.radiusSm})`)
+    check(widthOf(pin.borderTop) === 1 && sameColour(colourIn(pin.borderTop), pin.l3Token),
+      `one hairline frames it, in the visible step (${pin.borderTop} vs ${pin.l3Token})`)
+    check(pin.shadow === 'none', `the shell's elevation is gone (${pin.shadow})`)
+    // The fill is not a background on the plate: it is the inner material layer, which is why the
+    // skin re-points --dsw-menu-surface-fill instead of painting the surface. Both halves are read.
+    check(jobs.material !== null && alphaOf(jobs.material.fill) === 1 && sameColour(jobs.material.fill, pin.menuToken),
+      `the material layer paints the palette's own opaque menu fill (${jobs.material?.fill} vs ${pin.menuToken})`)
+    check(jobs.material !== null && jobs.material.blur === 'none',
+      `and its translucent blur is switched off (${jobs.material?.blur})`)
+    check(widthOf(list.borderTop) === 0,
+      `the frame is on the plate, not stacked on the list (list border ${list.borderTop})`)
     check(jobs.idle.expanded === 'false' && jobs.triggerNow.expanded === 'true'
       && jobs.triggerNow.box[1] === jobs.idle.box[1] && jobs.triggerNow.top === jobs.idle.top,
       `the trigger keeps its box and position between closed and open (${jobs.idle.box} -> ${jobs.triggerNow.box}, top ${jobs.idle.top} -> ${jobs.triggerNow.top})`)
@@ -515,6 +640,8 @@ try {
       `the open list is marked by the unit row's line (${jobs.triggerNow.shadow})`)
     check(jobs.idle.transform === 'none',
       `the trigger keeps its text case: its label is a live count, not a fixed label word (${jobs.idle.transform})`)
+    check(jobs.idle.radius === '0px' && jobs.triggerNow.radius === '0px',
+      `the trigger itself is square (closed ${jobs.idle.radius}, open ${jobs.triggerNow.radius})`)
     check((jobs.sectionHeaders ?? []).length > 0
       && jobs.sectionHeaders.every((h) => h.transform === 'uppercase' && parseFloat(h.tracking) > 0),
       `the list's section headers take the caption voice (${JSON.stringify(jobs.sectionHeaders?.map((h) => h.transform + ' ' + h.tracking))})`)
@@ -525,18 +652,20 @@ try {
     const headers = jobs.sectionHeaders ?? []
     const later = headers.filter((h) => h.index > 0)
     const first = headers.filter((h) => h.index === 0)
-    check(later.every((h) => widthOf(h.border) === 1 && sameColour(colourIn(h.border), menu.l1Token))
+    check(later.every((h) => widthOf(h.border) === 1 && sameColour(colourIn(h.border), pin.l1Token))
       && first.every((h) => widthOf(h.border) === 0),
-      `a section header that is not the first carries one border-l1 hairline, the first carries none (l1 ${menu.l1Token}; measured ${JSON.stringify(headers.map((h) => h.index + ':' + h.border))})`)
+      `a section header that is not the first carries one border-l1 hairline, the first carries none (l1 ${pin.l1Token}; measured ${JSON.stringify(headers.map((h) => h.index + ':' + h.border))})`)
     if (later.length === 0) note(`only ${headers.length} section(s) were present, so the rule BETWEEN sections was not exercised`)
+    check((jobs.rowRadii ?? []).every((radius) => radius === '0px'),
+      `every row control inside the list is square (${JSON.stringify(jobs.rowRadii)})`)
     if (jobs.stop !== null) {
-      check(widthOf(jobs.stop.border) === 1 && sameColour(colourIn(jobs.stop.border), menu.l3Token),
-        `the stop control is re-stroked in the visible step, not the fill's own colour (${jobs.stop.border} vs ${menu.l3Token})`)
+      check(widthOf(jobs.stop.border) === 1 && sameColour(colourIn(jobs.stop.border), pin.l3Token),
+        `the stop control is re-stroked in the visible step, not the fill's own colour (${jobs.stop.border} vs ${pin.l3Token})`)
     } else {
       note('no live job row was present, so the stop control stroke was not measured')
     }
     if (jobs.chevron !== null) {
-      check(widthOf(jobs.chevron.border) === 1 && sameColour(colourIn(jobs.chevron.border), menu.l3Token),
+      check(widthOf(jobs.chevron.border) === 1 && sameColour(colourIn(jobs.chevron.border), pin.l3Token),
         `and so is the row's chevron box (${jobs.chevron.border})`)
     } else {
       note('no chevron box was found in the list')
