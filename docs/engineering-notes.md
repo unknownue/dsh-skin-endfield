@@ -688,6 +688,10 @@ agent 调 `ask_user_question` 时，`dsh-client-ui-user-questions` 把待答问�
 
 > 未证明的部分写在检查头部：没法证明 host 一定会把卡片挂成这个形状（那由包自己的 JSX 决定），也量不到填入真实答案批次 / 倒计时之后的排版。
 
+> **检查脚本第一版把选项标记拼错了，截图上"1 / 2"和行边撞在一起** —— 那是探针的问题，不是皮肤的：真实组件里（从包的 JSX 读）单选选项是 `optionRow > button.option > (span.number, span.optionCopy > span.optionLine > span.optionLabel)`，**数字徽章是 optionCopy 的兄弟**、自己占 20×20；多选才用 `span.checkbox` 换掉它。第一版把数字嵌进了 checkbox 里，于是两个 20×20 盒子叠在一格网格里，数字被挤到行边线上。现在标记按 JSX 原样重建，并加了两条断言：每个数字徽章仍是 20×20、每行/徽章都是 0px 圆角。
+
+> 顺带量到一条**真实的**皮肤行为：选中项（外壳写在按钮上的 `aria-checked="true"`）会拿到第 11 节的选择信号 —— 2px `--endfield-focus` 描边 + bloom，`outline-offset:-2px` 在行内。这不是新加的规则，是 11 节早就给"选中行"的信号，提问卡里同样生效。
+
 ## 页面印版：正文面板上的一张图（装饰层 18b）
 
 页标现在就是**一张图**：四张可选印版之一（默认 `endfield-decal.png` —— 现在这张是由 `my-badge.png` + `my-wordmark.png` **合成**的锁定组合，见 `scripts/compose-lockup.mjs`），或者**你自己上传的一张图**。设置页的旋钮：`Page mark`（总开关）、`Artwork`（哪张图）、`Custom image`（上传本地图片）、`Orientation`（横排 / 竖排）、`Position`（面板四角）、`Size`、`Opacity`。竖排即把图**转 90°**（几何是算出来的，不是手调偏移：绕中心旋转后，偏移要减去长短边差的一半）。

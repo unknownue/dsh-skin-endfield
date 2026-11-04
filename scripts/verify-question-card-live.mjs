@@ -65,13 +65,29 @@ try {
       '</div></header>',
       '<div class="' + qc('questionTitle') + '"><p class="' + qc('titlePreview') + '">The card that replaces the composer while a question waits.</p></div>',
       '<div class="' + qc('options') + '">',
-      '<div class="' + qc('optionRow') + '"><button class="' + qc('option') + '" type="button">',
-      '<span class="' + qc('checkbox') + '"><span class="' + qc('number') + '">1</span></span>',
-      '<span class="' + qc('optionCopy') + '"><span class="' + qc('optionLine') + '"><span class="' + qc('optionLabel') + '">Square with one hairline</span></span></span>',
+      // The structure is the package's own, read from its JSX rather than guessed: a single-select
+      // option is optionRow > button.option > (span.number, span.optionCopy > span.optionLine >
+      // span.optionLabel). The NUMBER is a sibling of optionCopy at 20x20 -- it is NOT nested inside
+      // the checkbox; a multi-select option swaps it for span.checkbox, and the description sits a
+      // level below optionLine. The first version of this check nested the number inside the
+      // checkbox, and the screenshot it produced showed the digits colliding with the row edge --
+      // an artefact of the probe's markup, not of the skin.
+      '<div class="' + qc('optionRow') + ' ' + qc('optionRowInteractive') + '" data-option-row>',
+      '<button class="' + qc('option') + '" type="button" role="radio" aria-checked="false">',
+      '<span class="' + qc('number') + '">1</span>',
+      '<span class="' + qc('optionCopy') + '"><span class="' + qc('optionLine') + '"><span class="' + qc('optionLabel') + '">Square with one hairline</span>',
+      '<span class="' + qc('badge') + '">Recommended</span></span>',
+      '<span class="' + qc('description') + '">A one-line description sits under the label.</span></span>',
       '</button></div>',
-      '<div class="' + qc('optionRow') + ' ' + qc('optionSelected') + '"><button class="' + qc('option') + '" type="button">',
-      '<span class="' + qc('checkbox') + '"><span class="' + qc('number') + '">2</span></span>',
+      '<div class="' + qc('optionRow') + ' ' + qc('optionRowInteractive') + ' ' + qc('optionSelected') + '" data-option-row>',
+      '<button class="' + qc('option') + '" type="button" role="radio" aria-checked="true">',
+      '<span class="' + qc('number') + '">2</span>',
       '<span class="' + qc('optionCopy') + '"><span class="' + qc('optionLine') + '"><span class="' + qc('optionLabel') + '">Shell default</span></span></span>',
+      '</button></div>',
+      '<div class="' + qc('optionRow') + ' ' + qc('optionRowInteractive') + '" data-option-row>',
+      '<button class="' + qc('option') + '" type="button" role="checkbox" aria-checked="true">',
+      '<span class="' + qc('checkbox') + ' ' + qc('checkboxChecked') + '"></span>',
+      '<span class="' + qc('optionCopy') + '"><span class="' + qc('optionLine') + '"><span class="' + qc('optionLabel') + '">Multi-select shows a check box instead</span></span></span>',
       '</button></div></div>',
       '<div class="' + qc('footer') + '"><div class="' + qc('pager') + '">',
       '<span class="' + qc('progress') + '">1 / 1</span>',
@@ -106,15 +122,18 @@ try {
       const card = document.querySelector('[data-probe-card="' + name + '"]')
       if (!card) return null
       const cs = getComputedStyle(card)
-      const row = card.querySelector('[class*="_optionRow"]')
-      const num = card.querySelector('[class*="_number"]')
+      const radii = (selector) => [...card.querySelectorAll(selector)].map((el) => getComputedStyle(el).borderTopLeftRadius)
       return { radius: cs.borderTopLeftRadius, border: cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor,
         shadow: cs.boxShadow, fill: cs.backgroundColor,
         shadowVar: (() => { const d = document.createElement('div'); d.style.position = 'absolute'; d.style.left = '-9999px'; d.style.boxShadow = 'var(--endfield-surface-shadow)'; document.body.appendChild(d); const s = getComputedStyle(d).boxShadow; d.remove(); return s })(),
         frameVar: cs.getPropertyValue('--endfield-frame').trim(),
         radiusXl: cs.getPropertyValue('--dsw-radius-xl').trim(),
-        rowRadius: row ? getComputedStyle(row).borderTopLeftRadius : null,
-        numberRadius: num ? getComputedStyle(num).borderTopLeftRadius : null,
+        rowRadii: radii('[data-option-row]'),
+        numberRadii: radii('[class*="_number"]'),
+        checkboxRadii: radii('[class*="_checkbox"]'),
+        badgeRadii: radii('[class*="_badge"]'),
+        numberBox: (() => { const n = card.querySelector('[class*="_number"]'); if (!n) return null
+          const r = n.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)] })(),
         box: (() => { const r = card.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)] })(),
         cardToken: getComputedStyle(document.body).getPropertyValue('--dsw-specific-input-major').trim() }
     }
@@ -162,8 +181,12 @@ try {
       `${name}: and it wears the switchable surface shadow (${card?.shadow} vs ${card?.shadowVar})`)
     check(card !== null && card.radiusXl === '0', `${name}: the radius family is re-declared on it (xl=${card?.radiusXl})`)
   }
-  check(after.card?.rowRadius === '0px', `the question's option rows follow (${after.card?.rowRadius})`)
-  check(after.card?.numberRadius === '0px', `and its number badges (${after.card?.numberRadius})`)
+  const allZero = (list) => list !== undefined && list.length > 0 && list.every((r) => r === '0px')
+  check(allZero(after.card?.rowRadii), `every option row is square (${JSON.stringify(after.card?.rowRadii)})`)
+  check(allZero(after.card?.numberRadii), `and every number badge (${JSON.stringify(after.card?.numberRadii)})`)
+  check(allZero(after.card?.badgeRadii), `and the Recommended badge (${JSON.stringify(after.card?.badgeRadii)})`)
+  check(after.card?.numberBox?.join('x') === '20x20',
+    `the number badge keeps its own 20x20 box beside the label, not nested in the check box (${JSON.stringify(after.card?.numberBox)})`)
   note(`question card ${after.card?.box.join('x')} fill=${after.card?.fill} (--dsw-specific-input-major=${after.card?.cardToken}); window=${after.card?.box[0]}px wide`)
   console.log(`\n${fails === 0 ? 'OK: the composer-seat cards wear the skin frame' : fails + ' check(s) failed'}`)
   process.exitCode = fails === 0 ? 0 : 1
