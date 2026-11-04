@@ -1,6 +1,6 @@
 {
   "name": "dsh-skin-endfield",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Arknights: Endfield skin for the DeepSeek Harness Web GUI — industrial signal-yellow palette, technical frames, light detail cards and diamond markers, ported from the game's design language.",
   "type": "module",
   "license": "MIT",
@@ -80,6 +80,7 @@
     "verify:topbar-panels": "node scripts/verify-topbar-panels-live.mjs",
     "verify:file-preview": "node scripts/verify-file-preview-live.mjs",
     "verify:plan-chip": "node scripts/verify-plan-chip-live.mjs",
+    "verify:question-card": "node scripts/verify-question-card-live.mjs",
     "probe:topbar-panels": "node scripts/probe-topbar-panels.mjs",
     "probe:hover-surfaces": "node scripts/probe-hover-surfaces.mjs",
     "probe:plan-chip": "node scripts/probe-plan-chip.mjs",

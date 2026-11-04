@@ -648,6 +648,46 @@ plan 模式打开时，`dsh-client-ui-plan` 会在输入框那一排（`conversa
 >
 > **A/B 是这条检查的核心**：关掉装饰层后 chip 立刻回到那块浅色实底药丸（实测 `color(srgb .84 .92 1)`、8px 圆角、无边框）—— 这才是"改的是皮肤、不是外壳"的证明。
 
+## 提问卡片：临时接管输入框的那一块（装饰层 22，2026-11-03）
+
+agent 调 `ask_user_question` 时，`dsh-client-ui-user-questions` 把待答问题渲染成一块卡片，**临时接管输入框的位置**（composer 槽位的选择链：有 pending 提问时选它，没有才落回输入条）。用户报的是：这块卡片**看不到外边框**，预期是直角边框。
+
+### 它为什么没有边
+
+卡片结构：`div[frame][data-question-key] > section.card`（plan 审批卡同构，`data-plan-review-key`），类名是包的 CSS Modules（`QuestionComposer.module.css` / `PlanReviewPanel.module.css`）。卡自带的样式是：
+
+- `border: 0`；
+- `border-radius: var(--dsw-radius-xl)` = **20px**；
+- 背景 `--dsw-specific-input-major`；
+- 唯一的"边"是 `box-shadow: var(--dsw-elevation-panel)` —— 一条 0.5px 的 elevation stroke 加两道软阴影。
+
+皮肤的 `surfaceFill` 关掉时，`--dsw-specific-input-major` 被 palette 映射成 **transparent**，`--dsw-elevation-*` 家族被设置层改成**平的**（`0 0 0 .5px #35373C`）。于是在 #191919 画布上：透明底 + 一条 #35373C 的半像素线 = **没有任何可见边缘**，只剩 20px 圆角。和用户描述完全一致。
+
+### 修法：照抄它替代的那张卡
+
+这块卡换掉的是输入卡片，而输入卡片在第 14 节已经有皮肤的处理，所以直接沿用：**1px `--endfield-frame` 发丝线 + 直角 + 可切换的 `--endfield-surface-shadow`**（`surfaceFill` 关闭时那是平值，正好只剩发丝线做事）。半径**令牌族**在卡上重声明（19d 的手法）：选项行（12px）、自定义答案块（16px）、编号徽章（4px）一次全归零。
+
+锚点是包自己声明的属性 **`data-question-key` / `data-plan-review-key`** 加它的**直接子 `<section>`**，没有点任何哈希类名；这两个属性只在卡片存在期间出现。
+
+**不画角括号**（与第 14 节不同，写在注释里）：第 14 节的括号是贴在边内 2px 的，而这张卡的四角正好都有内容 —— 提问卡的 eyebrow 行、plan 审批卡整幅的 warn 色条 —— 画上去会压字。
+
+### 实测（运行中的 GUI，1584 视口）
+
+| 读数 | 修前（外壳原样） | 修后 |
+|---|---|---|
+| 卡片 | 1228×253 | 1228×253 |
+| 圆角 | **20px** | **0px** |
+| 边框 | `0px none` | `1px solid rgba(217,217,217,0.14)`（`--endfield-frame`） |
+| 阴影 | 0.5px elevation stroke + 两道软阴影 | `0 0 0 .5px #35373C`（`surfaceFill` 关时的平值，与 `--endfield-surface-shadow` 解析值一致） |
+| 选项行 / 编号徽章圆角 | 12px / 4px | 0px / 0px |
+| plan 审批卡 | 20px、无边框 | 0px、1px 发丝线（同一规则覆盖） |
+
+### 检查：真实卡片产生不出来，所以重建外壳
+
+`scripts/verify-question-card-live.mjs`（新增，已接入 `verify-all`）。**如实说明它与其它 live 检查的不同**：真实卡片只在有 pending 提问时存在，而 headless 运行无法按需触发（host 在 agent 调工具时才发事件）。所以检查把**包自己的卡片外壳**（frame + section + 包自己的 CSS Modules 类，类名前缀从包注册的 `<style data-plugin-css="…/QuestionComposer.module.css">` 里读）重建进**运行中的 composer seat**，读真实样式表的级联 —— 它验证的是"皮肤规则 vs 卡片类规则"的具体度之争，这与真实元素完全一致。断言做两次：先量皮肤形态，再通过 CSSOM 把那条规则的声明清空、量出外壳形态（border 0 / 20px / 只有 elevation stroke）作为 A/B。提问卡与 plan 审批卡都验。
+
+> 未证明的部分写在检查头部：没法证明 host 一定会把卡片挂成这个形状（那由包自己的 JSX 决定），也量不到填入真实答案批次 / 倒计时之后的排版。
+
 ## 页面印版：正文面板上的一张图（装饰层 18b）
 
 页标现在就是**一张图**：四张可选印版之一（默认 `endfield-decal.png` —— 现在这张是由 `my-badge.png` + `my-wordmark.png` **合成**的锁定组合，见 `scripts/compose-lockup.mjs`），或者**你自己上传的一张图**。设置页的旋钮：`Page mark`（总开关）、`Artwork`（哪张图）、`Custom image`（上传本地图片）、`Orientation`（横排 / 竖排）、`Position`（面板四角）、`Size`、`Opacity`。竖排即把图**转 90°**（几何是算出来的，不是手调偏移：绕中心旋转后，偏移要减去长短边差的一半）。
@@ -857,6 +897,7 @@ assets/logo/                皮肤自己的印版：3 个 SVG 源 + 生成的 4 
 - **`--endfield-band` 在 `<html>` 上解析不出来**：外壳把 `--dsw-alias-*` 声明在 `body` 上，而这条变量声明在 `html.endfield` 里、值里引用了 `--dsw-alias-bg-base` ⇒ 计算值无效，使用处一律落到各自的 fallback（单元行与两个 dock 的 fallback 恰好写了同一条 `color-mix`，所以成色仍然正确）。真正要修只需把这条变量挪到 `body` 块里 —— 本轮没动，因为它会改变现有三处表面的成色，属于另一件事（顶栏两个悬浮面板因此改用 `--dsw-specific-menu`，见「顶栏的两个悬浮面板」）。
 - 装饰层的 `::before/::after` 只在 `[role="dialog"|"menu"|"listbox"]` 上；若外壳把角色放在没有 `position` 的容器上，角括号可能落在可视区外（无害）。
 - 装饰层不含优先级强制声明（`verify-client` 文本扫描拦截），所有覆盖靠选择器具体度与源码顺序。
+- **提问卡片 / plan 审批卡的检查是在运行中的页面上"重建卡片外壳"**（`verify-question-card-live.mjs`）：真实卡片只在有 pending 提问时存在，headless 无法按需触发。所以那条检查证明的是"皮肤规则赢过卡片类规则"，证明不了 host 必然按这个形状挂载，也看不到填入真实答案与倒计时后的排版 —— 后者只能靠使用中的肉眼确认。
 - `dsh-skin-endfield` 设置命名空间的**宿主侧写入**需要你在界面上点一次确认（改一项设置，看 `~/.dsh/settings.yaml` 是否出现 `dsh-skin-endfield:`）。
 - 新增 **Accent** 字段需要**重启 `dsh web`** 才生效：浏览器半边的设置订阅连同已装的 bundle 会随 HMR 更新，但命名空间的 schema 由宿主半边注册，只在启动时读一次。
 - **水贴的印版走宿主路由**（`/skin-endfield/logo/…`），所以同一条限制：宿主半边只在 `dsh web` 启动时加载一次，**没重启前这条路由不存在** —— 设置页那格预览会是空的、画面上也不会印出来（live 检查把"每张印版都被送达"报成一条失败并说明原因，跳过各自的落墨断言）。重启一次即可。
